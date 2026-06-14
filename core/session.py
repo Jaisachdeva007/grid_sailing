@@ -155,7 +155,9 @@ def run_block(screen, clock, fonts, block_type, block_number,
 
         result = run_trial(
             screen, clock, fonts, trial, config,
-            cumulative_score, session_id
+            cumulative_score, session_id,
+            total_trials=n_trials,
+            block_type=block_type,
         )
         cumulative_score = result["cumulative_score"]
 
