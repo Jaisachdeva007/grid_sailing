@@ -185,6 +185,58 @@ def get_all_participants():
     return [dict(r) for r in rows]
 
 
+def get_participant_stats():
+    """
+    Return per-participant aggregated stats for the data viewer dashboard.
+    Joins participants → sessions → trials to compute accuracy, score, counts.
+    """
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT
+            p.participant_id,
+            p.group_name,
+            p.age,
+            p.gender,
+            p.created_at,
+            COUNT(DISTINCT s.session_id)                             AS sessions_done,
+            COUNT(t.trial_id)                                        AS total_trials,
+            COALESCE(AVG(CASE WHEN t.is_correct=1 THEN 100.0 ELSE 0 END), 0) AS accuracy_pct,
+            COALESCE(AVG(t.reward_score), 0)                        AS avg_score,
+            COALESCE(SUM(t.reward_score), 0)                        AS total_score,
+            COALESCE(AVG(t.reaction_time_ms), 0)                    AS avg_rt_ms
+        FROM participants p
+        LEFT JOIN sessions s  ON p.participant_id = s.participant_id
+                              AND s.completed_at IS NOT NULL
+        LEFT JOIN trials   t  ON s.session_id = t.session_id
+        GROUP BY p.participant_id
+        ORDER BY p.participant_id
+    """).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_session_breakdown(participant_id):
+    """Return per-session stats for one participant (used in detail view)."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT
+            s.session_number,
+            s.block_type,
+            s.block_number,
+            s.completed_at IS NOT NULL                               AS completed,
+            COUNT(t.trial_id)                                        AS trials,
+            COALESCE(AVG(CASE WHEN t.is_correct=1 THEN 100.0 ELSE 0 END), 0) AS accuracy_pct,
+            COALESCE(AVG(t.reward_score), 0)                        AS avg_score
+        FROM sessions s
+        LEFT JOIN trials t ON s.session_id = t.session_id
+        WHERE s.participant_id = ?
+        GROUP BY s.session_id
+        ORDER BY s.session_number, s.block_number
+    """, (participant_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 # ── Session functions ────────────────────────────────────────
 
 def create_session(participant_id, session_number, block_type, block_number):
