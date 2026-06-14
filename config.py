@@ -61,7 +61,7 @@ DB_PATH    = "database/experiment.db"
 EXPORT_DIR = "exports/"
 
 # --- Display ---
-WINDOW_WIDTH       = 900
-WINDOW_HEIGHT      = 700
+WINDOW_WIDTH       = 1100
+WINDOW_HEIGHT      = 820
 ANIMATION_DELAY_MS = 600
 FPS                = 60
