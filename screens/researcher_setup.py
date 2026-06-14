@@ -25,6 +25,7 @@ from database.db import (
     initialise_database, get_all_participants,
     create_participant, verify_participant
 )
+from screens.export_screen import run_export_screen
 
 # ── Colours ──────────────────────────────────────────────────
 BG          = (15,  15,  25)
@@ -264,6 +265,7 @@ def run_researcher_setup():
     new_btn       = Button(PAD,       55, 120, 28, "New Participant", ACCENT)
     return_btn    = Button(PAD + 135, 55, 140, 28, "Returning",       DIM)
     launch_btn    = Button(WINDOW_WIDTH // 2 - 120, WINDOW_HEIGHT - 60, 240, 40, "Launch Session", GREEN)
+    export_btn    = Button(WINDOW_WIDTH - PAD - 110, WINDOW_HEIGHT - 60, 110, 40, "Export Data", ORANGE)
 
     # ── State ────────────────────────────────────────────────
     message     = ""
@@ -296,6 +298,10 @@ def run_researcher_setup():
                 box.handle_event(event)
             for w in all_widgets:
                 w.handle_event(event)
+
+            # Export button — open export screen
+            if export_btn.handle_event(event):
+                run_export_screen(screen, clock, fonts)
 
             # Launch button
             if launch_btn.handle_event(event):
@@ -417,6 +423,7 @@ def run_researcher_setup():
             screen.blit(msg_surf, (WINDOW_WIDTH // 2 - msg_surf.get_width() // 2, WINDOW_HEIGHT - 90))
 
         launch_btn.draw(screen, f_med)
+        export_btn.draw(screen, f_sm)
 
         pygame.display.flip()
 

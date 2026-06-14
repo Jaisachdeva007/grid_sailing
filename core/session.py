@@ -19,6 +19,7 @@ from config import (
 )
 from core.grid import find_valid_paths, apply_key
 from core.trial import TrialData, run_trial
+from screens.reflection import run_reflection
 from database.db import (
     create_session, complete_session,
     get_resume_point, initialise_database
@@ -159,6 +160,15 @@ def run_block(screen, clock, fonts, block_type, block_number,
         cumulative_score = result["cumulative_score"]
 
     complete_session(session_id)
+
+    # Show reflection after practice blocks for MI groups
+    is_mi    = group.startswith("MI")
+    is_practice = block_type == "practice"
+    if is_mi and is_practice:
+        is_last = (session_number == 3)
+        run_reflection(screen, clock, fonts, participant_id,
+                       session_number, is_last_session=is_last)
+
     return cumulative_score, repeated_puzzle
 
 
