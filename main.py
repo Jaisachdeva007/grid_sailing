@@ -36,8 +36,10 @@ def main():
 
     # Step 3: Run the full session
     pygame.init()
-    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-    pygame.display.set_caption("Grid-Sailing Task")
+    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SCALED)
+    pid    = participant["participant_id"]
+    sn     = config["session_number"]
+    pygame.display.set_caption(f"Grid-Sailing  ·  {pid}  ·  Session {sn}")
     clock  = pygame.time.Clock()
 
     fonts = (

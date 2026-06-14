@@ -152,7 +152,7 @@ def _draw_progress(screen, fonts, trial, total, block_type, session_num):
     screen.blit(ss, (W - 14 - ss.get_width(), y + PROG_H//2 - ss.get_height()//2))
 
 
-def _draw_grid(screen, fonts, trial, trail, cursor, show_labels=True):
+def _draw_grid(screen, fonts, trial, trail, cursor, show_labels=True, show_arrows=False):
     f_big, f_med, f_sm, f_xs = fonts
     start, goal = trial.start, trial.goal
 
@@ -184,6 +184,21 @@ def _draw_grid(screen, fonts, trial, trail, cursor, show_labels=True):
                     lbl = f_xs.render("CHEESE", True, (60, 44, 4))
                     screen.blit(lbl, (px + sz//2 - lbl.get_width()//2,
                                       py + sz//2 - lbl.get_height()//2))
+
+    # Direction arrows (planning stage hint)
+    if show_arrows and cursor:
+        arrow_map = {1: ("↑", -1, 0), 2: ("↘", 1, 1), 3: ("↙", 1, -1)}
+        for key_num, (sym, dr, dc) in arrow_map.items():
+            nr, nc = cursor[0] + dr, cursor[1] + dc
+            if 0 <= nr < GRID_N and 0 <= nc < GRID_N:
+                ax = GL + nc * CELL + CELL // 2
+                ay = GT + nr * CELL + CELL // 2
+                arrow_col = (80, 120, 200, 160)
+                # draw a small numbered circle on the target cell
+                pygame.draw.circle(screen, (40, 60, 120), (ax, ay), 14)
+                pygame.draw.circle(screen, ACCENT,        (ax, ay), 14, 1)
+                fs = fonts[3].render(str(key_num), True, ACCENT)
+                screen.blit(fs, (ax - fs.get_width()//2, ay - fs.get_height()//2))
 
     # Cursor
     if cursor:
@@ -220,7 +235,8 @@ def _stage_header(screen, fonts, tag, tag_col, title, subtitle):
 
 def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
               cumulative_score: int, session_id: int,
-              total_trials: int = 20, block_type: str = "practice") -> dict:
+              total_trials: int = 20, block_type: str = "practice",
+              show_score: bool = True) -> dict:
 
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
@@ -407,7 +423,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
         elif state == FEEDBACK:
             _draw_stage_feedback(screen, fonts, trial, cumulative_score,
                                  rp_cursor, rp_trail, rp_done,
-                                 total_trials, block_type, sn)
+                                 total_trials, block_type, sn,
+                                 show_score=show_score)
         elif state == ITI:
             _draw_stage_iti(screen, fonts, trial, iti_start, iti_dur,
                             total_trials, block_type, sn)
@@ -480,7 +497,7 @@ def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
                   "PLANNING", ACCENT,
                   "Study the grid",
                   "Plan the shortest route from MOUSE to CHEESE   ·   SPACE to skip ahead")
-    _draw_grid(screen, fonts, trial, set(), trial.start)
+    _draw_grid(screen, fonts, trial, set(), trial.start, show_arrows=True)
 
     # Right panel
     rx, ry = GR, GT
@@ -583,7 +600,8 @@ def _draw_stage_action(screen, fonts, trial, cursor, trail,
 
 def _draw_stage_feedback(screen, fonts, trial, cum_score,
                          rp_cursor, rp_trail, rp_done,
-                         total_trials, block_type, sn):
+                         total_trials, block_type, sn,
+                         show_score=True):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     cx   = W // 2
@@ -607,21 +625,40 @@ def _draw_stage_feedback(screen, fonts, trial, cum_score,
     _t(screen, f_xs, f"Your sequence :  {p_str}", DIM, GL, gy)
     _t(screen, f_xs, f"Optimal           :  {o_str}", DIM, GL, gy + 22)
 
-    # Score cards (right panel)
+    # Right panel
     rx, ry = GR, GT
-    new_total = cum_score + trial.reward_score
 
-    cards = [
-        ("Moves used",  str(trial.number_of_moves),        WHITE),
-        ("Optimal",     str(len(trial.optimal_sequence)),  ACCENT),
-        ("Trial score", str(trial.reward_score),           tc),
-        ("Total score", str(new_total),                    GREEN),
-    ]
-    for label, val, col in cards:
-        _panel(screen, rx, ry, GRW, 64, col)
-        _t(screen, f_xs, label, DIM,  rx + 16, ry + 8)
-        _t(screen, f_med, val,  col,  rx + 16, ry + 28)
+    if show_score:
+        # Score cards — only shown during practice blocks
+        new_total = cum_score + trial.reward_score
+        cards = [
+            ("Moves used",  str(trial.number_of_moves),       WHITE),
+            ("Optimal",     str(len(trial.optimal_sequence)), ACCENT),
+            ("Trial score", str(trial.reward_score),          tc),
+            ("Total score", str(new_total),                   GREEN),
+        ]
+        for label, val, col in cards:
+            _panel(screen, rx, ry, GRW, 64, col)
+            _t(screen, f_xs, label, DIM,  rx + 16, ry + 8)
+            _t(screen, f_med, val,  col,  rx + 16, ry + 28)
+            ry += 76
+    else:
+        # No score during familiarization / test blocks
+        _panel(screen, rx, ry, GRW, 90, BORDER)
+        nl = f_sm.render("No score shown", True, DIM)
+        sl = f_xs.render("Scores are not displayed during this block.", True, DIM)
+        screen.blit(nl, (rx + GRW//2 - nl.get_width()//2, ry + 14))
+        screen.blit(sl, (rx + GRW//2 - sl.get_width()//2, ry + 48))
+        ry += 106
+
+        # Still show move count vs optimal so participant gets some feedback
+        _panel(screen, rx, ry, GRW, 64, BORDER)
+        _t(screen, f_xs, "Moves used", DIM,   rx + 16, ry + 8)
+        _t(screen, f_med, str(trial.number_of_moves), WHITE, rx + 16, ry + 28)
         ry += 76
+        _panel(screen, rx, ry, GRW, 64, BORDER)
+        _t(screen, f_xs, "Optimal", DIM,    rx + 16, ry + 8)
+        _t(screen, f_med, str(len(trial.optimal_sequence)), ACCENT, rx + 16, ry + 28)
 
     # SPACE hint
     hint_col = WHITE if rp_done else DIM

@@ -108,11 +108,18 @@ def run_export_screen(screen, clock, fonts):
     message     = ""
     msg_color   = GREEN
 
-    # List of registered participants
-    participants = [p["participant_id"] for p in get_all_participants()]
+    participants   = []
+    refresh_timer  = 0   # refresh participant list every 2 seconds
 
     while True:
         clock.tick(FPS)
+
+        # Refresh participant list every 2 seconds
+        now_ms = pygame.time.get_ticks()
+        if now_ms - refresh_timer > 2000:
+            participants  = [p["participant_id"] for p in get_all_participants()]
+            refresh_timer = now_ms
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit(); sys.exit()

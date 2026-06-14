@@ -20,6 +20,7 @@ from config import (
 from core.grid import find_valid_paths, apply_key
 from core.trial import TrialData, run_trial
 from screens.reflection import run_reflection
+from screens.tutorial import run_tutorial
 from database.db import (
     create_session, complete_session,
     get_resume_point, initialise_database
@@ -153,11 +154,15 @@ def run_block(screen, clock, fonts, block_type, block_number,
             group            = group,
         )
 
+        # Score is hidden during familiarization and test blocks
+        show_score = block_type == "practice"
+
         result = run_trial(
             screen, clock, fonts, trial, config,
             cumulative_score, session_id,
             total_trials=n_trials,
             block_type=block_type,
+            show_score=show_score,
         )
         cumulative_score = result["cumulative_score"]
 
@@ -200,6 +205,9 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
     block_sequence  = SESSION_STRUCTURE.get(session_number, [])
     cumulative_score = 0
     repeated_puzzle  = None   # fixed across the whole session
+
+    # Show key-mapping tutorial once before the very first block
+    run_tutorial(screen, clock, fonts)
 
     for block_idx, block_type in enumerate(block_sequence):
         cumulative_score, repeated_puzzle = run_block(
