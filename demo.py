@@ -17,7 +17,7 @@ import pygame
 import sys
 import time
 from config import GRID_SIZE, WINDOW_WIDTH, WINDOW_HEIGHT, ANIMATION_DELAY_MS, PLANNING_TIME_SEC
-from grid import find_valid_paths, apply_key
+from core.grid import find_valid_paths, apply_key
 
 # ── Colours ──────────────────────────────────────────────────
 BG          = (15,  15,  25)
