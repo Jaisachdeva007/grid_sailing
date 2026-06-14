@@ -159,7 +159,7 @@ def run_participant_login(config: dict) -> dict | None:
 
         # Confirm button
         pygame.draw.rect(screen, GREEN, confirm_rect, border_radius=10)
-        btn_lbl = f_med.render("Confirm & Begin", True, BG := (15, 15, 25))
+        btn_lbl = f_med.render("Confirm & Begin", True, (15, 15, 25))
         screen.blit(btn_lbl, (confirm_rect.x + confirm_rect.w // 2 - btn_lbl.get_width() // 2,
                                confirm_rect.y + confirm_rect.h // 2 - btn_lbl.get_height() // 2))
 
