@@ -58,7 +58,7 @@ SESSION_STRUCTURE = {
 
 # --- Admin Access ---
 # Change this password before deployment. Juliet uses it to access researcher setup.
-ADMIN_PASSWORD = "gridsail2025"
+ADMIN_PASSWORD = "2110"
 
 # --- Database & Export ---
 DB_PATH    = "database/experiment.db"
