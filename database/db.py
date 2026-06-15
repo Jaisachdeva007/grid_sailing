@@ -215,6 +215,36 @@ def get_participant_stats():
     return [dict(r) for r in rows]
 
 
+def get_participant_trials(participant_id):
+    """Return every trial for a participant with full detail."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT
+            s.session_number,
+            s.block_type,
+            s.block_number,
+            t.trial_number,
+            t.grid_type,
+            t.planned_sequence,
+            t.optimal_sequence,
+            t.optimal_length,
+            t.number_of_moves,
+            t.reward_score,
+            t.is_correct,
+            t.reaction_time_ms,
+            t.movement_time_ms,
+            t.elapsed_time_s,
+            t.imagery_duration_ms,
+            t.created_at
+        FROM sessions s
+        JOIN trials t ON s.session_id = t.session_id
+        WHERE s.participant_id = ?
+        ORDER BY s.session_number, s.block_number, t.trial_number
+    """, (participant_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 def get_session_breakdown(participant_id):
     """Return per-session stats for one participant (used in detail view)."""
     conn = get_connection()
