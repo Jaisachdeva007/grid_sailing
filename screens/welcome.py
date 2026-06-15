@@ -190,7 +190,7 @@ def run_welcome(screen, clock):
                          (btn_rect.x+2, btn_rect.y+3, btn_rect.w, btn_rect.h),
                          border_radius=10)
         pygame.draw.rect(screen, bcol, btn_rect, border_radius=10)
-        bl = f_sm.render("Log In", True, BG := (10, 10, 20))
+        bl = f_sm.render("Log In", True, (10, 10, 20))
         screen.blit(bl, (btn_rect.x + btn_rect.w // 2 - bl.get_width() // 2,
                           btn_rect.y + btn_rect.h // 2 - bl.get_height() // 2))
 

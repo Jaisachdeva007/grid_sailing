@@ -172,7 +172,7 @@ def run_participant_login(screen, clock, fonts, config: dict):
         btn_r.y = card_y + 182
         pygame.draw.rect(screen, (8, 8, 16), (btn_r.x+2, btn_r.y+3, btn_r.w, btn_r.h), border_radius=10)
         pygame.draw.rect(screen, bcol, btn_r, border_radius=10)
-        bl = f_sm.render("Confirm & Begin", True, BG := (10, 10, 20))
+        bl = f_sm.render("Confirm & Begin", True, (10, 10, 20))
         screen.blit(bl, (btn_r.x + btn_r.w//2 - bl.get_width()//2,
                           btn_r.y + btn_r.h//2 - bl.get_height()//2))
 
