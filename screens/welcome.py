@@ -90,8 +90,8 @@ def run_welcome(screen, clock):
     error_t  = 0
     start_t  = time.time()
 
-    pw_rect  = pygame.Rect(CX - 180, CY + 40, 360, 46)
-    btn_rect = pygame.Rect(CX - 100, CY + 102, 200, 44)
+    pw_rect  = pygame.Rect(CX - 180, CY - 58, 360, 46)
+    btn_rect = pygame.Rect(CX - 100, CY +  8, 200, 44)
 
     while True:
         clock.tick(FPS)
@@ -155,14 +155,16 @@ def run_welcome(screen, clock):
                          (CX - 220, CY - 158), (CX + 220, CY - 158))
 
         # Researcher login panel
-        panel_h = 220
+        panel_h = 200
         _panel(screen, CX - 220, CY - 145, 440, panel_h, BORDER)
 
         lock_lbl = f_xs.render("RESEARCHER ACCESS", True, DIM)
         screen.blit(lock_lbl, (CX - lock_lbl.get_width() // 2, CY - 128))
 
+        pygame.draw.line(screen, BORDER, (CX - 200, CY - 106), (CX + 200, CY - 106))
+
         pw_label = f_sm.render("Admin password", True, DIM)
-        screen.blit(pw_label, (CX - 180, CY + 16))
+        screen.blit(pw_label, (CX - 180, CY - 90))
 
         # Password input
         pw_bc = ACCENT if pw_active else BORDER
@@ -196,9 +198,8 @@ def run_welcome(screen, clock):
 
         # Error
         if error:
-            alpha = min(1.0, (2.5 - (now - error_t)) / 0.5)
             er = f_xs.render(error, True, RED)
-            screen.blit(er, (CX - er.get_width() // 2, CY + 155))
+            screen.blit(er, (CX - er.get_width() // 2, CY + 62))
 
         # Bottom hint — for participants
         hint = f_xs.render(
