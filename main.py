@@ -12,7 +12,7 @@ import pygame
 from config import WINDOW_WIDTH, WINDOW_HEIGHT, FPS
 from database.db import initialise_database
 from screens.welcome import run_welcome
-from screens.researcher_setup import run_researcher_setup
+from screens.researcher_setup import run_researcher_setup, run_researcher_home
 from screens.participant_login import run_participant_login
 from core.session import run_session
 
@@ -30,10 +30,26 @@ def main():
     if role != "researcher":
         return
 
-    # Step 2: Researcher configures the session
-    config = run_researcher_setup(screen, clock)
-    if not config:
-        return
+    # Step 2: Researcher picks what to do (home screen)
+    from screens.data_viewer import run_data_viewer
+    fonts_setup = (
+        pygame.font.SysFont("Helvetica Neue", 20, bold=True),
+        pygame.font.SysFont("Helvetica Neue", 20, bold=True),
+        pygame.font.SysFont("Helvetica Neue", 15),
+        pygame.font.SysFont("Helvetica Neue", 13),
+    )
+
+    config = None
+    while config is None:
+        choice = run_researcher_home(screen, clock)
+        if choice is None:
+            return
+        if choice == "data":
+            run_data_viewer(screen, clock, fonts_setup)
+            continue
+        config = run_researcher_setup(screen, clock, mode=choice)
+        if config is None:
+            continue   # researcher hit ESC — go back to home
 
     print(f"[MAIN] Session config: {config}")
 

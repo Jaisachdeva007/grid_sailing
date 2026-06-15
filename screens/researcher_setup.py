@@ -249,9 +249,135 @@ class Button:
                            self.rect.y + self.rect.h//2 - lbl.get_height()//2))
 
 
+# ── Researcher Home (landing screen after admin login) ────────
+
+def run_researcher_home(screen, clock):
+    """
+    Landing screen shown after Juliet logs in.
+    Returns one of: "new", "returning", "data", or None (quit).
+    """
+    f_title = pygame.font.SysFont("Helvetica Neue", 30, bold=True)
+    f_med   = pygame.font.SysFont("Helvetica Neue", 18, bold=True)
+    f_sm    = pygame.font.SysFont("Helvetica Neue", 15)
+    f_xs    = pygame.font.SysFont("Helvetica Neue", 13)
+
+    pygame.display.set_caption("Grid-Sailing — Researcher Home")
+
+    CX = WINDOW_WIDTH  // 2
+    CY = WINDOW_HEIGHT // 2
+
+    CARD_W, CARD_H = 280, 200
+    GAP = 36
+    total_w = CARD_W * 3 + GAP * 2
+    start_x = CX - total_w // 2
+
+    cards = [
+        {
+            "key":   "new",
+            "label": "New Participant",
+            "sub":   "Register a first-time participant\nand configure their session",
+            "color": GREEN,
+            "icon":  "+",
+        },
+        {
+            "key":   "returning",
+            "label": "Returning Participant",
+            "sub":   "Look up an existing participant\nand start their next session",
+            "color": ACCENT,
+            "icon":  "->",
+        },
+        {
+            "key":   "data",
+            "label": "View Data",
+            "sub":   "Browse participant progress,\naccuracy and session breakdown",
+            "color": PURPLE,
+            "icon":  "#",
+        },
+    ]
+
+    rects = [
+        pygame.Rect(start_x + i * (CARD_W + GAP), CY - CARD_H // 2, CARD_W, CARD_H)
+        for i in range(3)
+    ]
+
+    while True:
+        clock.tick(FPS)
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit(); sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                for i, r in enumerate(rects):
+                    if r.collidepoint(event.pos):
+                        return cards[i]["key"]
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                return None
+
+        screen.fill(BG)
+
+        # Title bar
+        pygame.draw.rect(screen, SURFACE, (0, 0, WINDOW_WIDTH, 60))
+        pygame.draw.line(screen, BORDER, (0, 60), (WINDOW_WIDTH, 60))
+        ts = f_title.render("Researcher Setup", WHITE, False)  # unused, use _t
+        _t(screen, f_title, "Researcher Setup", WHITE, PAD, 16)
+        _t(screen, f_xs, "Grid-Sailing Task", DIM, WINDOW_WIDTH - PAD - 120, 22)
+
+        # Subtitle
+        sub = f_sm.render("What would you like to do today?", True, DIM)
+        screen.blit(sub, (CX - sub.get_width() // 2, CY - CARD_H // 2 - 52))
+
+        mouse = pygame.mouse.get_pos()
+
+        for i, (card, r) in enumerate(zip(cards, rects)):
+            hover  = r.collidepoint(mouse)
+            col    = card["color"]
+            bg     = tuple(min(255, c + 10) for c in PANEL) if hover else PANEL
+            border = col if hover else BORDER
+
+            # Card shadow
+            pygame.draw.rect(screen, (8, 8, 16),
+                             (r.x + 3, r.y + 4, r.w, r.h), border_radius=16)
+            pygame.draw.rect(screen, bg, r, border_radius=16)
+            pygame.draw.rect(screen, border, r, width=1 if not hover else 2,
+                             border_radius=16)
+
+            # Top colour accent strip
+            strip = pygame.Rect(r.x + 1, r.y + 1, r.w - 2, 6)
+            pygame.draw.rect(screen, col, strip,
+                             border_radius=16)
+
+            # Icon circle
+            icon_r = pygame.Rect(r.x + r.w // 2 - 26, r.y + 30, 52, 52)
+            pygame.draw.circle(screen, tuple(max(0, c - 40) for c in col),
+                               icon_r.center, 26)
+            pygame.draw.circle(screen, col, icon_r.center, 26, width=2)
+
+            # Icon glyph — simple text
+            glyph_map = {"+": "+", "->": ">", "#": "="}
+            g = f_med.render(glyph_map.get(card["icon"], card["icon"]), True, col)
+            screen.blit(g, (icon_r.centerx - g.get_width() // 2,
+                            icon_r.centery - g.get_height() // 2))
+
+            # Card title
+            lt = f_med.render(card["label"], True, WHITE)
+            screen.blit(lt, (r.x + r.w // 2 - lt.get_width() // 2, r.y + 96))
+
+            # Card subtitle (two lines)
+            for j, line in enumerate(card["sub"].split("\n")):
+                ls = f_xs.render(line, True, DIM)
+                screen.blit(ls, (r.x + r.w // 2 - ls.get_width() // 2,
+                                 r.y + 124 + j * 18))
+
+        # Hint
+        hint = f_xs.render("ESC to return to the login screen", True, BORDER)
+        screen.blit(hint, (CX - hint.get_width() // 2, WINDOW_HEIGHT - 36))
+
+        pygame.display.flip()
+
+
 # ── Main setup screen ─────────────────────────────────────────
 
-def run_researcher_setup(screen=None, clock=None):
+def run_researcher_setup(screen=None, clock=None, mode="new"):
     """
     Display researcher configuration screen.
     screen/clock are passed in from main (shared window).
@@ -280,8 +406,6 @@ def run_researcher_setup(screen=None, clock=None):
         f_xs    = pygame.font.SysFont("Arial", 13)
 
     fonts = (f_med, f_med, f_sm, f_xs)
-
-    mode = "new"
 
     # ── Widgets ──────────────────────────────────────────────
     pid_box   = InputBox(INP_X1, 0, 190, ROW_H, "e.g. P001")
@@ -326,19 +450,8 @@ def run_researcher_setup(screen=None, clock=None):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit(); sys.exit()
-
-            # Tab toggle
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                mx, my = event.pos
-                tab_y  = CONTENT_TOP - 38
-                new_r  = pygame.Rect(PAD, tab_y, 160, 32)
-                ret_r  = pygame.Rect(PAD + 168, tab_y, 130, 32)
-                if new_r.collidepoint(mx, my):
-                    mode = "new"; message = ""
-                    for dd in all_dropdowns: dd.close()
-                elif ret_r.collidepoint(mx, my):
-                    mode = "returning"; message = ""
-                    for dd in all_dropdowns: dd.close()
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                return None
 
             for box in all_inputs:   box.handle_event(event)
             for s in all_steppers:   s.handle_event(event)
@@ -382,18 +495,10 @@ def run_researcher_setup(screen=None, clock=None):
         _t(screen, f_xs, "Grid-Sailing Task", DIM,
            WINDOW_WIDTH - PAD - 120, 22)
 
-        # ── Tab switcher ──────────────────────────────────────
-        tab_y = CONTENT_TOP - 40
-        for label, m, tx in [("New Participant", "new", PAD),
-                              ("Returning",       "returning", PAD + 168)]:
-            active = (mode == m)
-            tw = 155 if label == "New Participant" else 120
-            col = ACCENT if active else BORDER
-            bg  = (30, 42, 72) if active else INPUT_BG
-            pygame.draw.rect(screen, bg,  (tx, tab_y, tw, 32), border_radius=8)
-            pygame.draw.rect(screen, col, (tx, tab_y, tw, 32), width=1, border_radius=8)
-            ls = f_sm.render(label, True, WHITE if active else DIM)
-            screen.blit(ls, (tx + tw//2 - ls.get_width()//2, tab_y + 8))
+        # ── Breadcrumb ────────────────────────────────────────
+        crumb_y = CONTENT_TOP - 36
+        crumb_label = "New Participant" if mode == "new" else "Returning Participant"
+        _t(screen, f_xs, f"Home  /  {crumb_label}", DIM, PAD, crumb_y)
 
         y = CONTENT_TOP
 
