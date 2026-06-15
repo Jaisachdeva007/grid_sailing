@@ -33,10 +33,10 @@ def main():
     # Step 2: Researcher picks what to do (home screen)
     from screens.data_viewer import run_data_viewer
     fonts_setup = (
-        pygame.font.SysFont("Helvetica Neue", 20, bold=True),
-        pygame.font.SysFont("Helvetica Neue", 20, bold=True),
-        pygame.font.SysFont("Helvetica Neue", 15),
-        pygame.font.SysFont("Helvetica Neue", 13),
+        pygame.font.SysFont("Helvetica Neue", 34, bold=True),
+        pygame.font.SysFont("Helvetica Neue", 22, bold=True),
+        pygame.font.SysFont("Helvetica Neue", 17),
+        pygame.font.SysFont("Helvetica Neue", 14),
     )
 
     config = None
@@ -55,10 +55,10 @@ def main():
 
     # Step 3: Participant logs in with ID + PIN
     fonts = (
-        pygame.font.SysFont("Helvetica Neue", 28, bold=True),
-        pygame.font.SysFont("Helvetica Neue", 20, bold=True),
-        pygame.font.SysFont("Helvetica Neue", 15),
-        pygame.font.SysFont("Helvetica Neue", 12),
+        pygame.font.SysFont("Helvetica Neue", 34, bold=True),
+        pygame.font.SysFont("Helvetica Neue", 22, bold=True),
+        pygame.font.SysFont("Helvetica Neue", 17),
+        pygame.font.SysFont("Helvetica Neue", 14),
     )
 
     pid = config["participant_id"]

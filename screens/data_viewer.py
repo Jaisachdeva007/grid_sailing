@@ -7,12 +7,12 @@ import sys
 from database.db import get_participant_stats, get_session_breakdown
 from config import WINDOW_WIDTH, WINDOW_HEIGHT, FPS
 
-BG      = (12,  12,  22)
+BG      = (8,    8,  16)
 PANEL   = (20,  20,  36)
-PANEL2  = (28,  28,  46)
-BORDER  = (52,  52,  80)
-WHITE   = (230, 230, 242)
-DIM     = (100, 100, 138)
+PANEL2  = (26,  26,  44)
+BORDER  = (48,  48,  76)
+WHITE   = (245, 245, 255)
+DIM     = (118, 118, 158)
 ACCENT  = ( 88, 148, 255)
 GREEN   = ( 58, 196, 108)
 AMBER   = (210, 158,  28)

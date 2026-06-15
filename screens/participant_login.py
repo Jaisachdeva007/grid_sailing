@@ -1,9 +1,5 @@
 # ============================================================
 #  GRID-SAILING TASK — Participant Login Screen
-#
-#  Shown after researcher setup. Participant enters their ID
-#  and PIN. This is the ONLY screen participants see — they
-#  never interact with any researcher config.
 # ============================================================
 
 import pygame
@@ -13,21 +9,19 @@ import time
 from config import WINDOW_WIDTH, WINDOW_HEIGHT, FPS
 from database.db import verify_participant
 
-BG        = (10,  10,  20)
-PANEL     = (22,  22,  38)
-BORDER    = (52,  52,  80)
-WHITE     = (228, 228, 242)
-DIM       = (100, 100, 138)
-ACCENT    = ( 88, 148, 255)
-GREEN     = ( 58, 196, 108)
-RED       = (212,  58,  58)
-INPUT_BG  = (28,  28,  48)
-INPUT_ACT = (36,  36,  60)
+BG        = (8,    8,   16)
+PANEL     = (20,  20,   36)
+BORDER    = (48,  48,   76)
+WHITE     = (245, 245, 255)
+DIM       = (118, 118, 158)
+ACCENT    = (88,  148, 255)
+GREEN     = (52,  200, 100)
+RED       = (220,  60,  60)
+INPUT_BG  = (26,  26,   46)
+INPUT_ACT = (34,  34,   58)
 
-W  = WINDOW_WIDTH
-H  = WINDOW_HEIGHT
-CX = W // 2
-CY = H // 2
+W, H   = WINDOW_WIDTH, WINDOW_HEIGHT
+CX, CY = W // 2, H // 2
 
 
 class InputBox:
@@ -51,42 +45,41 @@ class InputBox:
     def draw(self, screen, font):
         bg = INPUT_ACT if self.active else INPUT_BG
         bc = ACCENT    if self.active else BORDER
-        pygame.draw.rect(screen, bg, self.rect, border_radius=8)
-        pygame.draw.rect(screen, bc, self.rect, width=1, border_radius=8)
+        pygame.draw.rect(screen, bg, self.rect, border_radius=10)
+        pygame.draw.rect(screen, bc, self.rect,
+                         width=2 if self.active else 1, border_radius=10)
         if self.active:
             pygame.draw.rect(screen, ACCENT,
                              (self.rect.x, self.rect.y + 8, 2, self.rect.h - 16))
         display = ("•" * len(self.text)) if self.secret else self.text
         txt = font.render(display if display else self.placeholder,
-                          True, WHITE if display else DIM)
-        screen.blit(txt, (self.rect.x + 14,
+                          True, WHITE if display else (60, 60, 90))
+        screen.blit(txt, (self.rect.x + 16,
                            self.rect.y + self.rect.h // 2 - txt.get_height() // 2))
 
 
 def run_participant_login(screen, clock, fonts, config: dict):
-    """
-    Show the participant-facing login screen.
-
-    Args:
-        screen, clock: shared pygame objects from main
-        fonts:         font tuple (f_big, f_med, f_sm, f_xs)
-        config (dict): session config set by researcher
-
-    Returns:
-        dict: verified participant record, or None if quit
-    """
     f_big, f_med, f_sm, f_xs = fonts
     pygame.display.set_caption("Grid-Sailing Task")
 
+    # Local larger fonts for this screen
+    f_title = pygame.font.SysFont("Helvetica Neue", 42, bold=True)
+    f_body  = pygame.font.SysFont("Helvetica Neue", 17)
+    f_lbl   = pygame.font.SysFont("Helvetica Neue", 14)
+
     start_t = time.time()
 
-    pid_box = InputBox(CX - 150, CY - 40,  300, 48, "e.g.  P001")
-    pin_box = InputBox(CX - 150, CY + 28,  300, 48, "4-digit PIN", secret=True)
-    btn_r   = pygame.Rect(CX - 130, CY + 98, 260, 48)
+    # Card geometry
+    CW, CH = 440, 280
+    CX2 = CX - CW // 2
+    CY2 = CY - CH // 2 + 20
 
-    message     = ""
-    message_col = RED
-    error_t     = 0
+    pid_box = InputBox(CX2 + 20, CY2 + 72,  CW - 40, 50, "e.g.  P001")
+    pin_box = InputBox(CX2 + 20, CY2 + 156, CW - 40, 50, "4-digit PIN", secret=True)
+    btn_r   = pygame.Rect(CX2 + 20, CY2 + 224, CW - 40, 46)
+
+    message = ""
+    error_t = 0
 
     while True:
         clock.tick(FPS)
@@ -108,12 +101,12 @@ def run_participant_login(screen, clock, fonts, config: dict):
                 pid = pid_box.text.strip().upper()
                 pin = pin_box.text.strip()
                 if not pid or not pin:
-                    message = "Please enter your ID and PIN."
+                    message = "Please enter your Participant ID and PIN."
                     error_t = now
                 else:
                     participant = verify_participant(pid, pin)
                     if not participant:
-                        message = "Incorrect ID or PIN. Please try again."
+                        message = "Incorrect ID or PIN — please try again."
                         error_t = now
                         pin_box.text = ""
                     elif participant["participant_id"] != config["participant_id"]:
@@ -122,72 +115,76 @@ def run_participant_login(screen, clock, fonts, config: dict):
                     else:
                         return participant
 
-        if message and now - error_t > 3:
+        if message and now - error_t > 3.5:
             message = ""
 
         # ── Draw ─────────────────────────────────────────────
         screen.fill(BG)
 
-        # Subtle animated background
+        # Dot grid
         for gx in range(0, W + 48, 48):
             for gy in range(0, H + 48, 48):
-                pygame.draw.circle(screen, (24, 24, 44), (gx, gy), 1)
+                pygame.draw.circle(screen, (20, 20, 40), (gx, gy), 1)
 
         # Glow
-        pulse = 0.5 + 0.5 * math.sin(t * 1.1)
-        for rad, alpha in [(110, 16), (75, 26), (48, 38)]:
-            g = pygame.Surface((rad*2, rad*2), pygame.SRCALPHA)
+        pulse = 0.5 + 0.5 * math.sin(t * 1.0)
+        for rad, alpha in [(140, 12), (96, 20), (62, 30)]:
+            g = pygame.Surface((rad * 2, rad * 2), pygame.SRCALPHA)
             pygame.draw.circle(g, (*ACCENT, int(alpha * pulse)), (rad, rad), rad)
-            screen.blit(g, (CX - rad, CY - 250 - rad))
+            screen.blit(g, (CX - rad, CY - 310 - rad))
 
         # Title
-        ts = f_big.render("Grid-Sailing Task", True, WHITE)
-        screen.blit(ts, (CX - ts.get_width() // 2, CY - 270))
+        ts = f_title.render("Grid-Sailing Task", True, WHITE)
+        screen.blit(ts, (CX - ts.get_width() // 2, CY - 310))
 
         # Session badge
         badge_txt = f"Session {config['session_number']}"
-        bs = f_xs.render(badge_txt, True, ACCENT)
-        bw = bs.get_width() + 20
-        pygame.draw.rect(screen, (28, 44, 88), (CX - bw//2, CY - 228, bw, 26), border_radius=13)
-        pygame.draw.rect(screen, ACCENT,       (CX - bw//2, CY - 228, bw, 26), width=1, border_radius=13)
-        screen.blit(bs, (CX - bs.get_width()//2, CY - 224))
+        bs = f_lbl.render(badge_txt, True, ACCENT)
+        bw = bs.get_width() + 24
+        bx = CX - bw // 2
+        pygame.draw.rect(screen, (20, 36, 80), (bx, CY - 262, bw, 26), border_radius=13)
+        pygame.draw.rect(screen, ACCENT,       (bx, CY - 262, bw, 26), width=1, border_radius=13)
+        screen.blit(bs, (CX - bs.get_width() // 2, CY - 258))
 
-        # Login card
-        card_w, card_h = 380, 240
-        card_x = CX - card_w // 2
-        card_y = CY - 72
-        pygame.draw.rect(screen, PANEL,  (card_x, card_y, card_w, card_h), border_radius=16)
-        pygame.draw.rect(screen, BORDER, (card_x, card_y, card_w, card_h), width=1, border_radius=16)
+        # ── Login card ───────────────────────────────────────
+        # Shadow
+        pygame.draw.rect(screen, (4, 4, 10),
+                         (CX2 + 4, CY2 + 6, CW, CH), border_radius=18)
+        # Card
+        pygame.draw.rect(screen, PANEL,  (CX2, CY2, CW, CH), border_radius=18)
+        pygame.draw.rect(screen, BORDER, (CX2, CY2, CW, CH), width=1, border_radius=18)
 
-        # Card labels + inputs
-        _lbl(screen, f_xs, "Participant ID", CX - 150, card_y + 14)
-        pid_box.rect.y = card_y + 34;  pid_box.draw(screen, f_sm)
+        # Field labels
+        lbl_pid = f_lbl.render("PARTICIPANT ID", True, DIM)
+        screen.blit(lbl_pid, (CX2 + 20, CY2 + 20))
 
-        _lbl(screen, f_xs, "PIN",          CX - 150, card_y + 96)
-        pin_box.rect.y = card_y + 114; pin_box.draw(screen, f_sm)
+        pid_box.rect.topleft = (CX2 + 20, CY2 + 40)
+        pid_box.draw(screen, f_body)
+
+        lbl_pin = f_lbl.render("PIN", True, DIM)
+        screen.blit(lbl_pin, (CX2 + 20, CY2 + 106))
+
+        pin_box.rect.topleft = (CX2 + 20, CY2 + 124)
+        pin_box.draw(screen, f_body)
 
         # Confirm button
         mouse = pygame.mouse.get_pos()
-        bcol  = tuple(min(255, c + 22) for c in GREEN) if btn_r.collidepoint(mouse) else GREEN
-        btn_r.y = card_y + 182
-        pygame.draw.rect(screen, (8, 8, 16), (btn_r.x+2, btn_r.y+3, btn_r.w, btn_r.h), border_radius=10)
+        hover = btn_r.collidepoint(mouse)
+        bcol  = tuple(min(255, c + 24) for c in GREEN) if hover else GREEN
+        pygame.draw.rect(screen, (4, 4, 10),
+                         (btn_r.x + 2, btn_r.y + 3, btn_r.w, btn_r.h), border_radius=10)
         pygame.draw.rect(screen, bcol, btn_r, border_radius=10)
-        bl = f_sm.render("Confirm & Begin", True, (10, 10, 20))
-        screen.blit(bl, (btn_r.x + btn_r.w//2 - bl.get_width()//2,
-                          btn_r.y + btn_r.h//2 - bl.get_height()//2))
+        bl = f_med.render("Confirm & Begin", True, (8, 8, 16))
+        screen.blit(bl, (btn_r.x + btn_r.w // 2 - bl.get_width() // 2,
+                          btn_r.y + btn_r.h // 2 - bl.get_height() // 2))
 
         # Error message
         if message:
-            er = f_xs.render(message, True, RED)
-            screen.blit(er, (CX - er.get_width()//2, card_y + card_h + 16))
+            er = f_lbl.render(message, True, RED)
+            screen.blit(er, (CX - er.get_width() // 2, CY2 + CH + 16))
 
         # Footer
-        ft = f_xs.render("Press Enter or click Confirm & Begin", True, DIM)
-        screen.blit(ft, (CX - ft.get_width()//2, H - 36))
+        ft = f_lbl.render("Press Enter or click Confirm & Begin", True, (52, 52, 80))
+        screen.blit(ft, (CX - ft.get_width() // 2, H - 34))
 
         pygame.display.flip()
-
-
-def _lbl(screen, font, text, x, y):
-    s = font.render(text, True, DIM)
-    screen.blit(s, (x, y))

@@ -26,21 +26,21 @@ from screens.export_screen import run_export_screen
 from screens.data_viewer  import run_data_viewer
 
 # ── Palette ───────────────────────────────────────────────────
-BG        = (12,  12,  22)
-SURFACE   = (20,  20,  36)
-PANEL     = (26,  26,  44)
-BORDER    = (54,  54,  82)
-BORDER_LT = (72,  72, 108)
-WHITE     = (228, 228, 242)
-DIM       = (108, 108, 145)
+BG        = (8,    8,   16)
+SURFACE   = (14,  14,   26)
+PANEL     = (20,  20,   36)
+BORDER    = (48,  48,   76)
+BORDER_LT = (68,  68,  108)
+WHITE     = (245, 245, 255)
+DIM       = (118, 118, 158)
 ACCENT    = ( 88, 148, 255)
-GREEN     = ( 58, 196, 108)
-RED       = (212,  58,  58)
+GREEN     = ( 52, 200, 100)
+RED       = (220,  60,  60)
 ORANGE    = (228, 138,  48)
 PURPLE    = (160,  90, 220)
-INPUT_BG  = (28,  28,  48)
-INPUT_ACT = (38,  38,  62)
-SELECTED  = ( 36,  78, 164)
+INPUT_BG  = (24,  24,   44)
+INPUT_ACT = (34,  34,   58)
+SELECTED  = ( 32,  72, 160)
 TAB_ACT   = ( 88, 148, 255)
 
 GROUP_COLORS = {
@@ -60,7 +60,7 @@ COL2     = HALF + 16
 LBL_W    = 172     # label column width inside each half
 INP_X1   = COL1 + LBL_W
 INP_X2   = COL2 + LBL_W
-ROW_H    = 42
+ROW_H    = 46
 SEC_GAP  = 14
 CONTENT_TOP = 104  # y below the title bar
 
@@ -256,9 +256,9 @@ def run_researcher_home(screen, clock):
     Landing screen shown after Juliet logs in.
     Returns one of: "new", "returning", "data", or None (quit).
     """
-    f_title = pygame.font.SysFont("Helvetica Neue", 30, bold=True)
-    f_med   = pygame.font.SysFont("Helvetica Neue", 18, bold=True)
-    f_sm    = pygame.font.SysFont("Helvetica Neue", 15)
+    f_title = pygame.font.SysFont("Helvetica Neue", 36, bold=True)
+    f_med   = pygame.font.SysFont("Helvetica Neue", 20, bold=True)
+    f_sm    = pygame.font.SysFont("Helvetica Neue", 16)
     f_xs    = pygame.font.SysFont("Helvetica Neue", 13)
 
     pygame.display.set_caption("Grid-Sailing — Researcher Home")
@@ -266,8 +266,8 @@ def run_researcher_home(screen, clock):
     CX = WINDOW_WIDTH  // 2
     CY = WINDOW_HEIGHT // 2
 
-    CARD_W, CARD_H = 280, 200
-    GAP = 36
+    CARD_W, CARD_H = 300, 220
+    GAP = 32
     total_w = CARD_W * 3 + GAP * 2
     start_x = CX - total_w // 2
 
@@ -392,18 +392,18 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
     initialise_database()
 
     # Fonts
-    f_title = pygame.font.SysFont("Helvetica Neue", 28, bold=True)
-    f_sec   = pygame.font.SysFont("Helvetica Neue", 13, bold=True)
-    f_med   = pygame.font.SysFont("Helvetica Neue", 17, bold=True)
-    f_sm    = pygame.font.SysFont("Helvetica Neue", 15)
-    f_xs    = pygame.font.SysFont("Helvetica Neue", 13)
-    # Fallback — Helvetica Neue may not exist on all systems
+    f_title = pygame.font.SysFont("Helvetica Neue", 32, bold=True)
+    f_sec   = pygame.font.SysFont("Helvetica Neue", 14, bold=True)
+    f_med   = pygame.font.SysFont("Helvetica Neue", 18, bold=True)
+    f_sm    = pygame.font.SysFont("Helvetica Neue", 16)
+    f_xs    = pygame.font.SysFont("Helvetica Neue", 14)
+    # Fallback
     if not f_title.get_height():
-        f_title = pygame.font.SysFont("Arial", 28, bold=True)
-        f_sec   = pygame.font.SysFont("Arial", 13, bold=True)
-        f_med   = pygame.font.SysFont("Arial", 17, bold=True)
-        f_sm    = pygame.font.SysFont("Arial", 15)
-        f_xs    = pygame.font.SysFont("Arial", 13)
+        f_title = pygame.font.SysFont("Arial", 32, bold=True)
+        f_sec   = pygame.font.SysFont("Arial", 14, bold=True)
+        f_med   = pygame.font.SysFont("Arial", 18, bold=True)
+        f_sm    = pygame.font.SysFont("Arial", 16)
+        f_xs    = pygame.font.SysFont("Arial", 14)
 
     fonts = (f_med, f_med, f_sm, f_xs)
 
