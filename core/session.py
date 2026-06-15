@@ -164,12 +164,19 @@ def run_block(screen, clock, fonts, block_type, block_number,
             block_type=block_type,
             show_score=show_score,
         )
+
+        if result.get("paused_exit"):
+            # Participant (or researcher) chose Save & Exit mid-block.
+            # Data up to this trial is already saved in the DB.
+            _show_saved_exit(screen, clock, fonts)
+            return "exited"   # signal to run_session to stop
+
         cumulative_score = result["cumulative_score"]
 
     complete_session(session_id)
 
     # Show reflection after practice blocks for MI groups
-    is_mi    = group.startswith("MI")
+    is_mi       = group.startswith("MI")
     is_practice = block_type == "practice"
     if is_mi and is_practice:
         is_last = (session_number == 3)
@@ -177,6 +184,40 @@ def run_block(screen, clock, fonts, block_type, block_number,
                        session_number, is_last_session=is_last)
 
     return cumulative_score, repeated_puzzle
+
+
+def _show_saved_exit(screen, clock, fonts):
+    """Brief confirmation screen shown after Save & Exit."""
+    f_big, f_med, f_sm, f_xs = fonts
+    cx = screen.get_width()  // 2
+    cy = screen.get_height() // 2
+
+    waiting = True
+    t0 = pygame.time.get_ticks()
+    while waiting:
+        clock.tick(FPS)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit(); import sys; sys.exit()
+            if event.type == pygame.KEYDOWN:
+                waiting = False
+
+        # Auto-exit after 3 seconds
+        if pygame.time.get_ticks() - t0 > 3000:
+            waiting = False
+
+        screen.fill((12, 12, 22))
+
+        ts = f_big.render("Progress Saved", True, (58, 196, 108))
+        screen.blit(ts, (cx - ts.get_width() // 2, cy - 60))
+
+        ms = f_sm.render("All completed trials have been recorded.", True, (100, 100, 138))
+        screen.blit(ms, (cx - ms.get_width() // 2, cy - 10))
+
+        hs = f_xs.render("Returning to the start screen...", True, (60, 60, 90))
+        screen.blit(hs, (cx - hs.get_width() // 2, cy + 40))
+
+        pygame.display.flip()
 
 
 # ── Session runner ────────────────────────────────────────────
@@ -210,7 +251,7 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
     run_tutorial(screen, clock, fonts)
 
     for block_idx, block_type in enumerate(block_sequence):
-        cumulative_score, repeated_puzzle = run_block(
+        result = run_block(
             screen         = screen,
             clock          = clock,
             fonts          = fonts,
@@ -224,6 +265,11 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
             repeated_puzzle= repeated_puzzle,
             cumulative_score = cumulative_score,
         )
+
+        if result == "exited":
+            return   # participant exited mid-session
+
+        cumulative_score, repeated_puzzle = result
 
         # Show break screen between blocks (not after the last one)
         if block_idx < len(block_sequence) - 1:
