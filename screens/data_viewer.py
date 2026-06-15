@@ -1,15 +1,5 @@
 # ============================================================
-#  GRID-SAILING TASK — Data Viewer
-#
-#  Accessible from the Researcher Setup screen.
-#  Juliet can see a live dashboard of all collected data
-#  without opening a terminal or spreadsheet.
-#
-#  Layout:
-#    Top row  — 4 summary stat cards
-#    Middle   — scrollable participant table with mini bar charts
-#    Side panel (right) — session breakdown for selected participant
-#    Bottom   — ESC / Back to return
+#  GRID-SAILING TASK — Data Viewer  (v2)
 # ============================================================
 
 import pygame
@@ -17,19 +7,18 @@ import sys
 from database.db import get_participant_stats, get_session_breakdown
 from config import WINDOW_WIDTH, WINDOW_HEIGHT, FPS
 
-# ── Palette (matches the rest of the app) ────────────────────
-BG       = (12,  12,  22)
-PANEL    = (20,  20,  36)
-PANEL2   = (26,  26,  44)
-BORDER   = (52,  52,  80)
-WHITE    = (230, 230, 242)
-DIM      = (100, 100, 138)
-ACCENT   = ( 88, 148, 255)
-GREEN    = ( 58, 196, 108)
-AMBER    = (210, 158,  28)
-ORANGE   = (228, 138,  48)
-RED_C    = (212,  58,  58)
-PURPLE   = (160,  90, 220)
+BG      = (12,  12,  22)
+PANEL   = (20,  20,  36)
+PANEL2  = (28,  28,  46)
+BORDER  = (52,  52,  80)
+WHITE   = (230, 230, 242)
+DIM     = (100, 100, 138)
+ACCENT  = ( 88, 148, 255)
+GREEN   = ( 58, 196, 108)
+AMBER   = (210, 158,  28)
+ORANGE  = (228, 138,  48)
+RED_C   = (212,  58,  58)
+PURPLE  = (160,  90, 220)
 
 GROUP_COLORS = {
     "MI-High":   ( 88, 148, 255),
@@ -40,21 +29,23 @@ GROUP_COLORS = {
     "CTRL-Low":  (168, 118,  18),
 }
 
-PAD      = 40
+PAD      = 36
+SIDE_W   = 280
 TABLE_X  = PAD
-TABLE_W  = WINDOW_WIDTH - PAD * 2 - 320   # leave room for side panel
+TABLE_W  = WINDOW_WIDTH - PAD * 2 - SIDE_W - 20
 SIDE_X   = TABLE_X + TABLE_W + 16
-SIDE_W   = WINDOW_WIDTH - SIDE_X - PAD
-ROW_H    = 52
-HEADER_Y = 148    # y below summary cards
+ROW_H    = 48
+CARD_H   = 80
+CARDS_Y  = 70
+TABLE_Y  = CARDS_Y + CARD_H + 18   # top of header row
 
 
-def _t(screen, font, text, col, x, y, right=False, center_w=0):
+# ── Helpers ───────────────────────────────────────────────────
+
+def _t(screen, font, text, col, x, y, center_in_w=0):
     s = font.render(text, True, col)
-    if right:
-        screen.blit(s, (x - s.get_width(), y))
-    elif center_w:
-        screen.blit(s, (x + center_w//2 - s.get_width()//2, y))
+    if center_in_w:
+        screen.blit(s, (x + center_in_w // 2 - s.get_width() // 2, y))
     else:
         screen.blit(s, (x, y))
     return s
@@ -63,167 +54,178 @@ def _panel(screen, x, y, w, h, col=BORDER, radius=10):
     pygame.draw.rect(screen, PANEL,  (x, y, w, h), border_radius=radius)
     pygame.draw.rect(screen, col,    (x, y, w, h), width=1, border_radius=radius)
 
-def _bar(screen, x, y, w, h, pct, fg, bg=(30, 30, 52)):
-    """Horizontal fill bar — pct is 0.0–1.0."""
-    pygame.draw.rect(screen, bg, (x, y, w, h), border_radius=4)
+def _bar(screen, x, y, w, h, pct, fg):
+    pygame.draw.rect(screen, (28, 28, 50), (x, y, w, h), border_radius=4)
     if pct > 0:
-        pygame.draw.rect(screen, fg, (x, y, int(w * min(pct, 1.0)), h), border_radius=4)
+        pygame.draw.rect(screen, fg,
+                         (x, y, max(4, int(w * min(pct, 1.0))), h), border_radius=4)
 
 def _pill(screen, font, text, fg, bg, x, y):
     s  = font.render(text, True, fg)
     pw = s.get_width() + 14
     ph = s.get_height() + 6
-    pygame.draw.rect(screen, bg, (x, y, pw, ph), border_radius=ph//2)
+    pygame.draw.rect(screen, bg, (x, y, pw, ph), border_radius=ph // 2)
     screen.blit(s, (x + 7, y + 3))
     return pw
 
 
-def _summary_card(screen, fonts, x, y, w, h, label, value, sub, accent):
-    f_big, f_med, f_sm, f_xs = fonts
-    _panel(screen, x, y, w, h, accent)
-    _t(screen, f_xs,  label, DIM,    x + 18, y + 12)
-    _t(screen, f_med, value, accent, x + 18, y + 32)
-    if sub:
-        _t(screen, f_xs, sub, DIM, x + 18, y + h - 22)
+# ── Summary cards ─────────────────────────────────────────────
+
+def _summary_card(screen, fonts, x, y, w, label, value, sub, accent):
+    _, f_med, f_sm, f_xs = fonts
+    _panel(screen, x, y, w, CARD_H, accent, radius=12)
+    # Top accent stripe
+    pygame.draw.rect(screen, accent,
+                     (x + 1, y + 1, w - 2, 5), border_radius=12)
+    _t(screen, f_xs,  label, DIM,    x + 16, y + 14)
+    _t(screen, f_med, value, accent, x + 16, y + 34)
+    _t(screen, f_xs,  sub,   DIM,    x + 16, y + CARD_H - 20)
 
 
-def _draw_table_header(screen, fonts, y):
-    f_big, f_med, f_sm, f_xs = fonts
-    cols = _col_positions()
-    labels = ["ID", "Group", "Age", "Sessions", "Trials", "Avg Score", "Accuracy"]
-    pygame.draw.rect(screen, PANEL2, (TABLE_X, y, TABLE_W, 30), border_radius=6)
-    for (cx, cw), lbl in zip(cols, labels):
-        _t(screen, f_xs, lbl, DIM, TABLE_X + cx + 8, y + 7)
-    pygame.draw.line(screen, BORDER, (TABLE_X, y+30), (TABLE_X+TABLE_W, y+30))
+# ── Column layout ─────────────────────────────────────────────
 
-
-def _col_positions():
-    """(x_offset, col_width) for each column within the table."""
+def _cols():
+    """(x_offset, width) for each column: ID, Group, Age, Sessions, Trials, Score, Accuracy"""
+    # Accuracy column: remaining space minus space for the % label (38px)
+    acc_x = 474
+    acc_w = TABLE_W - acc_x - 44   # 44px reserved for "100%" label
     return [
-        (0,   80),   # ID
-        (80,  110),  # Group
-        (190,  50),  # Age
-        (240,  80),  # Sessions
-        (320,  70),  # Trials
-        (390,  90),  # Avg Score
-        (480, TABLE_W - 488),  # Accuracy bar
+        (0,     86),   # ID
+        (86,   114),   # Group (pill)
+        (200,   46),   # Age
+        (246,   74),   # Sessions
+        (320,   64),   # Trials
+        (384,   90),   # Avg Score
+        (acc_x, acc_w),# Accuracy bar
     ]
 
 
-def _draw_participant_row(screen, fonts, stat, y, selected, scroll_clip):
-    f_big, f_med, f_sm, f_xs = fonts
-    cols = _col_positions()
+# ── Table header ──────────────────────────────────────────────
 
-    # Row background
-    bg = (32, 32, 56) if selected else PANEL
-    bc = ACCENT if selected else BORDER
-    pygame.draw.rect(screen, bg,  (TABLE_X, y, TABLE_W, ROW_H - 2), border_radius=8)
+def _draw_header(screen, fonts, y):
+    _, _, f_sm, f_xs = fonts
+    labels = ["ID", "Group", "Age", "Sessions", "Trials", "Avg Score", "Accuracy"]
+    pygame.draw.rect(screen, PANEL2, (TABLE_X, y, TABLE_W, 28), border_radius=6)
+    for (cx, cw), lbl in zip(_cols(), labels):
+        _t(screen, f_xs, lbl, DIM, TABLE_X + cx + 8, y + 6)
+    pygame.draw.line(screen, BORDER,
+                     (TABLE_X, y + 28), (TABLE_X + TABLE_W, y + 28))
+
+
+# ── Participant row ───────────────────────────────────────────
+
+def _draw_row(screen, fonts, stat, y, selected):
+    _, _, f_sm, f_xs = fonts
+    cols = _cols()
+
+    bg = (32, 32, 58) if selected else PANEL
+    bc = ACCENT        if selected else BORDER
+    pygame.draw.rect(screen, bg, (TABLE_X, y, TABLE_W, ROW_H - 2), border_radius=8)
     if selected:
-        pygame.draw.rect(screen, bc, (TABLE_X, y, TABLE_W, ROW_H - 2), width=1, border_radius=8)
+        pygame.draw.rect(screen, bc, (TABLE_X, y, TABLE_W, ROW_H - 2),
+                         width=1, border_radius=8)
 
-    cy = y + ROW_H//2 - 8   # vertical centre for text
+    cy = y + ROW_H // 2 - 8   # text baseline
 
-    # Clip row to visible scroll area
-    if y + ROW_H < scroll_clip[0] or y > scroll_clip[1]:
-        return
-
-    values = [
+    # Text columns (skip Group and Accuracy — drawn specially)
+    text_vals = [
         stat["participant_id"],
-        stat["group_name"],
+        "",                               # Group — pill drawn below
         str(stat["age"] or "—"),
         str(int(stat["sessions_done"])),
         str(int(stat["total_trials"])),
         f"{stat['avg_score']:.0f}",
     ]
-
-    for i, ((cx, cw), val) in enumerate(zip(cols, values)):
-        col = WHITE if selected else (WHITE if i == 0 else DIM)
+    for i, ((cx, cw), val) in enumerate(zip(cols[:6], text_vals)):
         if i == 0:
-            col = ACCENT if selected else WHITE
-        _t(screen, f_sm if i == 0 else f_xs, val, col, TABLE_X + cx + 8, cy)
+            color = ACCENT if selected else WHITE
+            _t(screen, f_sm, val, color, TABLE_X + cx + 8, cy)
+        elif i == 1:
+            pass   # pill below
+        else:
+            _t(screen, f_xs, val, DIM, TABLE_X + cx + 8, cy)
 
-    # Group badge
+    # Group pill
     gx, gw = cols[1]
     gcol = GROUP_COLORS.get(stat["group_name"], DIM)
-    _pill(screen, f_xs, stat["group_name"], (12, 12, 22), gcol,
-          TABLE_X + gx + 8, y + ROW_H//2 - 12)
+    _pill(screen, f_xs, stat["group_name"], (10, 10, 20), gcol,
+          TABLE_X + gx + 6, y + ROW_H // 2 - 11)
 
-    # Accuracy bar
+    # Accuracy bar + %
     ax, aw = cols[6]
-    bar_x = TABLE_X + ax + 8
-    bar_w = aw - 16
-    pct   = stat["accuracy_pct"] / 100.0
-    bar_y = y + ROW_H//2 - 6
-    _bar(screen, bar_x, bar_y, bar_w, 12, pct,
+    bar_x  = TABLE_X + ax + 8
+    bar_w  = aw
+    pct    = stat["accuracy_pct"] / 100.0
+    bar_y  = y + ROW_H // 2 - 5
+    _bar(screen, bar_x, bar_y, bar_w, 10, pct,
          fg=GREEN if pct >= 0.7 else (ORANGE if pct >= 0.4 else RED_C))
-    _t(screen, f_xs, f"{stat['accuracy_pct']:.0f}%", WHITE,
-       bar_x + bar_w + 6, bar_y - 2)
+    pct_x = bar_x + bar_w + 6
+    _t(screen, f_xs, f"{stat['accuracy_pct']:.0f}%", WHITE, pct_x, bar_y - 2)
 
 
-def _draw_side_panel(screen, fonts, pid, sessions):
-    f_big, f_med, f_sm, f_xs = fonts
-    x, y, w = SIDE_X, HEADER_Y, SIDE_W
-    H = WINDOW_HEIGHT - HEADER_Y - 60
+# ── Side panel ────────────────────────────────────────────────
 
-    _panel(screen, x, y, w, H, BORDER)
+def _draw_side(screen, fonts, pid, sessions, panel_h):
+    _, _, f_sm, f_xs = fonts
+    x, y, w = SIDE_X, TABLE_Y, SIDE_W
+
+    _panel(screen, x, y, w, panel_h, BORDER, radius=12)
+
     _t(screen, f_sm, pid, ACCENT, x + 16, y + 14)
-    _t(screen, f_xs, "Session breakdown", DIM, x + 16, y + 38)
-    pygame.draw.line(screen, BORDER, (x + 12, y + 58), (x + w - 12, y + 58))
+    _t(screen, f_xs, "Session breakdown", DIM, x + 16, y + 36)
+    pygame.draw.line(screen, BORDER, (x + 12, y + 56), (x + w - 12, y + 56))
 
-    ry = y + 68
+    ry = y + 66
     for s in sessions:
-        if ry + 54 > y + H - 10:
+        if ry + 58 > y + panel_h - 10:
             break
         done   = bool(s["completed"])
         bc     = GREEN if done else BORDER
-        label  = f"S{s['session_number']}·{s['block_type'].replace('_',' ')[:8]}"
-        _panel(screen, x + 10, ry, w - 20, 50, bc, radius=8)
-
-        _t(screen, f_xs, label, WHITE if done else DIM, x + 18, ry + 6)
+        label  = f"S{s['session_number']} · {s['block_type'].replace('_', ' ')}"
+        _panel(screen, x + 10, ry, w - 20, 52, bc, radius=8)
+        _t(screen, f_xs, label,
+           WHITE if done else DIM, x + 20, ry + 6)
         _t(screen, f_xs,
            f"Trials: {int(s['trials'])}   Acc: {s['accuracy_pct']:.0f}%",
-           DIM, x + 18, ry + 26)
-
-        # Mini accuracy bar
-        _bar(screen, x + 18, ry + 42, w - 36, 5,
+           DIM, x + 20, ry + 26)
+        _bar(screen, x + 20, ry + 44, w - 40, 5,
              s["accuracy_pct"] / 100.0,
              fg=GREEN if s["accuracy_pct"] >= 70 else ORANGE)
-        ry += 58
+        ry += 60
 
     if not sessions:
-        _t(screen, f_xs, "No sessions recorded yet.", DIM, x + 16, y + 78)
+        _t(screen, f_xs, "No sessions recorded yet.", DIM, x + 16, y + 74)
 
 
-# ── Main entry point ──────────────────────────────────────────
+# ── Entry point ───────────────────────────────────────────────
 
 def run_data_viewer(screen, clock, fonts):
-    """
-    Display the live data dashboard.
-    Returns when user presses ESC or Back.
-    """
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
 
     selected_idx  = 0
-    scroll_offset = 0     # rows scrolled down
+    scroll_offset = 0
     stats         = []
     sessions      = []
     refresh_t     = 0
 
-    back_rect = pygame.Rect(PAD, H - 50, 100, 34)
+    clip_top    = TABLE_Y + 30
+    clip_bottom = H - 62
+    visible_rows = (clip_bottom - clip_top) // ROW_H
+    panel_h     = clip_bottom - TABLE_Y
 
-    visible_rows = (H - HEADER_Y - 80) // ROW_H
+    back_rect = pygame.Rect(PAD, H - 50, 110, 34)
+
+    pygame.display.set_caption("Grid-Sailing — Data Overview")
 
     while True:
         clock.tick(FPS)
         now = pygame.time.get_ticks()
 
-        # Refresh data every 3 seconds
         if now - refresh_t > 3000:
-            stats     = get_participant_stats()
-            sessions  = get_session_breakdown(
-                stats[selected_idx]["participant_id"]
-            ) if stats else []
+            stats    = get_participant_stats()
+            sessions = (get_session_breakdown(stats[selected_idx]["participant_id"])
+                        if stats else [])
             refresh_t = now
 
         for event in pygame.event.get():
@@ -244,23 +246,18 @@ def run_data_viewer(screen, clock, fonts):
                         scroll_offset -= 1
                     sessions = get_session_breakdown(
                         stats[selected_idx]["participant_id"])
-
             if event.type == pygame.MOUSEBUTTONDOWN:
-                # Back button
                 if back_rect.collidepoint(event.pos):
                     return
-                # Click a row
                 mx, my = event.pos
                 for i in range(len(stats)):
                     row_i = i - scroll_offset
                     if 0 <= row_i < visible_rows:
-                        ry = HEADER_Y + 32 + row_i * ROW_H
-                        if (TABLE_X <= mx <= TABLE_X + TABLE_W
-                                and ry <= my <= ry + ROW_H):
+                        ry = clip_top + row_i * ROW_H
+                        if TABLE_X <= mx <= TABLE_X + TABLE_W and ry <= my <= ry + ROW_H:
                             selected_idx = i
                             sessions = get_session_breakdown(
                                 stats[i]["participant_id"])
-
             if event.type == pygame.MOUSEWHEEL:
                 scroll_offset = max(0, min(
                     scroll_offset - event.y,
@@ -270,48 +267,43 @@ def run_data_viewer(screen, clock, fonts):
         # ── Draw ─────────────────────────────────────────────
         screen.fill(BG)
 
-        # Title
-        _t(screen, f_big, "Data Overview", WHITE, PAD, 18)
-        _t(screen, f_xs, "↑ ↓ or click to select   ·   scroll to browse   ·   ESC to go back",
-           DIM, PAD, 52)
+        # Title bar
+        pygame.draw.rect(screen, (18, 18, 32), (0, 0, W, 58))
+        pygame.draw.line(screen, BORDER, (0, 58), (W, 58))
+        _t(screen, f_big, "Data Overview", WHITE, PAD, 16)
+        _t(screen, f_xs,
+           "Up/Down or click to select   |   Scroll to browse   |   ESC to go back",
+           DIM, 0, 36, center_in_w=W)
 
         # ── Summary cards ─────────────────────────────────────
         n_parts  = len(stats)
         n_trials = sum(int(s["total_trials"]) for s in stats)
         avg_acc  = (sum(s["accuracy_pct"] for s in stats) / n_parts) if n_parts else 0
-        avg_rt   = (sum(s["avg_rt_ms"] for s in stats) / n_parts) if n_parts else 0
+        avg_rt   = (sum(s["avg_rt_ms"]    for s in stats) / n_parts) if n_parts else 0
 
         card_w = (W - PAD * 2 - 36) // 4
         cx = PAD
         for label, val, sub, col in [
-            ("Participants",   str(n_parts),
-             "registered",                    ACCENT),
-            ("Total Trials",   str(n_trials),
-             "across all participants",        GREEN),
-            ("Avg Accuracy",   f"{avg_acc:.0f}%",
-             "correct trials",                AMBER),
+            ("Participants",    str(n_parts),               "registered",            ACCENT),
+            ("Total Trials",    str(n_trials),              "across all participants", GREEN),
+            ("Avg Accuracy",    f"{avg_acc:.0f}%",          "correct trials",         AMBER),
             ("Avg React. Time", f"{avg_rt/1000:.2f}s" if avg_rt else "—",
-             "planning → first key",          PURPLE),
+                                                            "planning to first key",  PURPLE),
         ]:
-            _summary_card(screen, fonts, cx, 74, card_w, 64,
-                          label, val, sub, col)
+            _summary_card(screen, fonts, cx, CARDS_Y, card_w, label, val, sub, col)
             cx += card_w + 12
 
         # ── Table ─────────────────────────────────────────────
-        _draw_table_header(screen, fonts, HEADER_Y)
-        clip_top    = HEADER_Y + 32
-        clip_bottom = H - 70
-        clip_rect   = pygame.Rect(TABLE_X, clip_top, TABLE_W, clip_bottom - clip_top)
+        _draw_header(screen, fonts, TABLE_Y)
 
+        clip_rect = pygame.Rect(TABLE_X, clip_top, TABLE_W + 50, clip_bottom - clip_top)
         screen.set_clip(clip_rect)
         for i, stat in enumerate(stats):
             row_i = i - scroll_offset
             if row_i < 0 or row_i >= visible_rows:
                 continue
             ry = clip_top + row_i * ROW_H
-            _draw_participant_row(screen, fonts, stat, ry,
-                                  selected=(i == selected_idx),
-                                  scroll_clip=(clip_top, clip_bottom))
+            _draw_row(screen, fonts, stat, ry, selected=(i == selected_idx))
         screen.set_clip(None)
 
         if not stats:
@@ -320,32 +312,31 @@ def run_data_viewer(screen, clock, fonts):
 
         # Scrollbar
         if len(stats) > visible_rows:
-            sb_h     = clip_bottom - clip_top
-            thumb_h  = max(30, int(sb_h * visible_rows / len(stats)))
-            thumb_y  = clip_top + int((sb_h - thumb_h) * scroll_offset
-                                      / max(1, len(stats) - visible_rows))
-            pygame.draw.rect(screen, (40, 40, 68),
+            sb_h    = clip_bottom - clip_top
+            th      = max(30, int(sb_h * visible_rows / len(stats)))
+            ty      = clip_top + int((sb_h - th) * scroll_offset
+                                     / max(1, len(stats) - visible_rows))
+            pygame.draw.rect(screen, (36, 36, 60),
                              (TABLE_X + TABLE_W - 6, clip_top, 6, sb_h), border_radius=3)
             pygame.draw.rect(screen, BORDER,
-                             (TABLE_X + TABLE_W - 6, thumb_y, 6, thumb_h), border_radius=3)
+                             (TABLE_X + TABLE_W - 6, ty, 6, th), border_radius=3)
 
         # ── Side panel ────────────────────────────────────────
         if stats:
-            _draw_side_panel(screen, fonts,
-                             stats[selected_idx]["participant_id"], sessions)
+            _draw_side(screen, fonts,
+                       stats[selected_idx]["participant_id"], sessions, panel_h)
         else:
-            _panel(screen, SIDE_X, HEADER_Y, SIDE_W,
-                   H - HEADER_Y - 60, BORDER)
-            _t(screen, f_xs, "Select a participant", DIM, SIDE_X + 16, HEADER_Y + 20)
+            _panel(screen, SIDE_X, TABLE_Y, SIDE_W, panel_h, BORDER)
+            _t(screen, f_xs, "Select a participant", DIM, SIDE_X + 16, TABLE_Y + 20)
 
         # ── Bottom bar ────────────────────────────────────────
         pygame.draw.line(screen, BORDER, (0, H - 58), (W, H - 58))
-        pygame.draw.rect(screen, (30, 30, 52), back_rect, border_radius=8)
-        pygame.draw.rect(screen, BORDER,       back_rect, width=1, border_radius=8)
-        _t(screen, f_xs, "← Back", DIM, back_rect.x + 12, back_rect.y + 9)
+        pygame.draw.rect(screen, PANEL2, back_rect, border_radius=8)
+        pygame.draw.rect(screen, BORDER, back_rect, width=1, border_radius=8)
+        _t(screen, f_xs, "< Back", DIM, back_rect.x + 14, back_rect.y + 10)
 
         _t(screen, f_xs,
-           f"Auto-refreshes every 3 s   ·   {n_parts} participant(s)   ·   {n_trials} trial(s) recorded",
-           DIM, W // 2, H - 44, center_w=0)
+           f"Auto-refreshes every 3s   |   {n_parts} participant(s)   |   {n_trials} trial(s)",
+           DIM, 0, H - 40, center_in_w=W)
 
         pygame.display.flip()
