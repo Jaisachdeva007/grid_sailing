@@ -251,11 +251,17 @@ class Button:
 
 # ── Main setup screen ─────────────────────────────────────────
 
-def run_researcher_setup():
-    pygame.init()
-    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SCALED)
+def run_researcher_setup(screen=None, clock=None):
+    """
+    Display researcher configuration screen.
+    screen/clock are passed in from main (shared window).
+    Falls back to creating its own window if called standalone.
+    """
+    if screen is None:
+        pygame.init()
+        screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SCALED)
+        clock  = pygame.time.Clock()
     pygame.display.set_caption("Grid-Sailing — Researcher Setup")
-    clock  = pygame.time.Clock()
 
     initialise_database()
 
@@ -363,7 +369,7 @@ def run_researcher_setup():
                 if isinstance(result, str):
                     message = result; message_col = RED
                 elif isinstance(result, dict):
-                    pygame.quit(); return result
+                    return result
 
         # ── Draw ─────────────────────────────────────────────
         screen.fill(BG)
