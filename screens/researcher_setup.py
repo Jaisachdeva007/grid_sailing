@@ -434,6 +434,7 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
 
     message     = ""
     message_col = RED
+    scroll_y    = 0          # vertical scroll offset for the form content
 
     all_dropdowns = [gender_dd, hand_dd, group_dd, session_dd]
     all_inputs    = [pid_box, pin_box, age_box, ret_pid_box, ret_pin_box]
@@ -468,6 +469,9 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
             if export_btn.handle_event(event):
                 run_export_screen(screen, clock, fonts)
 
+            if event.type == pygame.MOUSEWHEEL:
+                scroll_y = max(0, min(scroll_y - event.y * 24, 220))
+
             if launch_btn.handle_event(event):
                 result = _validate_and_launch(
                     mode, pid_box, pin_box, age_box, gender_dd, hand_dd,
@@ -483,64 +487,70 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
         # ── Draw ─────────────────────────────────────────────
         screen.fill(BG)
 
-        # ── Top title bar ─────────────────────────────────────
+        # ── Top title bar (fixed — never scrolls) ─────────────
         pygame.draw.rect(screen, SURFACE, (0, 0, WINDOW_WIDTH, 60))
         pygame.draw.line(screen, BORDER, (0, 60), (WINDOW_WIDTH, 60))
         _t(screen, f_title, "Researcher Setup", WHITE, PAD, 16)
-        # Version tag top-right
-        _t(screen, f_xs, "Grid-Sailing Task", DIM,
-           WINDOW_WIDTH - PAD - 120, 22)
+        _t(screen, f_xs, "Grid-Sailing Task", DIM, WINDOW_WIDTH - PAD - 120, 22)
 
-        # ── Breadcrumb ────────────────────────────────────────
-        crumb_y = CONTENT_TOP - 36
+        # ── Breadcrumb (fixed) ────────────────────────────────
         crumb_label = "New Participant" if mode == "new" else "Returning Participant"
-        _t(screen, f_xs, f"Home  /  {crumb_label}", DIM, PAD, crumb_y)
+        _t(screen, f_xs, f"Home  /  {crumb_label}", DIM, PAD, 76)
+
+        # ── Scroll helper ─────────────────────────────────────
+        # oy(base, extra=0) converts a layout y to a screen y by
+        # subtracting the current scroll offset.
+        def oy(base, extra=0):
+            return base + extra - scroll_y
+
+        BY_LINE = WINDOW_HEIGHT - BH - 30
+
+        # Clip so content that scrolls off-screen is hidden.
+        screen.set_clip(pygame.Rect(0, 96, WINDOW_WIDTH, BY_LINE - 96))
 
         y = CONTENT_TOP
 
         # ── §1: Participant ───────────────────────────────────
-        y += _section(screen, f_sec, "1  Participant", y)
+        y += _section(screen, f_sec, "1  Participant", oy(y))
 
         if mode == "new":
-            _label(screen, f_sm, "Participant ID", COL1, y)
-            pid_box.rect.y = y;  pid_box.draw(screen, f_sm)
-            _label(screen, f_sm, "PIN (4 digits)", COL1, y + ROW_H + 8)
-            pin_box.rect.y = y + ROW_H + 8; pin_box.draw(screen, f_sm)
+            _label(screen, f_sm, "Participant ID", COL1, oy(y))
+            pid_box.rect.y = oy(y);  pid_box.draw(screen, f_sm)
+            _label(screen, f_sm, "PIN (4 digits)", COL1, oy(y, ROW_H + 8))
+            pin_box.rect.y = oy(y, ROW_H + 8); pin_box.draw(screen, f_sm)
 
-            _label(screen, f_sm, "Age",        COL2, y)
-            age_box.rect.y = y; age_box.draw(screen, f_sm)
-            _label(screen, f_sm, "Gender",     COL2, y + ROW_H + 8)
-            gender_dd.rect.y = y + ROW_H + 8; gender_dd.draw_closed(screen, f_sm)
-            _label(screen, f_sm, "Handedness", COL2, y + ROW_H * 2 + 16)
-            hand_dd.rect.y   = y + ROW_H * 2 + 16; hand_dd.draw_closed(screen, f_sm)
+            _label(screen, f_sm, "Age",        COL2, oy(y))
+            age_box.rect.y = oy(y); age_box.draw(screen, f_sm)
+            _label(screen, f_sm, "Gender",     COL2, oy(y, ROW_H + 8))
+            gender_dd.rect.y = oy(y, ROW_H + 8); gender_dd.draw_closed(screen, f_sm)
+            _label(screen, f_sm, "Handedness", COL2, oy(y, ROW_H * 2 + 16))
+            hand_dd.rect.y   = oy(y, ROW_H * 2 + 16); hand_dd.draw_closed(screen, f_sm)
             y += ROW_H * 3 + 24
         else:
-            _label(screen, f_sm, "Participant ID", COL1, y)
-            ret_pid_box.rect.y = y; ret_pid_box.draw(screen, f_sm)
-            _label(screen, f_sm, "PIN",           COL1, y + ROW_H + 8)
-            ret_pin_box.rect.y = y + ROW_H + 8; ret_pin_box.draw(screen, f_sm)
+            _label(screen, f_sm, "Participant ID", COL1, oy(y))
+            ret_pid_box.rect.y = oy(y); ret_pid_box.draw(screen, f_sm)
+            _label(screen, f_sm, "PIN",           COL1, oy(y, ROW_H + 8))
+            ret_pin_box.rect.y = oy(y, ROW_H + 8); ret_pin_box.draw(screen, f_sm)
 
-            # Participant chips
             parts = [p["participant_id"] for p in get_all_participants()]
-            px = COL2; py2 = y + 6
+            px = COL2; py2 = oy(y, 6)
             for pid in parts[:10]:
                 pw = _pill(screen, f_xs, pid, BG, ACCENT, px, py2)
                 px += pw + 8
                 if px > WINDOW_WIDTH - PAD - 60:
                     px = COL2; py2 += 28
             if not parts:
-                _t(screen, f_xs, "No participants yet", DIM, COL2, y + 14)
+                _t(screen, f_xs, "No participants yet", DIM, COL2, oy(y, 14))
             y += ROW_H * 2 + 24
 
         # ── §2: Group ─────────────────────────────────────────
-        y += _section(screen, f_sec, "2  Group Assignment", y)
-        _label(screen, f_sm, "Experimental group", COL1, y)
-        group_dd.rect.y = y; group_dd.draw_closed(screen, f_sm)
+        y += _section(screen, f_sec, "2  Group Assignment", oy(y))
+        _label(screen, f_sm, "Experimental group", COL1, oy(y))
+        group_dd.rect.y = oy(y); group_dd.draw_closed(screen, f_sm)
 
-        # Group color badge
         gcol = GROUP_COLORS.get(group_dd.value, DIM)
         _pill(screen, f_xs, group_dd.value, BG, gcol,
-              INP_X1 + 218, y + ROW_H//2 - 12)
+              INP_X1 + 218, oy(y, ROW_H // 2 - 12))
 
         group_desc = {
             "MI-High":   "Motor imagery  ·  high sensory feedback keypad",
@@ -550,13 +560,13 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
             "CTRL-High": "Control (planning only)  ·  high sensory feedback",
             "CTRL-Low":  "Control (planning only)  ·  low sensory feedback",
         }
-        _t(screen, f_xs, group_desc.get(group_dd.value, ""), DIM, COL2, y + ROW_H//2 - 7)
+        _t(screen, f_xs, group_desc.get(group_dd.value, ""), DIM, COL2, oy(y, ROW_H // 2 - 7))
         y += ROW_H + 20
 
         # ── §3: Session ───────────────────────────────────────
-        y += _section(screen, f_sec, "3  Session", y)
-        _label(screen, f_sm, "Session number", COL1, y)
-        session_dd.rect.y = y; session_dd.draw_closed(screen, f_sm)
+        y += _section(screen, f_sec, "3  Session", oy(y))
+        _label(screen, f_sm, "Session number", COL1, oy(y))
+        session_dd.rect.y = oy(y); session_dd.draw_closed(screen, f_sm)
 
         blocks = SESSION_STRUCTURE.get(session_dd.value, [])
         bx = COL2
@@ -565,33 +575,56 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
                        b.replace("_", " "),
                        BG,
                        ACCENT if "practice" in b else (GREEN if "test" in b else DIM),
-                       bx, y + ROW_H//2 - 12)
+                       bx, oy(y, ROW_H // 2 - 12))
             bx += bw + 8
         y += ROW_H + 20
 
         # ── §4: Timing ────────────────────────────────────────
-        y += _section(screen, f_sec, "4  Timing Overrides (seconds)", y)
+        y += _section(screen, f_sec, "4  Timing Overrides (seconds)", oy(y))
 
-        _label(screen, f_sm, "Planning time",  COL1, y)
-        planning_input.reposition(INP_X1, y + 5); planning_input.draw(screen, f_sm)
-        _label(screen, f_sm, "Feedback time",  COL2, y)
-        feedback_input.reposition(INP_X2, y + 5); feedback_input.draw(screen, f_sm)
+        _label(screen, f_sm, "Planning time",  COL1, oy(y))
+        planning_input.reposition(INP_X1, oy(y, 5)); planning_input.draw(screen, f_sm)
+        _label(screen, f_sm, "Feedback time",  COL2, oy(y))
+        feedback_input.reposition(INP_X2, oy(y, 5)); feedback_input.draw(screen, f_sm)
 
         y += ROW_H + 8
-        _label(screen, f_sm, "Action time",    COL1, y)
-        action_input.reposition(INP_X1, y + 5); action_input.draw(screen, f_sm)
-        _label(screen, f_sm, "Intertrial gap", COL2, y)
-        intertrial_input.reposition(INP_X2, y + 5); intertrial_input.draw(screen, f_sm)
+        _label(screen, f_sm, "Action time",    COL1, oy(y))
+        action_input.reposition(INP_X1, oy(y, 5)); action_input.draw(screen, f_sm)
+        _label(screen, f_sm, "Intertrial gap", COL2, oy(y))
+        intertrial_input.reposition(INP_X2, oy(y, 5)); intertrial_input.draw(screen, f_sm)
         y += ROW_H + 20
 
         # ── §5: Ratio ─────────────────────────────────────────
-        y += _section(screen, f_sec, "5  Repeated Grid Ratio (%)", y)
-        _label(screen, f_sm, "Practice blocks", COL1, y)
-        practice_ratio_input.reposition(INP_X1, y + 5); practice_ratio_input.draw(screen, f_sm)
-        _label(screen, f_sm, "Test blocks",     COL2, y)
-        test_ratio_input.reposition(INP_X2, y + 5); test_ratio_input.draw(screen, f_sm)
+        y += _section(screen, f_sec, "5  Repeated Grid Ratio (%)", oy(y))
+        _label(screen, f_sm, "Practice blocks", COL1, oy(y))
+        practice_ratio_input.reposition(INP_X1, oy(y, 5)); practice_ratio_input.draw(screen, f_sm)
+        _label(screen, f_sm, "Test blocks",     COL2, oy(y))
+        test_ratio_input.reposition(INP_X2, oy(y, 5)); test_ratio_input.draw(screen, f_sm)
 
-        # ── Bottom action bar ─────────────────────────────────
+        # Thin scroll indicator bar on right edge
+        content_end = y + ROW_H + 30
+        content_span = content_end - CONTENT_TOP
+        view_span    = BY_LINE - CONTENT_TOP
+        if content_span > view_span:
+            sb_h  = view_span
+            th    = max(28, int(sb_h * view_span / content_span))
+            ty_   = 96 + int((sb_h - th) * scroll_y / max(1, content_span - view_span))
+            pygame.draw.rect(screen, (30, 30, 52),
+                             (WINDOW_WIDTH - 6, 96, 6, sb_h), border_radius=3)
+            pygame.draw.rect(screen, BORDER_LT,
+                             (WINDOW_WIDTH - 6, ty_, 6, th), border_radius=3)
+
+        # ── Open dropdowns (still within clip) ───────────────
+        if mode == "new":
+            gender_dd.draw_open(screen, f_sm)
+            hand_dd.draw_open(screen, f_sm)
+        group_dd.draw_open(screen, f_sm)
+        session_dd.draw_open(screen, f_sm)
+
+        # ── End content clip ──────────────────────────────────
+        screen.set_clip(None)
+
+        # ── Bottom action bar (fixed) ─────────────────────────
         pygame.draw.line(screen, BORDER,
                          (0, WINDOW_HEIGHT - BH - 30),
                          (WINDOW_WIDTH, WINDOW_HEIGHT - BH - 30))
@@ -603,13 +636,6 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
         launch_btn.draw(screen, f_med)
         data_btn.draw(screen, f_sm)
         export_btn.draw(screen, f_sm)
-
-        # ── Dropdowns on top ──────────────────────────────────
-        if mode == "new":
-            gender_dd.draw_open(screen, f_sm)
-            hand_dd.draw_open(screen, f_sm)
-        group_dd.draw_open(screen, f_sm)
-        session_dd.draw_open(screen, f_sm)
 
         pygame.display.flip()
 
