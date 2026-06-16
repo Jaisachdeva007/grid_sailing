@@ -30,11 +30,11 @@ ADMIN_HASH = _hash(ADMIN_PASSWORD)
 
 
 def run_welcome(screen, clock):
-    f_title = pygame.font.SysFont("Helvetica Neue", 44, bold=True)
-    f_sub   = pygame.font.SysFont("Helvetica Neue", 17)
-    f_med   = pygame.font.SysFont("Helvetica Neue", 20, bold=True)
-    f_sm    = pygame.font.SysFont("Helvetica Neue", 16)
-    f_xs    = pygame.font.SysFont("Helvetica Neue", 13)
+    f_title = pygame.font.SysFont("Helvetica Neue", 52, bold=True)
+    f_sub   = pygame.font.SysFont("Helvetica Neue", 20)
+    f_med   = pygame.font.SysFont("Helvetica Neue", 24, bold=True)
+    f_sm    = pygame.font.SysFont("Helvetica Neue", 19)
+    f_xs    = pygame.font.SysFont("Helvetica Neue", 16)
 
     pygame.display.set_caption("Grid-Sailing Task")
 

@@ -8,10 +8,10 @@ import pygame
 def main():
     pygame.init()
 
-    # Create a true fullscreen window at the display's native resolution.
-    # Using (0, 0) lets SDL pick the exact screen size — no guessing,
-    # no letterbox black bars, no blur from non-integer scaling.
-    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+    # (0,0) + FULLSCREEN + SCALED: SDL picks native screen size,
+    # fills it without letterboxing, and enables the HiDPI rendering
+    # path on Retina displays (2× physical pixels → sharp text).
+    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN | pygame.SCALED)
     native_w = screen.get_width()
     native_h = screen.get_height()
 
@@ -42,10 +42,10 @@ def main():
 
     # Step 2: Researcher home
     fonts_setup = (
-        pygame.font.SysFont("Helvetica Neue", 34, bold=True),
-        pygame.font.SysFont("Helvetica Neue", 22, bold=True),
-        pygame.font.SysFont("Helvetica Neue", 17),
-        pygame.font.SysFont("Helvetica Neue", 14),
+        pygame.font.SysFont("Helvetica Neue", 40, bold=True),   # f_big
+        pygame.font.SysFont("Helvetica Neue", 26, bold=True),   # f_med
+        pygame.font.SysFont("Helvetica Neue", 20),              # f_sm
+        pygame.font.SysFont("Helvetica Neue", 16),              # f_xs
     )
 
     config_data = None
@@ -64,10 +64,10 @@ def main():
 
     # Step 3: Participant login
     fonts = (
-        pygame.font.SysFont("Helvetica Neue", 34, bold=True),
-        pygame.font.SysFont("Helvetica Neue", 22, bold=True),
-        pygame.font.SysFont("Helvetica Neue", 17),
-        pygame.font.SysFont("Helvetica Neue", 14),
+        pygame.font.SysFont("Helvetica Neue", 40, bold=True),
+        pygame.font.SysFont("Helvetica Neue", 26, bold=True),
+        pygame.font.SysFont("Helvetica Neue", 20),
+        pygame.font.SysFont("Helvetica Neue", 16),
     )
 
     pid = config_data["participant_id"]

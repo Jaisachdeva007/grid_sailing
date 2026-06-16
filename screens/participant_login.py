@@ -63,9 +63,9 @@ def run_participant_login(screen, clock, fonts, config: dict):
     pygame.display.set_caption("Grid-Sailing Task")
 
     # Local larger fonts for this screen
-    f_title = pygame.font.SysFont("Helvetica Neue", 42, bold=True)
-    f_body  = pygame.font.SysFont("Helvetica Neue", 17)
-    f_lbl   = pygame.font.SysFont("Helvetica Neue", 14)
+    f_title = pygame.font.SysFont("Helvetica Neue", 50, bold=True)
+    f_body  = pygame.font.SysFont("Helvetica Neue", 20)
+    f_lbl   = pygame.font.SysFont("Helvetica Neue", 16)
 
     start_t = time.time()
 

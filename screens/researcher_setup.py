@@ -256,10 +256,10 @@ def run_researcher_home(screen, clock):
     Landing screen shown after Juliet logs in.
     Returns one of: "new", "returning", "data", or None (quit).
     """
-    f_title = pygame.font.SysFont("Helvetica Neue", 36, bold=True)
-    f_med   = pygame.font.SysFont("Helvetica Neue", 20, bold=True)
-    f_sm    = pygame.font.SysFont("Helvetica Neue", 16)
-    f_xs    = pygame.font.SysFont("Helvetica Neue", 13)
+    f_title = pygame.font.SysFont("Helvetica Neue", 42, bold=True)
+    f_med   = pygame.font.SysFont("Helvetica Neue", 23, bold=True)
+    f_sm    = pygame.font.SysFont("Helvetica Neue", 19)
+    f_xs    = pygame.font.SysFont("Helvetica Neue", 15)
 
     pygame.display.set_caption("Grid-Sailing — Researcher Home")
 
@@ -388,18 +388,18 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
     initialise_database()
 
     # Fonts
-    f_title = pygame.font.SysFont("Helvetica Neue", 32, bold=True)
-    f_sec   = pygame.font.SysFont("Helvetica Neue", 14, bold=True)
-    f_med   = pygame.font.SysFont("Helvetica Neue", 18, bold=True)
-    f_sm    = pygame.font.SysFont("Helvetica Neue", 16)
-    f_xs    = pygame.font.SysFont("Helvetica Neue", 14)
+    f_title = pygame.font.SysFont("Helvetica Neue", 38, bold=True)
+    f_sec   = pygame.font.SysFont("Helvetica Neue", 16, bold=True)
+    f_med   = pygame.font.SysFont("Helvetica Neue", 21, bold=True)
+    f_sm    = pygame.font.SysFont("Helvetica Neue", 19)
+    f_xs    = pygame.font.SysFont("Helvetica Neue", 16)
     # Fallback
     if not f_title.get_height():
-        f_title = pygame.font.SysFont("Arial", 32, bold=True)
-        f_sec   = pygame.font.SysFont("Arial", 14, bold=True)
-        f_med   = pygame.font.SysFont("Arial", 18, bold=True)
-        f_sm    = pygame.font.SysFont("Arial", 16)
-        f_xs    = pygame.font.SysFont("Arial", 14)
+        f_title = pygame.font.SysFont("Arial", 38, bold=True)
+        f_sec   = pygame.font.SysFont("Arial", 16, bold=True)
+        f_med   = pygame.font.SysFont("Arial", 21, bold=True)
+        f_sm    = pygame.font.SysFont("Arial", 19)
+        f_xs    = pygame.font.SysFont("Arial", 16)
 
     fonts = (f_med, f_med, f_sm, f_xs)
 
