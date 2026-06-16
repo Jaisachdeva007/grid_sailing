@@ -8,10 +8,9 @@ import pygame
 def main():
     pygame.init()
 
-    # (0,0) + FULLSCREEN + SCALED: SDL picks native screen size,
-    # fills it without letterboxing, and enables the HiDPI rendering
-    # path on Retina displays (2× physical pixels → sharp text).
-    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN | pygame.SCALED)
+    # (0,0) + FULLSCREEN: SDL fills the display at its native resolution.
+    # No SCALED needed — (0,0) already gives exact screen dimensions.
+    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
     native_w = screen.get_width()
     native_h = screen.get_height()
 
