@@ -19,7 +19,8 @@ from core.session import run_session
 
 def main():
     pygame.init()
-    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SCALED)
+    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT),
+                                      pygame.FULLSCREEN | pygame.SCALED)
     pygame.display.set_caption("Grid-Sailing Task")
     clock = pygame.time.Clock()
 
