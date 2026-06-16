@@ -122,7 +122,7 @@ def _view_a(screen, clock, fonts, on_select):
     SIDE_X   = PAD + TABLE_W + 16
     HDR_H    = 32
     CLIP_TOP = TABLE_Y + HDR_H
-    CLIP_BOT = H - 64
+    CLIP_BOT = H - 76    # leave room for two-row bottom bar
     VIS      = (CLIP_BOT - CLIP_TOP) // ROW_H
 
     # Columns: (x, w, label)
@@ -143,9 +143,9 @@ def _view_a(screen, clock, fonts, on_select):
     refresh_t = 0
     msg       = ""; msg_col = GREEN
 
-    back_r    = pygame.Rect(PAD,       H - 52, 100, 36)
-    exp_all_r = pygame.Rect(PAD + 110, H - 52, 180, 36)
-    exp_sum_r = pygame.Rect(PAD + 300, H - 52, 200, 36)
+    back_r    = pygame.Rect(PAD,       H - 64, 100, 36)
+    exp_all_r = pygame.Rect(PAD + 110, H - 64, 180, 36)
+    exp_sum_r = pygame.Rect(PAD + 300, H - 64, 200, 36)
 
     pygame.display.set_caption("Grid-Sailing — Data Overview")
 
@@ -274,7 +274,7 @@ def _view_a(screen, clock, fonts, on_select):
             pygame.draw.rect(screen, BORDER,
                              (PAD + TABLE_W - 6, ty2, 6, th), border_radius=3)
 
-        # Side panel
+        # Side panel  (height = from table top to clip bottom)
         ph = CLIP_BOT - TABLE_Y
         _panel(screen, SIDE_X, TABLE_Y, SIDE_W, ph, BORDER, r=12)
         if stats:
@@ -305,19 +305,19 @@ def _view_a(screen, clock, fonts, on_select):
         else:
             _t(screen, f_xs, "Select a participant", DIM, SIDE_X + 16, TABLE_Y + 24)
 
-        # Bottom bar
-        pygame.draw.line(screen, BORDER, (0, H - 60), (W, H - 60))
+        # Bottom bar — buttons row + hint row
+        pygame.draw.line(screen, BORDER, (0, H - 72), (W, H - 72))
         _back_btn(screen, fonts, back_r)
         _action_btn(screen, fonts, "Export All", "all participants CSV",  exp_all_r, ORANGE)
         _action_btn(screen, fonts, "Trial Summary", "one row per trial",  exp_sum_r, PURPLE)
 
         if msg:
             ms = f_xs.render(msg, True, msg_col)
-            screen.blit(ms, (W - PAD - ms.get_width(), H - 40))
+            screen.blit(ms, (W - PAD - ms.get_width(), H - 56))
 
         _t(screen, f_xs,
-           f"Auto-refreshes every 3s  ·  {n_parts} participant(s)  ·  {n_trials} trial(s)",
-           DIM2, 0, H - 40, cw=W)
+           f"Auto-refreshes every 3s   ·   {n_parts} participant(s)   ·   {n_trials} trial(s)",
+           DIM2, 0, H - 18, cw=W)
 
         pygame.display.flip()
 
