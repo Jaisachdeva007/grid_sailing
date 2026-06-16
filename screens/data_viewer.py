@@ -1,13 +1,5 @@
 # ============================================================
-#  GRID-SAILING TASK — Data Viewer  (v3)
-#
-#  View A: Participant overview table  (summary cards + list)
-#  View B: Trial drill-down           (every attempt, full detail)
-#
-#  Navigation:
-#    Click participant row  → drill into their trials
-#    ESC / Back             → return to previous view / home
-#    Export button          → write CSV to exports/
+#  GRID-SAILING TASK — Data Viewer  (v4 — clean redesign)
 # ============================================================
 
 import pygame
@@ -21,13 +13,14 @@ from export.exporter import export_participant, export_all, export_summary
 from config import WINDOW_WIDTH, WINDOW_HEIGHT, FPS
 
 # ── Palette ───────────────────────────────────────────────────
-BG      = (8,    8,  16)
-SURFACE = (14,  14,  26)
-PANEL   = (20,  20,  36)
-PANEL2  = (26,  26,  44)
-BORDER  = (48,  48,  76)
+BG      = (8,    8,   16)
+SURFACE = (14,  14,   26)
+PANEL   = (20,  20,   36)
+PANEL2  = (28,  28,   46)
+BORDER  = (48,  48,   76)
 WHITE   = (245, 245, 255)
 DIM     = (118, 118, 158)
+DIM2    = (80,   80, 120)
 ACCENT  = ( 88, 148, 255)
 GREEN   = ( 52, 200, 100)
 AMBER   = (220, 162,  28)
@@ -36,28 +29,21 @@ RED_C   = (220,  60,  60)
 PURPLE  = (160,  90, 220)
 
 GROUP_COLORS = {
-    "MI-High":   ( 88, 148, 255),
-    "MI-Low":    ( 60, 110, 210),
-    "PP-High":   ( 52, 200, 100),
-    "PP-Low":    ( 38, 148,  80),
-    "CTRL-High": (220, 162,  28),
-    "CTRL-Low":  (168, 118,  18),
+    "MI-High":   ( 88, 148, 255),  "MI-Low":    ( 60, 110, 210),
+    "PP-High":   ( 52, 200, 100),  "PP-Low":    ( 38, 148,  80),
+    "CTRL-High": (220, 162,  28),  "CTRL-Low":  (168, 118,  18),
 }
 
-W, H   = WINDOW_WIDTH, WINDOW_HEIGHT
-PAD    = 36
-ROW_H  = 48
-CARD_H = 82
+W, H  = WINDOW_WIDTH, WINDOW_HEIGHT
+PAD   = 40
+ROW_H = 52
 
 
-# ── Tiny helpers ──────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────
 
-def _t(screen, font, text, col, x, y, center_w=0):
+def _t(screen, font, text, col, x, y, cw=0):
     s = font.render(text, True, col)
-    if center_w:
-        screen.blit(s, (x + center_w // 2 - s.get_width() // 2, y))
-    else:
-        screen.blit(s, (x, y))
+    screen.blit(s, (x + cw // 2 - s.get_width() // 2, y) if cw else (x, y))
     return s
 
 def _panel(screen, x, y, w, h, col=BORDER, r=10):
@@ -65,477 +51,465 @@ def _panel(screen, x, y, w, h, col=BORDER, r=10):
     pygame.draw.rect(screen, col,   (x, y, w, h), width=1, border_radius=r)
 
 def _bar(screen, x, y, w, h, pct, fg):
-    pygame.draw.rect(screen, (24, 24, 48), (x, y, w, h), border_radius=4)
+    pygame.draw.rect(screen, (22, 22, 44), (x, y, w, h), border_radius=4)
     if pct > 0:
         pygame.draw.rect(screen, fg,
                          (x, y, max(4, int(w * min(pct, 1.0))), h), border_radius=4)
 
 def _pill(screen, font, text, fg, bg, x, y):
     s  = font.render(text, True, fg)
-    pw = s.get_width() + 14
-    ph = s.get_height() + 6
+    pw, ph = s.get_width() + 16, s.get_height() + 8
     pygame.draw.rect(screen, bg, (x, y, pw, ph), border_radius=ph // 2)
-    screen.blit(s, (x + 7, y + 3))
+    screen.blit(s, (x + 8, y + 4))
     return pw
 
-def _btn(screen, fonts, label, rect, color, sub=""):
-    _, f_med, f_sm, f_xs = fonts
+def _back_btn(screen, fonts, rect):
+    _, _, f_sm, f_xs = fonts
     mouse = pygame.mouse.get_pos()
     hover = rect.collidepoint(mouse)
-    col   = tuple(min(255, c + 22) for c in color) if hover else color
+    col   = PANEL2 if not hover else (38, 38, 62)
+    pygame.draw.rect(screen, col,   rect, border_radius=8)
+    pygame.draw.rect(screen, BORDER, rect, width=1, border_radius=8)
+    _t(screen, f_xs, "< Back", DIM, rect.x + 14, rect.y + 10)
+
+def _action_btn(screen, fonts, label, sub, rect, color):
+    _, _, f_sm, f_xs = fonts
+    mouse = pygame.mouse.get_pos()
+    hover = rect.collidepoint(mouse)
+    col   = tuple(min(255, c + 24) for c in color) if hover else color
     pygame.draw.rect(screen, (4, 4, 10),
                      (rect.x + 2, rect.y + 3, rect.w, rect.h), border_radius=10)
     pygame.draw.rect(screen, col, rect, border_radius=10)
     ls = f_sm.render(label, True, (8, 8, 16))
     screen.blit(ls, (rect.x + rect.w // 2 - ls.get_width() // 2,
-                     rect.y + (rect.h // 2 - ls.get_height() // 2) - (8 if sub else 0)))
+                     rect.y + rect.h // 2 - ls.get_height() // 2 - (9 if sub else 0)))
     if sub:
-        ss = f_xs.render(sub, True, (30, 30, 50))
+        ss = f_xs.render(sub, True, (24, 24, 40))
         screen.blit(ss, (rect.x + rect.w // 2 - ss.get_width() // 2,
-                         rect.y + rect.h // 2 + 4))
-    return hover
+                         rect.y + rect.h // 2 + 6))
 
+def _title_bar(screen, fonts, title, hint=""):
+    _, f_med, _, f_xs = fonts
+    pygame.draw.rect(screen, SURFACE, (0, 0, W, 60))
+    pygame.draw.line(screen, BORDER, (0, 60), (W, 60))
+    _t(screen, f_med, title, WHITE, PAD, 19)
+    if hint:
+        hs = f_xs.render(hint, True, DIM2)
+        screen.blit(hs, (W - PAD - hs.get_width(), 23))
 
-# ── Title bar ─────────────────────────────────────────────────
-
-def _title_bar(screen, fonts, title, hint="ESC to go back"):
-    _, f_med, f_sm, f_xs = fonts
-    pygame.draw.rect(screen, SURFACE, (0, 0, W, 58))
-    pygame.draw.line(screen, BORDER, (0, 58), (W, 58))
-    _t(screen, f_med, title, WHITE, PAD, 18)
-    hr = f_xs.render(hint, True, DIM)
-    screen.blit(hr, (W - PAD - hr.get_width(), 22))
-
-
-# ── Summary cards (View A) ────────────────────────────────────
-
-def _summary_cards(screen, fonts, stats):
-    _, f_med, f_sm, f_xs = fonts
-    n_parts  = len(stats)
-    n_trials = sum(int(s["total_trials"]) for s in stats)
-    avg_acc  = (sum(s["accuracy_pct"] for s in stats) / n_parts) if n_parts else 0
-    avg_rt   = (sum(s["avg_rt_ms"]    for s in stats) / n_parts) if n_parts else 0
-
-    card_w = (W - PAD * 2 - 36) // 4
-    cx = PAD
-    cards = [
-        ("Participants",    str(n_parts),              "registered",             ACCENT),
-        ("Total Trials",    str(n_trials),             "across all participants", GREEN),
-        ("Avg Accuracy",    f"{avg_acc:.0f}%",         "correct trials",          AMBER),
-        ("Avg React. Time", f"{avg_rt/1000:.2f}s" if avg_rt else "—",
-                                                       "planning to first key",   PURPLE),
-    ]
-    for label, val, sub, col in cards:
-        # shadow
-        pygame.draw.rect(screen, (4, 4, 10),
-                         (cx + 2, 70 + 3, card_w, CARD_H), border_radius=12)
-        _panel(screen, cx, 70, card_w, CARD_H, col, r=12)
-        pygame.draw.rect(screen, col, (cx + 1, 71, card_w - 2, 5), border_radius=12)
-        _t(screen, f_xs,  label, DIM,   cx + 16, 86)
-        _t(screen, f_med, val,   col,   cx + 16, 106)
-        _t(screen, f_xs,  sub,   DIM,   cx + 16, 70 + CARD_H - 20)
-        cx += card_w + 12
+def _stat_card(screen, fonts, x, y, w, h, label, value, sub, col):
+    _, f_med, _, f_xs = fonts
+    pygame.draw.rect(screen, (4, 4, 10),  (x + 3, y + 4, w, h), border_radius=14)
+    _panel(screen, x, y, w, h, col, r=14)
+    pygame.draw.rect(screen, col, (x + 1, y + 1, w - 2, 5), border_radius=14)
+    _t(screen, f_xs,  label, DIM,  x + 16, y + 16)
+    _t(screen, f_med, value, col,  x + 16, y + 36)
+    _t(screen, f_xs,  sub,   DIM2, x + 16, y + h - 20)
 
 
 # ──────────────────────────────────────────────────────────────
-#  VIEW A — Participant overview
+#  VIEW A — Participant list
 # ──────────────────────────────────────────────────────────────
 
 def _view_a(screen, clock, fonts, on_select):
-    """
-    Scrollable participant table.
-    on_select(participant_id) is called when user clicks a row.
-    Returns when user presses ESC.
-    """
     f_big, f_med, f_sm, f_xs = fonts
 
-    TABLE_Y   = 70 + CARD_H + 14
-    SIDE_W    = 272
-    TABLE_W   = W - PAD * 2 - SIDE_W - 16
-    SIDE_X    = PAD + TABLE_W + 16
-    HDR_H     = 30
-    CLIP_TOP  = TABLE_Y + HDR_H
-    CLIP_BOT  = H - 62
-    VIS_ROWS  = (CLIP_BOT - CLIP_TOP) // ROW_H
+    CARD_H   = 84
+    CARDS_Y  = 68
+    TABLE_Y  = CARDS_Y + CARD_H + 16
+    SIDE_W   = 268
+    TABLE_W  = W - PAD * 2 - SIDE_W - 16
+    SIDE_X   = PAD + TABLE_W + 16
+    HDR_H    = 32
+    CLIP_TOP = TABLE_Y + HDR_H
+    CLIP_BOT = H - 64
+    VIS      = (CLIP_BOT - CLIP_TOP) // ROW_H
 
-    # Column layout: (x_offset, width)
-    COLS = [(0,86),(86,114),(200,46),(246,74),(320,64),(384,90),(474, TABLE_W-474-44)]
+    # Columns: (x, w, label)
+    COLS = [
+        (0,   92,  "Participant"),
+        (92,  120, "Group"),
+        (212,  48, "Age"),
+        (260,  80, "Sessions"),
+        (340,  72, "Trials"),
+        (412,  88, "Avg Score"),
+        (500, TABLE_W - 500 - 48, "Accuracy"),
+    ]
 
-    stats         = []
-    sessions      = []
-    sel           = 0
-    scroll        = 0
-    refresh_t     = 0
-    msg           = ""
-    msg_col       = GREEN
+    stats     = []
+    sessions  = []
+    sel       = 0
+    scroll    = 0
+    refresh_t = 0
+    msg       = ""; msg_col = GREEN
 
-    back_r    = pygame.Rect(PAD,        H - 50, 110, 34)
-    exp_all_r = pygame.Rect(PAD + 120,  H - 50, 170, 34)
-    exp_sum_r = pygame.Rect(PAD + 300,  H - 50, 200, 34)
+    back_r    = pygame.Rect(PAD,       H - 52, 100, 36)
+    exp_all_r = pygame.Rect(PAD + 110, H - 52, 180, 36)
+    exp_sum_r = pygame.Rect(PAD + 300, H - 52, 200, 36)
 
     pygame.display.set_caption("Grid-Sailing — Data Overview")
 
     while True:
         clock.tick(FPS)
-        now_ms = pygame.time.get_ticks()
+        now = pygame.time.get_ticks()
 
-        if now_ms - refresh_t > 3000:
-            stats     = get_participant_stats()
-            sessions  = (get_session_breakdown(stats[sel]["participant_id"])
-                         if stats else [])
-            refresh_t = now_ms
+        if now - refresh_t > 3000:
+            stats    = get_participant_stats()
+            sessions = (get_session_breakdown(stats[sel]["participant_id"])
+                        if stats else [])
+            refresh_t = now
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT:
                 pygame.quit(); sys.exit()
-
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    return
-                if event.key == pygame.K_DOWN and stats:
+            if ev.type == pygame.KEYDOWN:
+                if ev.key == pygame.K_ESCAPE: return
+                if ev.key == pygame.K_DOWN and stats:
                     sel = min(sel + 1, len(stats) - 1)
-                    if sel >= scroll + VIS_ROWS: scroll += 1
+                    if sel >= scroll + VIS: scroll += 1
                     sessions = get_session_breakdown(stats[sel]["participant_id"])
-                if event.key == pygame.K_UP and stats:
+                if ev.key == pygame.K_UP and stats:
                     sel = max(sel - 1, 0)
                     if sel < scroll: scroll -= 1
                     sessions = get_session_breakdown(stats[sel]["participant_id"])
-
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                mx, my = event.pos
-                # Row click → drill down
+            if ev.type == pygame.MOUSEBUTTONDOWN:
+                mx, my = ev.pos
                 for i in range(len(stats)):
                     ri = i - scroll
-                    if 0 <= ri < VIS_ROWS:
+                    if 0 <= ri < VIS:
                         ry = CLIP_TOP + ri * ROW_H
-                        if PAD <= mx <= PAD + TABLE_W and ry <= my <= ry + ROW_H:
+                        if PAD <= mx <= PAD + TABLE_W and ry <= my <= ry + ROW_H - 2:
                             sel = i
-                            sessions = get_session_breakdown(
-                                stats[i]["participant_id"])
+                            sessions = get_session_breakdown(stats[i]["participant_id"])
                             on_select(stats[i]["participant_id"])
                             return
-                # Buttons
-                if back_r.collidepoint(event.pos):
-                    return
-                if exp_all_r.collidepoint(event.pos):
-                    path = export_all()
-                    msg = f"Saved: {os.path.basename(path)}"
-                    msg_col = GREEN
-                if exp_sum_r.collidepoint(event.pos):
-                    path = export_summary()
-                    msg = f"Saved: {os.path.basename(path)}"
-                    msg_col = GREEN
-
-            if event.type == pygame.MOUSEWHEEL:
-                scroll = max(0, min(scroll - event.y,
-                                    max(0, len(stats) - VIS_ROWS)))
+                if back_r.collidepoint(ev.pos):    return
+                if exp_all_r.collidepoint(ev.pos):
+                    path = export_all();   msg = f"Saved  {os.path.basename(path)}"; msg_col = GREEN
+                if exp_sum_r.collidepoint(ev.pos):
+                    path = export_summary(); msg = f"Saved  {os.path.basename(path)}"; msg_col = GREEN
+            if ev.type == pygame.MOUSEWHEEL:
+                scroll = max(0, min(scroll - ev.y, max(0, len(stats) - VIS)))
 
         # ── Draw ─────────────────────────────────────────────
         screen.fill(BG)
         _title_bar(screen, fonts, "Data Overview",
-                   "Click a participant to view every attempt   |   ESC to go back")
-        _summary_cards(screen, fonts, stats)
+                   "Click a row to drill into every trial   |   ESC to go back")
+
+        # Summary cards
+        n_parts  = len(stats)
+        n_trials = sum(int(s["total_trials"]) for s in stats)
+        avg_acc  = (sum(s["accuracy_pct"] for s in stats) / n_parts) if n_parts else 0
+        avg_rt   = (sum(s["avg_rt_ms"]    for s in stats) / n_parts) if n_parts else 0
+        card_w   = (W - PAD * 2 - 36) // 4
+        cx = PAD
+        for label, val, sub, col in [
+            ("Participants",    str(n_parts),              "registered",             ACCENT),
+            ("Total Trials",    str(n_trials),             "across all participants", GREEN),
+            ("Avg Accuracy",    f"{avg_acc:.0f}%",         "correct trials",          AMBER),
+            ("Avg React. Time", f"{avg_rt/1000:.2f}s" if avg_rt else "—",
+                                                           "planning to first key",   PURPLE),
+        ]:
+            _stat_card(screen, fonts, cx, CARDS_Y, card_w, CARD_H, label, val, sub, col)
+            cx += card_w + 12
 
         # Table header
-        pygame.draw.rect(screen, PANEL2, (PAD, TABLE_Y, TABLE_W, HDR_H), border_radius=6)
-        for (cx2, cw), lbl in zip(COLS, ["ID","Group","Age","Sessions","Trials","Avg Score","Accuracy"]):
-            _t(screen, f_xs, lbl, DIM, PAD + cx2 + 8, TABLE_Y + 7)
+        pygame.draw.rect(screen, PANEL2, (PAD, TABLE_Y, TABLE_W, HDR_H), border_radius=8)
+        for cx2, cw, lbl in COLS:
+            _t(screen, f_xs, lbl, DIM, PAD + cx2 + 10, TABLE_Y + 9)
         pygame.draw.line(screen, BORDER,
                          (PAD, TABLE_Y + HDR_H), (PAD + TABLE_W, TABLE_Y + HDR_H))
 
         # Rows
-        clip = pygame.Rect(PAD, CLIP_TOP, TABLE_W + 48, CLIP_BOT - CLIP_TOP)
-        screen.set_clip(clip)
+        screen.set_clip(pygame.Rect(PAD, CLIP_TOP, TABLE_W + 52, CLIP_BOT - CLIP_TOP))
         for i, stat in enumerate(stats):
             ri = i - scroll
-            if ri < 0 or ri >= VIS_ROWS: continue
-            ry = CLIP_TOP + ri * ROW_H
-            is_sel = (i == sel)
-            bg = (32, 32, 58) if is_sel else PANEL
-            pygame.draw.rect(screen, bg,
-                             (PAD, ry, TABLE_W, ROW_H - 2), border_radius=8)
-            if is_sel:
+            if ri < 0 or ri >= VIS: continue
+            ry  = CLIP_TOP + ri * ROW_H
+            sel_row = (i == sel)
+            bg  = PANEL2 if sel_row else PANEL
+            pygame.draw.rect(screen, bg, (PAD, ry, TABLE_W, ROW_H - 4), border_radius=8)
+            if sel_row:
                 pygame.draw.rect(screen, ACCENT,
-                                 (PAD, ry, TABLE_W, ROW_H - 2), width=1, border_radius=8)
-            cy2 = ry + ROW_H // 2 - 8
+                                 (PAD, ry, TABLE_W, ROW_H - 4), width=1, border_radius=8)
+                pygame.draw.rect(screen, ACCENT,
+                                 (PAD, ry, 3, ROW_H - 4), border_radius=4)
+            cy2 = ry + ROW_H // 2 - 9
             # ID
             _t(screen, f_sm, stat["participant_id"],
-               ACCENT if is_sel else WHITE, PAD + 8, cy2)
+               ACCENT if sel_row else WHITE, PAD + 10, cy2)
             # Group pill
-            gx, _ = COLS[1]
             gcol = GROUP_COLORS.get(stat["group_name"], DIM)
             _pill(screen, f_xs, stat["group_name"], (8,8,16), gcol,
-                  PAD + gx + 6, ry + ROW_H // 2 - 11)
-            # Other text cols
+                  PAD + 92 + 6, ry + ROW_H // 2 - 12)
+            # Text cells
             for idx, (key, fmt) in enumerate([
-                ("age", "{}"), ("sessions_done", "{:.0f}"),
-                ("total_trials", "{:.0f}"), ("avg_score", "{:.0f}")
+                ("age","{}"), ("sessions_done","{:.0f}"),
+                ("total_trials","{:.0f}"), ("avg_score","{:.0f}")
             ]):
-                cx2, _ = COLS[idx + 2]
-                val = stat[key]
-                _t(screen, f_xs, fmt.format(val) if val else "—",
-                   DIM, PAD + cx2 + 8, cy2)
-            # Accuracy bar
-            ax, aw = COLS[6]
-            bx = PAD + ax + 8
+                cx2, _, _ = COLS[idx + 2]
+                v = stat[key]
+                _t(screen, f_xs, fmt.format(v) if v else "—",
+                   DIM, PAD + cx2 + 10, cy2)
+            # Accuracy bar + %
+            ax, aw, _ = COLS[6]
+            bx  = PAD + ax + 10
             pct = stat["accuracy_pct"] / 100.0
-            _bar(screen, bx, ry + ROW_H // 2 - 5, aw, 10, pct,
-                 fg=GREEN if pct >= 0.7 else (ORANGE if pct >= 0.4 else RED_C))
+            _bar(screen, bx, ry + ROW_H // 2 - 6, aw, 12, pct,
+                 GREEN if pct >= 0.7 else (ORANGE if pct >= 0.4 else RED_C))
             _t(screen, f_xs, f"{stat['accuracy_pct']:.0f}%", WHITE,
-               bx + aw + 6, ry + ROW_H // 2 - 7)
+               bx + aw + 8, ry + ROW_H // 2 - 8)
         screen.set_clip(None)
 
         if not stats:
-            _t(screen, f_sm, "No participants registered yet.", DIM, PAD + 20, CLIP_TOP + 20)
+            _t(screen, f_sm, "No participants registered yet.", DIM, PAD + 20, CLIP_TOP + 24)
 
         # Scrollbar
-        if len(stats) > VIS_ROWS:
+        if len(stats) > VIS:
             sb_h = CLIP_BOT - CLIP_TOP
-            th   = max(30, int(sb_h * VIS_ROWS / len(stats)))
-            ty2  = CLIP_TOP + int((sb_h - th) * scroll
-                                  / max(1, len(stats) - VIS_ROWS))
-            pygame.draw.rect(screen, (36, 36, 60),
+            th   = max(32, int(sb_h * VIS / len(stats)))
+            ty2  = CLIP_TOP + int((sb_h - th) * scroll / max(1, len(stats) - VIS))
+            pygame.draw.rect(screen, (32,32,58),
                              (PAD + TABLE_W - 6, CLIP_TOP, 6, sb_h), border_radius=3)
             pygame.draw.rect(screen, BORDER,
                              (PAD + TABLE_W - 6, ty2, 6, th), border_radius=3)
 
-        # Side panel — session breakdown
+        # Side panel
         ph = CLIP_BOT - TABLE_Y
         _panel(screen, SIDE_X, TABLE_Y, SIDE_W, ph, BORDER, r=12)
         if stats:
             pid = stats[sel]["participant_id"]
-            _t(screen, f_sm, pid, ACCENT, SIDE_X + 14, TABLE_Y + 14)
-            _t(screen, f_xs, "Session breakdown — click row for full trials",
-               DIM, SIDE_X + 14, TABLE_Y + 36)
+            _t(screen, f_sm, pid, ACCENT, SIDE_X + 16, TABLE_Y + 16)
+            _t(screen, f_xs, "Sessions", DIM, SIDE_X + 16, TABLE_Y + 40)
             pygame.draw.line(screen, BORDER,
-                             (SIDE_X + 10, TABLE_Y + 56),
-                             (SIDE_X + SIDE_W - 10, TABLE_Y + 56))
-            ry2 = TABLE_Y + 64
+                             (SIDE_X + 12, TABLE_Y + 58),
+                             (SIDE_X + SIDE_W - 12, TABLE_Y + 58))
+            ry2 = TABLE_Y + 68
             for s in sessions:
-                if ry2 + 58 > TABLE_Y + ph - 8: break
+                if ry2 + 64 > TABLE_Y + ph - 8: break
                 done  = bool(s["completed"])
                 bc    = GREEN if done else BORDER
-                label = f"S{s['session_number']} · {s['block_type'].replace('_',' ')}"
-                _panel(screen, SIDE_X + 8, ry2, SIDE_W - 16, 52, bc, r=8)
-                _t(screen, f_xs, label, WHITE if done else DIM, SIDE_X + 18, ry2 + 6)
+                label = f"S{s['session_number']}  {s['block_type'].replace('_',' ')}"
+                _panel(screen, SIDE_X + 10, ry2, SIDE_W - 20, 56, bc, r=9)
+                _t(screen, f_sm, label,
+                   WHITE if done else DIM, SIDE_X + 20, ry2 + 8)
                 _t(screen, f_xs,
-                   f"Trials: {int(s['trials'])}   Acc: {s['accuracy_pct']:.0f}%   Avg: {s['avg_score']:.0f}",
-                   DIM, SIDE_X + 18, ry2 + 26)
-                _bar(screen, SIDE_X + 18, ry2 + 44, SIDE_W - 36, 5,
-                     s["accuracy_pct"] / 100.0,
+                   f"Trials: {int(s['trials'])}   Acc: {s['accuracy_pct']:.0f}%",
+                   DIM, SIDE_X + 20, ry2 + 32)
+                _bar(screen, SIDE_X + 20, ry2 + 50,
+                     SIDE_W - 40, 4, s["accuracy_pct"] / 100.0,
                      GREEN if s["accuracy_pct"] >= 70 else ORANGE)
-                ry2 += 60
+                ry2 += 64
             if not sessions:
-                _t(screen, f_xs, "No sessions yet.", DIM, SIDE_X + 14, TABLE_Y + 74)
+                _t(screen, f_xs, "No sessions yet.", DIM, SIDE_X + 16, TABLE_Y + 78)
         else:
-            _t(screen, f_xs, "Select a participant", DIM, SIDE_X + 14, TABLE_Y + 20)
+            _t(screen, f_xs, "Select a participant", DIM, SIDE_X + 16, TABLE_Y + 24)
 
         # Bottom bar
-        pygame.draw.line(screen, BORDER, (0, H - 58), (W, H - 58))
-
-        pygame.draw.rect(screen, PANEL2, back_r,    border_radius=8)
-        pygame.draw.rect(screen, BORDER, back_r,    width=1, border_radius=8)
-        _t(screen, f_xs, "< Back", DIM, back_r.x + 14, back_r.y + 10)
-
-        _btn(screen, fonts, "Export All", exp_all_r, ORANGE,
-             sub="Full keypresses CSV")
-        _btn(screen, fonts, "Trial Summary", exp_sum_r, PURPLE,
-             sub="One row per trial CSV")
+        pygame.draw.line(screen, BORDER, (0, H - 60), (W, H - 60))
+        _back_btn(screen, fonts, back_r)
+        _action_btn(screen, fonts, "Export All", "all participants CSV",  exp_all_r, ORANGE)
+        _action_btn(screen, fonts, "Trial Summary", "one row per trial",  exp_sum_r, PURPLE)
 
         if msg:
             ms = f_xs.render(msg, True, msg_col)
-            screen.blit(ms, (W - PAD - ms.get_width(), H - 44))
+            screen.blit(ms, (W - PAD - ms.get_width(), H - 40))
 
         _t(screen, f_xs,
-           f"Auto-refreshes every 3s  |  {len(stats)} participant(s)  |  Click a row to drill in",
-           DIM, 0, H - 40, center_w=W)
+           f"Auto-refreshes every 3s  ·  {n_parts} participant(s)  ·  {n_trials} trial(s)",
+           DIM2, 0, H - 40, cw=W)
 
         pygame.display.flip()
 
 
 # ──────────────────────────────────────────────────────────────
-#  VIEW B — Trial drill-down for one participant
+#  VIEW B — Per-participant trial breakdown
 # ──────────────────────────────────────────────────────────────
 
-def _view_b(screen, clock, fonts, participant_id):
-    """
-    Show every single trial for participant_id with full detail.
-    ESC / Back → return to overview.
-    """
+def _view_b(screen, clock, fonts, pid):
     f_big, f_med, f_sm, f_xs = fonts
 
-    trials   = get_participant_trials(participant_id)
+    trials   = get_participant_trials(pid)
     scroll   = 0
-    msg      = ""
-    msg_col  = GREEN
+    msg      = ""; msg_col = GREEN
 
-    HDR_Y    = 68
-    HDR_H    = 30
+    STATS_H  = 72
+    STATS_Y  = 68
+    HDR_Y    = STATS_Y + STATS_H + 12
+    HDR_H    = 32
     CLIP_TOP = HDR_Y + HDR_H
-    CLIP_BOT = H - 62
-    VIS_ROWS = (CLIP_BOT - CLIP_TOP) // ROW_H
+    CLIP_BOT = H - 64
+    TW       = W - PAD * 2
+    VIS      = (CLIP_BOT - CLIP_TOP) // ROW_H
 
-    TW = W - PAD * 2
-    # Columns: Session, Block, Trial#, Grid, Correct, Moves/Opt, Score, RT(ms), Move Time, Elapsed
+    # Columns: (x, w, label)  — wider so nothing gets cut
     COLS = [
-        (0,   44,  "Sn"),
-        (44,  130, "Block"),
-        (174,  40, "#"),
-        (214,  72, "Grid"),
-        (286,  62, "Result"),
-        (348,  80, "Moves/Opt"),
-        (428,  68, "Score"),
-        (496, 100, "React.(ms)"),
-        (596, 108, "Move Time"),
-        (704, TW-704, "Elapsed(s)"),
+        (0,   46, "Sn"),
+        (46, 138, "Block"),
+        (184,  44, "#"),
+        (228,  76, "Grid"),
+        (304,  96, "Result"),
+        (400, 104, "Moves / Opt"),
+        (504,  76, "Score"),
+        (580, 110, "React (ms)"),
+        (690, TW - 690, "Duration"),
     ]
 
-    back_r   = pygame.Rect(PAD,       H - 50, 110, 34)
-    exp_r    = pygame.Rect(PAD + 120, H - 50, 200, 34)
+    back_r  = pygame.Rect(PAD,       H - 52, 100, 36)
+    exp_r   = pygame.Rect(PAD + 110, H - 52, 220, 36)
 
-    pygame.display.set_caption(f"Grid-Sailing — {participant_id} Trials")
+    pygame.display.set_caption(f"Grid-Sailing — {pid}")
 
     while True:
         clock.tick(FPS)
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT:
                 pygame.quit(); sys.exit()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    return
-                if event.key == pygame.K_DOWN:
-                    scroll = min(scroll + 1, max(0, len(trials) - VIS_ROWS))
-                if event.key == pygame.K_UP:
+            if ev.type == pygame.KEYDOWN:
+                if ev.key == pygame.K_ESCAPE: return
+                if ev.key == pygame.K_DOWN:
+                    scroll = min(scroll + 1, max(0, len(trials) - VIS))
+                if ev.key == pygame.K_UP:
                     scroll = max(scroll - 1, 0)
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if back_r.collidepoint(event.pos):
-                    return
-                if exp_r.collidepoint(event.pos):
-                    path = export_participant(participant_id)
-                    msg = f"Saved: {os.path.basename(path)}"
-                    msg_col = GREEN
-            if event.type == pygame.MOUSEWHEEL:
-                scroll = max(0, min(scroll - event.y,
-                                    max(0, len(trials) - VIS_ROWS)))
+            if ev.type == pygame.MOUSEBUTTONDOWN:
+                if back_r.collidepoint(ev.pos): return
+                if exp_r.collidepoint(ev.pos):
+                    path = export_participant(pid)
+                    msg = f"Saved  {os.path.basename(path)}"; msg_col = GREEN
+            if ev.type == pygame.MOUSEWHEEL:
+                scroll = max(0, min(scroll - ev.y, max(0, len(trials) - VIS)))
 
         # ── Draw ─────────────────────────────────────────────
         screen.fill(BG)
         _title_bar(screen, fonts,
-                   f"{participant_id} — All Trials  ({len(trials)} total)",
+                   f"{pid}  —  All Trials  ({len(trials)} total)",
                    "ESC to go back")
 
-        # Stats strip
+        # Stat strip
         if trials:
-            n_corr  = sum(1 for t in trials if t["is_correct"])
-            avg_rt  = sum(t["reaction_time_ms"] or 0 for t in trials) / len(trials)
-            avg_sc  = sum(t["reward_score"] or 0 for t in trials) / len(trials)
-            strip_items = [
-                (f"{n_corr}/{len(trials)}", "Correct"),
-                (f"{n_corr/len(trials)*100:.0f}%", "Accuracy"),
-                (f"{avg_rt:.0f} ms", "Avg React."),
-                (f"{avg_sc:.0f}", "Avg Score"),
-            ]
-            sw = (W - PAD * 2) // len(strip_items)
-            for i, (val, lbl) in enumerate(strip_items):
-                sx = PAD + i * sw
-                _panel(screen, sx, 66, sw - 8, 54, BORDER, r=10)
-                _t(screen, f_med, val, ACCENT, sx + 14, 74)
-                _t(screen, f_xs,  lbl, DIM,    sx + 14, 100)
+            n_corr = sum(1 for t in trials if t["is_correct"])
+            rts    = [t["reaction_time_ms"] for t in trials if t["reaction_time_ms"]]
+            avg_rt = sum(rts) / len(rts) if rts else 0
+            avg_sc = sum(t["reward_score"] or 0 for t in trials) / len(trials)
+            sw     = (TW - 36) // 4
+            for i, (val, lbl, col) in enumerate([
+                (f"{n_corr} / {len(trials)}", "Correct Trials", GREEN),
+                (f"{n_corr/len(trials)*100:.0f}%",  "Accuracy",      AMBER),
+                (f"{avg_rt:.0f} ms",   "Avg Reaction",  ACCENT),
+                (f"{avg_sc:.0f}",      "Avg Score",     PURPLE),
+            ]):
+                sx = PAD + i * (sw + 12)
+                _stat_card(screen, fonts, sx, STATS_Y, sw, STATS_H,
+                           lbl, val, "", col)
 
         # Table header
-        pygame.draw.rect(screen, PANEL2, (PAD, HDR_Y + 62, TW, HDR_H), border_radius=6)
-        for (cx2, cw, lbl) in COLS:
-            _t(screen, f_xs, lbl, DIM, PAD + cx2 + 6, HDR_Y + 62 + 7)
+        pygame.draw.rect(screen, PANEL2, (PAD, HDR_Y, TW, HDR_H), border_radius=8)
+        for cx2, cw, lbl in COLS:
+            _t(screen, f_xs, lbl, DIM, PAD + cx2 + 10, HDR_Y + 9)
         pygame.draw.line(screen, BORDER,
-                         (PAD, HDR_Y + 62 + HDR_H), (PAD + TW, HDR_Y + 62 + HDR_H))
+                         (PAD, HDR_Y + HDR_H), (PAD + TW, HDR_Y + HDR_H))
 
-        CLIP_TOP2 = HDR_Y + 62 + HDR_H
-        VIS2      = (CLIP_BOT - CLIP_TOP2) // ROW_H
-
-        clip = pygame.Rect(PAD, CLIP_TOP2, TW, CLIP_BOT - CLIP_TOP2)
-        screen.set_clip(clip)
+        # Rows
+        screen.set_clip(pygame.Rect(PAD, CLIP_TOP, TW, CLIP_BOT - CLIP_TOP))
         for i, tr in enumerate(trials):
             ri = i - scroll
-            if ri < 0 or ri >= VIS2: continue
-            ry = CLIP_TOP2 + ri * ROW_H
+            if ri < 0 or ri >= VIS: continue
+            ry = CLIP_TOP + ri * ROW_H
 
             correct = bool(tr["is_correct"])
-            bg = (20, 36, 20) if correct else (36, 20, 20)
-            pygame.draw.rect(screen, bg,     (PAD, ry, TW, ROW_H - 2), border_radius=7)
-            pygame.draw.rect(screen, BORDER, (PAD, ry, TW, ROW_H - 2), width=1, border_radius=7)
 
-            cy2 = ry + ROW_H // 2 - 8
+            # Clean neutral row — no harsh color fill
+            pygame.draw.rect(screen, PANEL,
+                             (PAD, ry, TW, ROW_H - 4), border_radius=8)
+            pygame.draw.rect(screen, BORDER,
+                             (PAD, ry, TW, ROW_H - 4), width=1, border_radius=8)
+            # Left accent stripe
+            stripe_col = GREEN if correct else RED_C
+            pygame.draw.rect(screen, stripe_col,
+                             (PAD, ry, 3, ROW_H - 4), border_radius=3)
+
+            cy2 = ry + ROW_H // 2 - 9
 
             def cell(col_i, text, color=WHITE):
-                cx2, _, _ = COLS[col_i]
-                _t(screen, f_xs, str(text), color, PAD + cx2 + 6, cy2)
+                cx2, cw2, _ = COLS[col_i]
+                _t(screen, f_xs, str(text), color, PAD + cx2 + 10, cy2)
 
-            cell(0, tr["session_number"], ACCENT)
-            # Block type — shortened
-            bt = tr["block_type"].replace("familiarization","fam").replace("_"," ")
-            cell(1, f"B{tr['block_number']} {bt}", DIM)
+            cell(0, tr["session_number"], DIM)
+
+            bt = (tr["block_type"]
+                  .replace("familiarization", "Familiar.")
+                  .replace("pre_test", "Pre-Test")
+                  .replace("post_test", "Post-Test")
+                  .replace("practice", "Practice")
+                  .replace("_", " "))
+            cell(1, f"B{tr['block_number']}  {bt}", DIM)
             cell(2, tr["trial_number"], WHITE)
-            # Grid type pill
-            gx2, _, _ = COLS[3]
-            gcol = ACCENT if tr["grid_type"] == "repeated" else ORANGE
-            _pill(screen, f_xs, tr["grid_type"][:3].upper(), (8,8,16), gcol,
-                  PAD + gx2 + 4, ry + ROW_H // 2 - 10)
-            # Result
-            cell(4, "CORRECT" if correct else "MISS",
+
+            # Grid pill
+            gx, _, _ = COLS[3]
+            is_rep = tr["grid_type"] == "repeated"
+            _pill(screen, f_xs,
+                  "REP" if is_rep else "RAN",
+                  (8, 8, 16),
+                  ACCENT if is_rep else ORANGE,
+                  PAD + gx + 6, ry + ROW_H // 2 - 12)
+
+            cell(4, "Correct" if correct else "Missed",
                  GREEN if correct else RED_C)
-            # Moves / optimal
+
             moves = tr["number_of_moves"] or 0
             opt   = tr["optimal_length"]  or 0
-            cell(5, f"{moves} / {opt}",
-                 GREEN if moves <= opt else (ORANGE if moves <= opt + 2 else RED_C))
-            cell(6, f"{tr['reward_score'] or 0}", AMBER)
-            # Reaction time
+            extra = moves - opt
+            moves_col = GREEN if extra <= 0 else (ORANGE if extra <= 2 else RED_C)
+            cell(5, f"{moves}  /  {opt}", moves_col)
+
+            cell(6, str(tr["reward_score"] or 0), AMBER)
+
             rt = tr["reaction_time_ms"]
-            cell(7, f"{rt:.0f}" if rt else "—",
-                 WHITE if rt and rt < 3000 else ORANGE)
-            # Movement time
-            mt = tr["movement_time_ms"]
-            mts = f"{mt/1000:.1f}s" if mt else ("—" if not tr["imagery_duration_ms"]
-                  else f"{tr['imagery_duration_ms']/1000:.1f}s img")
-            cell(8, mts, DIM)
-            # Elapsed
-            el = tr["elapsed_time_s"]
-            cell(9, f"{el:.1f}s" if el else "—", DIM)
+            cell(7, f"{rt:.0f} ms" if rt else "—",
+                 WHITE if rt and rt < 5000 else DIM)
+
+            # Duration — movement time or imagery
+            mt  = tr["movement_time_ms"]
+            idt = tr["imagery_duration_ms"]
+            if mt:
+                dur_str = f"{mt/1000:.1f} s"
+            elif idt:
+                dur_str = f"{idt/1000:.1f} s  (img)"
+            else:
+                et = tr["elapsed_time_s"]
+                dur_str = f"{et:.1f} s" if et else "—"
+            cell(8, dur_str, DIM)
 
         screen.set_clip(None)
 
         if not trials:
             _t(screen, f_sm, "No trials recorded for this participant yet.",
-               DIM, PAD + 20, CLIP_TOP2 + 20)
+               DIM, PAD + 20, CLIP_TOP + 24)
 
         # Scrollbar
-        if len(trials) > VIS2:
-            sb_h = CLIP_BOT - CLIP_TOP2
-            th   = max(30, int(sb_h * VIS2 / len(trials)))
-            ty2  = CLIP_TOP2 + int((sb_h - th) * scroll
-                                   / max(1, len(trials) - VIS2))
-            pygame.draw.rect(screen, (36,36,60),
-                             (PAD + TW - 6, CLIP_TOP2, 6, sb_h), border_radius=3)
+        if len(trials) > VIS:
+            sb_h = CLIP_BOT - CLIP_TOP
+            th   = max(32, int(sb_h * VIS / len(trials)))
+            ty2  = CLIP_TOP + int((sb_h - th) * scroll / max(1, len(trials) - VIS))
+            pygame.draw.rect(screen, (32,32,58),
+                             (PAD + TW - 6, CLIP_TOP, 6, sb_h), border_radius=3)
             pygame.draw.rect(screen, BORDER,
                              (PAD + TW - 6, ty2, 6, th), border_radius=3)
 
         # Bottom bar
-        pygame.draw.line(screen, BORDER, (0, H - 58), (W, H - 58))
-        pygame.draw.rect(screen, PANEL2, back_r, border_radius=8)
-        pygame.draw.rect(screen, BORDER, back_r, width=1, border_radius=8)
-        _t(screen, f_xs, "< Back", DIM, back_r.x + 14, back_r.y + 10)
-
-        _btn(screen, fonts, f"Export {participant_id}", exp_r, ACCENT,
-             sub="Full keypress CSV")
+        pygame.draw.line(screen, BORDER, (0, H - 60), (W, H - 60))
+        _back_btn(screen, fonts, back_r)
+        _action_btn(screen, fonts, f"Export {pid}", "full keypress CSV", exp_r, ACCENT)
 
         if msg:
             ms = f_xs.render(msg, True, msg_col)
-            screen.blit(ms, (W - PAD - ms.get_width(), H - 44))
+            screen.blit(ms, (W - PAD - ms.get_width(), H - 40))
 
         _t(screen, f_xs,
-           "Green row = correct  |  Red row = missed goal  |  Scroll to browse all attempts",
-           DIM, 0, H - 40, center_w=W)
+           "Green stripe = correct  ·  Red stripe = missed  ·  Scroll or arrow keys to browse",
+           DIM2, 0, H - 40, cw=W)
 
         pygame.display.flip()
 
@@ -543,20 +517,13 @@ def _view_b(screen, clock, fonts, participant_id):
 # ── Entry point ───────────────────────────────────────────────
 
 def run_data_viewer(screen, clock, fonts):
-    """
-    Main entry: shows overview, then drills into participant trials on click.
-    Returns when user ESCs all the way back.
-    """
-    drill_target = [None]
-
-    def on_select(pid):
-        drill_target[0] = pid
+    drill = [None]
+    def on_select(pid): drill[0] = pid
 
     while True:
-        drill_target[0] = None
+        drill[0] = None
         _view_a(screen, clock, fonts, on_select)
-
-        if drill_target[0]:
-            _view_b(screen, clock, fonts, drill_target[0])
+        if drill[0]:
+            _view_b(screen, clock, fonts, drill[0])
         else:
-            return   # ESC from overview = go back to researcher home
+            return

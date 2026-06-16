@@ -290,117 +290,137 @@ def _show_loading(screen, fonts):
     pygame.display.flip()
 
 
-def _show_block_intro(screen, clock, fonts, block_type, block_number,
-                      session_number, group, config):
-    """
-    Show a brief intro card before each block starts.
-    Researcher or participant presses SPACE to begin.
-    """
+BG     = (8,   8,  16)
+PANEL  = (20,  20, 36)
+BORDER = (48,  48, 76)
+WHITE  = (245, 245, 255)
+DIM    = (118, 118, 158)
+ACCENT = (88,  148, 255)
+GREEN  = (52,  200, 100)
+AMBER  = (220, 162, 28)
+
+
+def _card_screen(screen, clock, fonts, title, title_col, badge, lines,
+                 hint_text, hint_col=None):
+    """Generic centred card screen. Returns when SPACE is pressed."""
     f_big, f_med, f_sm, f_xs = fonts
-    cx = screen.get_width() // 2
+    W, H   = screen.get_width(), screen.get_height()
+    CX, CY = W // 2, H // 2
+    if hint_col is None:
+        hint_col = ACCENT
 
-    descriptions = {
-        "familiarization": "Learn the key-finger mappings through physical practice.\nNo score will be shown during this block.",
-        "pre_test":        "Baseline performance test.\nPhysically press your planned sequence. No score shown.",
-        "practice":        "Practice block. Follow your assigned condition.\nFeedback will appear after each trial.",
-        "post_test":       "Final performance test.\nPhysically press your planned sequence. No score shown.",
-    }
-
-    waiting = True
-    while waiting:
+    while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit(); import sys; sys.exit()
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                waiting = False
+            if event.type == pygame.KEYDOWN:
+                if event.key in (pygame.K_SPACE, pygame.K_RETURN, pygame.K_ESCAPE):
+                    return
 
-        screen.fill((15, 15, 25))
+        screen.fill(BG)
 
-        title = f_big.render(block_type.replace("_", " ").title(), True, (235, 235, 245))
-        screen.blit(title, (cx - title.get_width() // 2, 180))
+        # Subtle dot grid
+        for gx in range(0, W + 48, 48):
+            for gy in range(0, H + 48, 48):
+                pygame.draw.circle(screen, (18, 18, 36), (gx, gy), 1)
 
-        sub = f_sm.render(f"Session {session_number}  |  Block {block_number}  |  Group: {group}",
-                          True, (90, 150, 255))
-        screen.blit(sub, (cx - sub.get_width() // 2, 235))
+        # Card
+        CW, CH = 560, max(220, 80 + len(lines) * 34 + 80)
+        cx2 = CX - CW // 2
+        cy2 = CY - CH // 2
+        pygame.draw.rect(screen, (4, 4, 10),
+                         (cx2 + 4, cy2 + 6, CW, CH), border_radius=20)
+        pygame.draw.rect(screen, PANEL,  (cx2, cy2, CW, CH), border_radius=20)
+        pygame.draw.rect(screen, BORDER, (cx2, cy2, CW, CH), width=1, border_radius=20)
+        pygame.draw.rect(screen, title_col,
+                         (cx2 + 1, cy2 + 1, CW - 2, 6), border_radius=20)
 
-        desc_lines = descriptions.get(block_type, "").split("\n")
-        y = 290
-        for line in desc_lines:
-            d = f_sm.render(line, True, (110, 110, 145))
-            screen.blit(d, (cx - d.get_width() // 2, y))
-            y += 28
+        # Badge pill
+        if badge:
+            bs = f_xs.render(badge, True, title_col)
+            bw = bs.get_width() + 24
+            bx = CX - bw // 2
+            pygame.draw.rect(screen, (20, 20, 40),
+                             (bx, cy2 + 20, bw, 26), border_radius=13)
+            pygame.draw.rect(screen, title_col,
+                             (bx, cy2 + 20, bw, 26), width=1, border_radius=13)
+            screen.blit(bs, (CX - bs.get_width() // 2, cy2 + 24))
 
-        hint = f_sm.render("Press  SPACE  to begin", True, (90, 150, 255))
-        screen.blit(hint, (cx - hint.get_width() // 2, 420))
+        # Title
+        ts = f_big.render(title, True, WHITE)
+        screen.blit(ts, (CX - ts.get_width() // 2, cy2 + 58))
+
+        pygame.draw.line(screen, BORDER,
+                         (cx2 + 32, cy2 + 102), (cx2 + CW - 32, cy2 + 102))
+
+        # Body lines
+        ly = cy2 + 118
+        for line, col in lines:
+            ls = f_sm.render(line, True, col)
+            screen.blit(ls, (CX - ls.get_width() // 2, ly))
+            ly += 34
+
+        # Hint
+        hs = f_sm.render(hint_text, True, hint_col)
+        screen.blit(hs, (CX - hs.get_width() // 2, cy2 + CH - 44))
+
+        # Footer
+        ft = f_xs.render("Press  SPACE  to continue", True, (44, 44, 72))
+        screen.blit(ft, (CX - ft.get_width() // 2, H - 32))
 
         pygame.display.flip()
         clock.tick(FPS)
+
+
+def _show_block_intro(screen, clock, fonts, block_type, block_number,
+                      session_number, group, config):
+    f_big, f_med, f_sm, f_xs = fonts
+
+    descriptions = {
+        "familiarization": "Get comfortable with the keys and the grid.",
+        "pre_test":        "Baseline test — execute your planned sequence physically.",
+        "practice":        "Practice block — follow your assigned condition.",
+        "post_test":       "Final performance test — execute your planned sequence.",
+    }
+    score_note = {
+        "familiarization": "No score shown during this block.",
+        "pre_test":        "No score shown during this block.",
+        "practice":        "Feedback and score will appear after each trial.",
+        "post_test":       "No score shown during this block.",
+    }
+
+    badge = f"Session {session_number}  ·  Block {block_number}  ·  {group}"
+    lines = [
+        (descriptions.get(block_type, ""), DIM),
+        (score_note.get(block_type, ""),   DIM),
+    ]
+    _card_screen(screen, clock, fonts,
+                 title=block_type.replace("_", " ").title(),
+                 title_col=ACCENT, badge=badge, lines=lines,
+                 hint_text="Press  SPACE  to begin")
 
 
 def _show_break(screen, clock, fonts, completed_blocks, total_blocks):
-    """
-    Show a break screen between blocks. Participant can rest.
-    Press SPACE when ready to continue.
-    """
-    f_big, f_med, f_sm, f_xs = fonts
-    cx = screen.get_width() // 2
-
-    waiting = True
-    while waiting:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit(); import sys; sys.exit()
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                waiting = False
-
-        screen.fill((15, 15, 25))
-
-        title = f_big.render("Take a Break", True, (235, 235, 245))
-        screen.blit(title, (cx - title.get_width() // 2, 180))
-
-        prog = f_sm.render(f"Block {completed_blocks} of {total_blocks} complete.",
-                           True, (70, 190, 110))
-        screen.blit(prog, (cx - prog.get_width() // 2, 250))
-
-        hint = f_sm.render("Press  SPACE  when you are ready to continue.",
-                            True, (90, 150, 255))
-        screen.blit(hint, (cx - hint.get_width() // 2, 370))
-
-        pygame.display.flip()
-        clock.tick(FPS)
+    lines = [
+        ("Take a moment to rest.",                                   DIM),
+        (f"Block {completed_blocks} of {total_blocks} complete.",    GREEN),
+        ("When you are ready, press SPACE to continue.",             DIM),
+    ]
+    _card_screen(screen, clock, fonts,
+                 title="Take a Break", title_col=GREEN,
+                 badge=None, lines=lines,
+                 hint_text="Press  SPACE  when ready")
 
 
 def _show_session_complete(screen, clock, fonts, session_number, total_score):
-    """End-of-session screen shown after all blocks are done."""
-    f_big, f_med, f_sm, f_xs = fonts
-    cx = screen.get_width() // 2
-
-    waiting = True
-    while waiting:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit(); import sys; sys.exit()
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                waiting = False
-
-        screen.fill((15, 15, 25))
-
-        title = f_big.render(f"Session {session_number} Complete!", True, (70, 190, 110))
-        screen.blit(title, (cx - title.get_width() // 2, 180))
-
-        score_lbl = f_med.render(f"Total Score:  {total_score}", True, (210, 160, 30))
-        screen.blit(score_lbl, (cx - score_lbl.get_width() // 2, 260))
-
-        if session_number < 3:
-            next_msg = f"Please return for Session {session_number + 1}."
-        else:
-            next_msg = "You have completed all 3 sessions. Thank you!"
-
-        next_surf = f_sm.render(next_msg, True, (110, 110, 145))
-        screen.blit(next_surf, (cx - next_surf.get_width() // 2, 330))
-
-        esc = f_xs.render("Press ESC to exit", True, (60, 60, 90))
-        screen.blit(esc, (cx - esc.get_width() // 2, screen.get_height() - 40))
-
-        pygame.display.flip()
-        clock.tick(FPS)
+    next_msg = (f"Please return for Session {session_number + 1}."
+                if session_number < 3
+                else "You have completed all 3 sessions. Thank you!")
+    lines = [
+        (f"Total score:  {total_score}", AMBER),
+        (next_msg,                       DIM),
+    ]
+    _card_screen(screen, clock, fonts,
+                 title=f"Session {session_number} Complete!",
+                 title_col=GREEN, badge=None, lines=lines,
+                 hint_text="Press  ESC  to exit", hint_col=DIM)

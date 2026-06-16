@@ -56,13 +56,13 @@ GROUP_COLORS = {
 PAD      = 48
 HALF     = WINDOW_WIDTH // 2
 COL1     = PAD
-COL2     = HALF + 16
-LBL_W    = 172     # label column width inside each half
+COL2     = HALF + 20
+LBL_W    = 180
 INP_X1   = COL1 + LBL_W
 INP_X2   = COL2 + LBL_W
-ROW_H    = 46
-SEC_GAP  = 14
-CONTENT_TOP = 104  # y below the title bar
+ROW_H    = 48
+SEC_GAP  = 18
+CONTENT_TOP = 110
 
 
 # ── Tiny helpers ─────────────────────────────────────────────
@@ -277,21 +277,21 @@ def run_researcher_home(screen, clock):
             "label": "New Participant",
             "sub":   "Register a first-time participant\nand configure their session",
             "color": GREEN,
-            "icon":  "+",
+            "icon":  "N",
         },
         {
             "key":   "returning",
             "label": "Returning Participant",
             "sub":   "Look up an existing participant\nand start their next session",
             "color": ACCENT,
-            "icon":  "->",
+            "icon":  "R",
         },
         {
             "key":   "data",
             "label": "View Data",
             "sub":   "Browse participant progress,\naccuracy and session breakdown",
             "color": PURPLE,
-            "icon":  "#",
+            "icon":  "D",
         },
     ]
 
@@ -331,42 +331,38 @@ def run_researcher_home(screen, clock):
         for i, (card, r) in enumerate(zip(cards, rects)):
             hover  = r.collidepoint(mouse)
             col    = card["color"]
-            bg     = tuple(min(255, c + 10) for c in PANEL) if hover else PANEL
-            border = col if hover else BORDER
 
-            # Card shadow
-            pygame.draw.rect(screen, (8, 8, 16),
-                             (r.x + 3, r.y + 4, r.w, r.h), border_radius=16)
-            pygame.draw.rect(screen, bg, r, border_radius=16)
-            pygame.draw.rect(screen, border, r, width=1 if not hover else 2,
-                             border_radius=16)
+            # Shadow
+            pygame.draw.rect(screen, (4, 4, 10),
+                             (r.x + 3, r.y + 5, r.w, r.h), border_radius=18)
+            # Card body
+            bg = tuple(min(255, c + 8) for c in PANEL) if hover else PANEL
+            pygame.draw.rect(screen, bg, r, border_radius=18)
+            pygame.draw.rect(screen, col if hover else BORDER,
+                             r, width=2 if hover else 1, border_radius=18)
 
-            # Top colour accent strip
-            strip = pygame.Rect(r.x + 1, r.y + 1, r.w - 2, 6)
-            pygame.draw.rect(screen, col, strip,
-                             border_radius=16)
+            # Top colour strip
+            pygame.draw.rect(screen, col,
+                             (r.x + 1, r.y + 1, r.w - 2, 6), border_radius=18)
 
-            # Icon circle
-            icon_r = pygame.Rect(r.x + r.w // 2 - 26, r.y + 30, 52, 52)
-            pygame.draw.circle(screen, tuple(max(0, c - 40) for c in col),
-                               icon_r.center, 26)
-            pygame.draw.circle(screen, col, icon_r.center, 26, width=2)
+            # Icon circle — clean
+            ic = (r.x + r.w // 2, r.y + 52)
+            dark_col = tuple(max(0, c - 50) for c in col)
+            pygame.draw.circle(screen, dark_col, ic, 28)
+            pygame.draw.circle(screen, col,      ic, 28, width=2)
+            g = f_med.render(card["icon"], True, col)
+            screen.blit(g, (ic[0] - g.get_width() // 2,
+                            ic[1] - g.get_height() // 2))
 
-            # Icon glyph — simple text
-            glyph_map = {"+": "+", "->": ">", "#": "="}
-            g = f_med.render(glyph_map.get(card["icon"], card["icon"]), True, col)
-            screen.blit(g, (icon_r.centerx - g.get_width() // 2,
-                            icon_r.centery - g.get_height() // 2))
-
-            # Card title
+            # Label
             lt = f_med.render(card["label"], True, WHITE)
-            screen.blit(lt, (r.x + r.w // 2 - lt.get_width() // 2, r.y + 96))
+            screen.blit(lt, (r.x + r.w // 2 - lt.get_width() // 2, r.y + 94))
 
-            # Card subtitle (two lines)
+            # Subtitle
             for j, line in enumerate(card["sub"].split("\n")):
                 ls = f_xs.render(line, True, DIM)
                 screen.blit(ls, (r.x + r.w // 2 - ls.get_width() // 2,
-                                 r.y + 124 + j * 18))
+                                 r.y + 122 + j * 20))
 
         # Hint
         hint = f_xs.render("ESC to return to the login screen", True, BORDER)
