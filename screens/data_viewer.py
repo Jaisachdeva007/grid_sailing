@@ -498,18 +498,18 @@ def _view_b(screen, clock, fonts, pid):
             pygame.draw.rect(screen, BORDER,
                              (PAD + TW - 6, ty2, 6, th), border_radius=3)
 
-        # Bottom bar
-        pygame.draw.line(screen, BORDER, (0, H - 60), (W, H - 60))
+        # Bottom bar  — two rows: buttons row + hint row
+        pygame.draw.line(screen, BORDER, (0, H - 72), (W, H - 72))
         _back_btn(screen, fonts, back_r)
         _action_btn(screen, fonts, f"Export {pid}", "full keypress CSV", exp_r, ACCENT)
 
         if msg:
             ms = f_xs.render(msg, True, msg_col)
-            screen.blit(ms, (W - PAD - ms.get_width(), H - 40))
+            screen.blit(ms, (W - PAD - ms.get_width(), H - 56))
 
         _t(screen, f_xs,
-           "Green stripe = correct  ·  Red stripe = missed  ·  Scroll or arrow keys to browse",
-           DIM2, 0, H - 40, cw=W)
+           "Green stripe = correct   ·   Red stripe = missed   ·   Scroll or arrow keys to browse",
+           DIM2, 0, H - 18, cw=W)
 
         pygame.display.flip()
 
