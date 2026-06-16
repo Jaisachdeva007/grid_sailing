@@ -29,7 +29,11 @@ def main():
     config.WINDOW_WIDTH  = native_w
     config.WINDOW_HEIGHT = native_h
 
-    screen = pygame.display.set_mode((native_w, native_h), pygame.FULLSCREEN)
+    # FULLSCREEN | SCALED: SDL stretches the surface to fill the physical display.
+    # When surface size == logical screen size the scale ratio is 1:1 → no blur.
+    # On Retina (physical = 2× logical) SDL does a clean 2× integer upscale → sharp.
+    screen = pygame.display.set_mode((native_w, native_h),
+                                      pygame.FULLSCREEN | pygame.SCALED)
     pygame.display.set_caption("Grid-Sailing Task")
     clock = pygame.time.Clock()
 

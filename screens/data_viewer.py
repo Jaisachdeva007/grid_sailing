@@ -35,8 +35,8 @@ GROUP_COLORS = {
 }
 
 W, H  = WINDOW_WIDTH, WINDOW_HEIGHT
-PAD   = 40
-ROW_H = 52
+PAD   = 52
+ROW_H = 56
 
 
 # ── Helpers ───────────────────────────────────────────────────
@@ -89,22 +89,22 @@ def _action_btn(screen, fonts, label, sub, rect, color):
                          rect.y + rect.h // 2 + 6))
 
 def _title_bar(screen, fonts, title, hint=""):
-    _, f_med, _, f_xs = fonts
-    pygame.draw.rect(screen, SURFACE, (0, 0, W, 60))
-    pygame.draw.line(screen, BORDER, (0, 60), (W, 60))
-    _t(screen, f_med, title, WHITE, PAD, 19)
+    _, f_med, f_sm, f_xs = fonts
+    pygame.draw.rect(screen, SURFACE, (0, 0, W, 68))
+    pygame.draw.line(screen, BORDER, (0, 68), (W, 68))
+    _t(screen, f_med, title, WHITE, PAD, 22)
     if hint:
         hs = f_xs.render(hint, True, DIM2)
-        screen.blit(hs, (W - PAD - hs.get_width(), 23))
+        screen.blit(hs, (W - PAD - hs.get_width(), 26))
 
 def _stat_card(screen, fonts, x, y, w, h, label, value, sub, col):
-    _, f_med, _, f_xs = fonts
-    pygame.draw.rect(screen, (4, 4, 10),  (x + 3, y + 4, w, h), border_radius=14)
+    f_big, f_med, f_sm, f_xs = fonts
+    pygame.draw.rect(screen, (4, 4, 10),  (x + 3, y + 5, w, h), border_radius=14)
     _panel(screen, x, y, w, h, col, r=14)
-    pygame.draw.rect(screen, col, (x + 1, y + 1, w - 2, 5), border_radius=14)
-    _t(screen, f_xs,  label, DIM,  x + 16, y + 16)
-    _t(screen, f_med, value, col,  x + 16, y + 36)
-    _t(screen, f_xs,  sub,   DIM2, x + 16, y + h - 20)
+    pygame.draw.rect(screen, col, (x + 1, y + 1, w - 2, 6), border_radius=14)
+    _t(screen, f_sm,  label, DIM,  x + 18, y + 18)
+    _t(screen, f_big, value, col,  x + 18, y + 40)
+    _t(screen, f_xs,  sub,   DIM2, x + 18, y + h - 22)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -114,15 +114,15 @@ def _stat_card(screen, fonts, x, y, w, h, label, value, sub, col):
 def _view_a(screen, clock, fonts, on_select):
     f_big, f_med, f_sm, f_xs = fonts
 
-    CARD_H   = 84
-    CARDS_Y  = 68
-    TABLE_Y  = CARDS_Y + CARD_H + 16
-    SIDE_W   = 268
-    TABLE_W  = W - PAD * 2 - SIDE_W - 16
-    SIDE_X   = PAD + TABLE_W + 16
-    HDR_H    = 32
+    CARD_H   = 100
+    CARDS_Y  = 80
+    TABLE_Y  = CARDS_Y + CARD_H + 18
+    SIDE_W   = 280
+    TABLE_W  = W - PAD * 2 - SIDE_W - 20
+    SIDE_X   = PAD + TABLE_W + 20
+    HDR_H    = 36
     CLIP_TOP = TABLE_Y + HDR_H
-    CLIP_BOT = H - 76    # leave room for two-row bottom bar
+    CLIP_BOT = H - 96    # leave room for two-row bottom bar + safe margin
     VIS      = (CLIP_BOT - CLIP_TOP) // ROW_H
 
     # Columns: (x, w, label)
@@ -143,9 +143,9 @@ def _view_a(screen, clock, fonts, on_select):
     refresh_t = 0
     msg       = ""; msg_col = GREEN
 
-    back_r    = pygame.Rect(PAD,       H - 64, 100, 36)
-    exp_all_r = pygame.Rect(PAD + 110, H - 64, 180, 36)
-    exp_sum_r = pygame.Rect(PAD + 300, H - 64, 200, 36)
+    back_r    = pygame.Rect(PAD,       H - 80, 110, 40)
+    exp_all_r = pygame.Rect(PAD + 122, H - 80, 190, 40)
+    exp_sum_r = pygame.Rect(PAD + 324, H - 80, 210, 40)
 
     pygame.display.set_caption("Grid-Sailing — Data Overview")
 
@@ -274,7 +274,7 @@ def _view_a(screen, clock, fonts, on_select):
             pygame.draw.rect(screen, BORDER,
                              (PAD + TABLE_W - 6, ty2, 6, th), border_radius=3)
 
-        # Side panel  (height = from table top to clip bottom)
+        # Side panel stretches from table top to clip bottom
         ph = CLIP_BOT - TABLE_Y
         _panel(screen, SIDE_X, TABLE_Y, SIDE_W, ph, BORDER, r=12)
         if stats:
@@ -306,18 +306,18 @@ def _view_a(screen, clock, fonts, on_select):
             _t(screen, f_xs, "Select a participant", DIM, SIDE_X + 16, TABLE_Y + 24)
 
         # Bottom bar — buttons row + hint row
-        pygame.draw.line(screen, BORDER, (0, H - 72), (W, H - 72))
+        pygame.draw.line(screen, BORDER, (0, H - 88), (W, H - 88))
         _back_btn(screen, fonts, back_r)
         _action_btn(screen, fonts, "Export All", "all participants CSV",  exp_all_r, ORANGE)
         _action_btn(screen, fonts, "Trial Summary", "one row per trial",  exp_sum_r, PURPLE)
 
         if msg:
             ms = f_xs.render(msg, True, msg_col)
-            screen.blit(ms, (W - PAD - ms.get_width(), H - 56))
+            screen.blit(ms, (W - PAD - ms.get_width(), H - 38))
 
         _t(screen, f_xs,
            f"Auto-refreshes every 3s   ·   {n_parts} participant(s)   ·   {n_trials} trial(s)",
-           DIM2, 0, H - 18, cw=W)
+           DIM2, 0, H - 20, cw=W)
 
         pygame.display.flip()
 
@@ -333,12 +333,12 @@ def _view_b(screen, clock, fonts, pid):
     scroll   = 0
     msg      = ""; msg_col = GREEN
 
-    STATS_H  = 72
-    STATS_Y  = 68
-    HDR_Y    = STATS_Y + STATS_H + 12
-    HDR_H    = 32
+    STATS_H  = 100
+    STATS_Y  = 80
+    HDR_Y    = STATS_Y + STATS_H + 14
+    HDR_H    = 36
     CLIP_TOP = HDR_Y + HDR_H
-    CLIP_BOT = H - 64
+    CLIP_BOT = H - 96
     TW       = W - PAD * 2
     VIS      = (CLIP_BOT - CLIP_TOP) // ROW_H
 
@@ -355,8 +355,8 @@ def _view_b(screen, clock, fonts, pid):
         (690, TW - 690, "Duration"),
     ]
 
-    back_r  = pygame.Rect(PAD,       H - 52, 100, 36)
-    exp_r   = pygame.Rect(PAD + 110, H - 52, 220, 36)
+    back_r  = pygame.Rect(PAD,       H - 80, 110, 40)
+    exp_r   = pygame.Rect(PAD + 122, H - 80, 240, 40)
 
     pygame.display.set_caption(f"Grid-Sailing — {pid}")
 
@@ -498,18 +498,18 @@ def _view_b(screen, clock, fonts, pid):
             pygame.draw.rect(screen, BORDER,
                              (PAD + TW - 6, ty2, 6, th), border_radius=3)
 
-        # Bottom bar  — two rows: buttons row + hint row
-        pygame.draw.line(screen, BORDER, (0, H - 72), (W, H - 72))
+        # Bottom bar — two rows: buttons row + hint row
+        pygame.draw.line(screen, BORDER, (0, H - 88), (W, H - 88))
         _back_btn(screen, fonts, back_r)
         _action_btn(screen, fonts, f"Export {pid}", "full keypress CSV", exp_r, ACCENT)
 
         if msg:
             ms = f_xs.render(msg, True, msg_col)
-            screen.blit(ms, (W - PAD - ms.get_width(), H - 56))
+            screen.blit(ms, (W - PAD - ms.get_width(), H - 38))
 
         _t(screen, f_xs,
            "Green stripe = correct   ·   Red stripe = missed   ·   Scroll or arrow keys to browse",
-           DIM2, 0, H - 18, cw=W)
+           DIM2, 0, H - 20, cw=W)
 
         pygame.display.flip()
 
