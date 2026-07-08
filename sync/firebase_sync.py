@@ -12,22 +12,24 @@
 #        (fields: last_active, last_participant, trials_synced)
 #        participants/
 #          P012/                   ← participant_id
-#            (fields: group, age, gender, handedness, enrolled)
+#            (fields: participant_id, group_name, age, gender, …)
 #            s1_practice_b2/       ← session key
-#              (fields: started, last_synced, trials_synced)
-#              trials/
-#                01/  02/  03/ … ← zero-padded trial number
+#              _info               ← session metadata document
+#              01/  02/  03/ …     ← one doc per trial, fields
+#                                     match CSV export exactly
 #
+#  Field names in trial documents match the CSV column names
+#  from export/exporter.py (TRIAL_COLUMNS + KEYPRESS_COLUMNS).
 #  Idempotent: calling twice for the same trial just overwrites.
 # ============================================================
 
 import threading
 import socket
 import sqlite3
+import json
 
-_KEY_DIR = {1: "UP", 2: "DOWN-RIGHT", 3: "DOWN-LEFT"}
-
-_db_client = None
+_KEY_LABELS = {1: "UP", 2: "DOWN-RIGHT", 3: "DOWN-LEFT"}
+_db_client  = None
 
 
 def _get_client():
@@ -55,52 +57,153 @@ def _get_client():
         return None
 
 
-# ── Helpers ──────────────────────────────────────────────────
+# ── Format helpers (match exporter.py exactly) ────────────────
+
+def _clean_sequence(val) -> str:
+    """'[1, 2, 3]' → '1,2,3'. None → ''."""
+    if val is None:
+        return ""
+    if isinstance(val, (list, tuple)):
+        return ",".join(str(x) for x in val)
+    s = str(val).strip().lstrip("[").rstrip("]")
+    return ",".join(p.strip() for p in s.split(",") if p.strip())
+
+
+def _clean_all_optimal(val) -> str:
+    """JSON '[[1,2,3],[1,3,2]]' → '1,2,3|1,3,2'. None → ''."""
+    if val is None:
+        return ""
+    try:
+        seqs = json.loads(val)
+        return "|".join(",".join(str(k) for k in seq) for seq in seqs)
+    except Exception:
+        return str(val)
+
+
+def _ms_to_s(val):
+    """ms → seconds (4 dp). None → None."""
+    return None if val is None else round(val / 1000, 4)
+
+
+def _bool_str(val) -> str:
+    return "TRUE" if val else "FALSE"
+
+
+# ── Key helpers ──────────────────────────────────────────────
 
 def _session_key(sn, block_type, bn):
-    """Human-readable Firestore document ID for a session.
-    e.g. s1_practice_b2, s2_pre_test_b1
-    """
+    """e.g. s1_practice_b2, s2_pre_test_b1"""
     return f"s{sn}_{block_type}_b{bn}"
 
 
 def _trial_key(n):
-    """Zero-padded trial number so console sorts 01,02…10,11…20."""
+    """Zero-padded so Firebase console sorts 01, 02 … 10, 11 … 20."""
     return f"{n:02d}"
 
 
-def _fmt_seq(raw):
-    """'[1, 2, 3]' → '1 → 2 → 3'. None → ''."""
-    if raw is None:
-        return ""
-    s = str(raw).strip().lstrip("[").rstrip("]")
-    parts = [p.strip() for p in s.split(",") if p.strip()]
-    return " → ".join(parts)
+# ── Keypress formatter ───────────────────────────────────────
 
-
-def _clean_keypresses(kp_list):
-    """Strip internal SQLite IDs; keep only researcher-relevant fields."""
+def _format_keypresses(tid, kp_by_tid: dict) -> list:
+    """Format keypresses with exact CSV column names (KEYPRESS_COLUMNS)."""
     out = []
-    for kp in kp_list:
-        k = kp.get("key_pressed")
+    for kp in kp_by_tid.get(tid, []):
+        k      = kp.get("key_pressed")
         before = (kp.get("cursor_row_before"), kp.get("cursor_col_before"))
         after  = (kp.get("cursor_row_after"),  kp.get("cursor_col_after"))
         out.append({
-            "key":           k,
-            "direction":     _KEY_DIR.get(k, ""),
-            "row_before":    before[0],
-            "col_before":    before[1],
-            "row_after":     after[0],
-            "col_after":     after[1],
-            "out_of_bounds": before == after,
-            "t_ms":          kp.get("timestamp_ms"),
-            "since_start_ms": kp.get("time_since_trial_start_ms"),
-            "iki_ms":        kp.get("time_since_last_press_ms"),
+            "keypress_id":               kp.get("keypress_id"),
+            "key_pressed":               k,
+            "key_direction":             _KEY_LABELS.get(k, ""),
+            "cursor_row_before":         before[0],
+            "cursor_col_before":         before[1],
+            "cursor_row_after":          after[0],
+            "cursor_col_after":          after[1],
+            "was_out_of_bounds":         _bool_str(before == after),
+            "timestamp_ms":              kp.get("timestamp_ms"),
+            "time_since_trial_start_ms": kp.get("time_since_trial_start_ms"),
+            "time_since_last_press_ms":  kp.get("time_since_last_press_ms"),
         })
     return out
 
 
-# ── SQLite fetch ─────────────────────────────────────────────
+# ── Trial document builder ───────────────────────────────────
+
+def _build_trial_doc(t: dict, sess: dict, part: dict,
+                     cum_score: int, kp_by_tid: dict) -> tuple:
+    """
+    Build a Firestore trial document with exact CSV column names.
+    Returns (doc_dict, updated_cumulative_score).
+    """
+    is_corr = bool(t.get("is_correct"))
+    n_moves = t.get("number_of_moves")
+    opt_len = t.get("optimal_length") or 0
+    score   = t.get("reward_score") or 0
+
+    if n_moves is not None:
+        extra   = n_moves - opt_len
+        is_opt  = _bool_str(is_corr and extra <= 0)
+        penalty = max(0, extra) * 5 if is_corr else 0
+    else:
+        extra   = None
+        is_opt  = ""
+        penalty = None
+
+    cum_score += score
+    tid = t.get("trial_id")
+
+    doc = {
+        # Participant demographics
+        "participant_id":        t.get("participant_id", ""),
+        "age":                   part.get("age"),
+        "gender":                part.get("gender", ""),
+        "handedness":            part.get("handedness", ""),
+        "group_name":            part.get("group_name", ""),
+        # Session context
+        "session_id":            sess.get("session_id"),
+        "session_number":        sess.get("session_number"),
+        "block_type":            sess.get("block_type", ""),
+        "block_number":          sess.get("block_number"),
+        "session_started_at":    sess.get("started_at", ""),
+        "session_completed_at":  sess.get("completed_at"),
+        # Trial identity
+        "trial_id":              tid,
+        "trial_number":          t.get("trial_number"),
+        "grid_type":             t.get("grid_type", ""),
+        "start_row":             t.get("start_row"),
+        "start_col":             t.get("start_col"),
+        "goal_row":              t.get("goal_row"),
+        "goal_col":              t.get("goal_col"),
+        # Sequences (comma-separated; alternative paths pipe-separated)
+        "planned_sequence":      _clean_sequence(t.get("planned_sequence")),
+        "optimal_sequence":      _clean_sequence(t.get("optimal_sequence")),
+        "all_optimal_sequences": _clean_all_optimal(t.get("all_optimal_sequences")),
+        "optimal_length":        opt_len,
+        # Performance
+        "number_of_moves":       n_moves,
+        "extra_moves":           extra,
+        "is_optimal":            is_opt,
+        "oob_count":             t.get("oob_count") or 0,
+        "reward_score":          t.get("reward_score"),
+        "penalty_pts":           penalty,
+        "cumulative_score":      cum_score,
+        # Timing (both ms and s to match CSV)
+        "reaction_time_ms":      t.get("reaction_time_ms"),
+        "reaction_time_s":       _ms_to_s(t.get("reaction_time_ms")),
+        "movement_time_ms":      t.get("movement_time_ms"),
+        "movement_time_s":       _ms_to_s(t.get("movement_time_ms")),
+        "elapsed_time_s":        t.get("elapsed_time_s"),
+        "imagery_duration_ms":   t.get("imagery_duration_ms"),
+        "imagery_duration_s":    _ms_to_s(t.get("imagery_duration_ms")),
+        # Outcome
+        "is_correct":            _bool_str(is_corr),
+        "trial_created_at":      t.get("created_at", ""),
+        # Keypresses embedded array (CSV KEYPRESS_COLUMNS per entry)
+        "keypresses":            _format_keypresses(tid, kp_by_tid),
+    }
+    return doc, cum_score
+
+
+# ── SQLite fetch: single session ─────────────────────────────
 
 def _fetch(session_id, up_to_trial):
     from config import DB_PATH
@@ -112,7 +215,7 @@ def _fetch(session_id, up_to_trial):
     ).fetchone()
     if not sess_row:
         conn.close()
-        return None, None, [], {}
+        return None, None, [], {}, 0
     sess = dict(sess_row)
 
     part = dict(conn.execute(
@@ -125,6 +228,17 @@ def _fetch(session_id, up_to_trial):
         WHERE session_id = ? AND trial_number <= ?
         ORDER BY trial_number
     """, (session_id, up_to_trial)).fetchall()]
+
+    # Cumulative score from all trials recorded before the first trial in this batch
+    prior_cum = 0
+    if trials:
+        first_tid = trials[0]["trial_id"]
+        row = conn.execute(
+            "SELECT COALESCE(SUM(reward_score), 0) FROM trials "
+            "WHERE participant_id = ? AND trial_id < ?",
+            (sess["participant_id"], first_tid)
+        ).fetchone()
+        prior_cum = row[0] or 0
 
     kp_by_tid = {}
     if trials:
@@ -139,26 +253,106 @@ def _fetch(session_id, up_to_trial):
             kp_by_tid.setdefault(d["trial_id"], []).append(d)
 
     conn.close()
-    return sess, part, trials, kp_by_tid
+    return sess, part, trials, kp_by_tid, prior_cum
 
 
-# ── Firestore write ───────────────────────────────────────────
+# ── SQLite fetch: everything (for backfill) ──────────────────
+
+def _fetch_all():
+    """Return all data needed for a full backfill sync."""
+    from config import DB_PATH
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+
+    participants = {
+        dict(r)["participant_id"]: dict(r)
+        for r in conn.execute("SELECT * FROM participants").fetchall()
+    }
+
+    sessions = [dict(r) for r in conn.execute(
+        "SELECT * FROM sessions "
+        "ORDER BY participant_id, session_number, block_number, session_id"
+    ).fetchall()]
+
+    trial_by_sid = {}
+    for t in conn.execute(
+        "SELECT * FROM trials ORDER BY participant_id, trial_id"
+    ).fetchall():
+        d = dict(t)
+        trial_by_sid.setdefault(d["session_id"], []).append(d)
+
+    kp_by_tid = {}
+    for kp in conn.execute(
+        "SELECT * FROM keypresses ORDER BY trial_id, keypress_id"
+    ).fetchall():
+        d = dict(kp)
+        kp_by_tid.setdefault(d["trial_id"], []).append(d)
+
+    conn.close()
+    return participants, sessions, trial_by_sid, kp_by_tid
+
+
+# ── Firestore write: one session's trials ────────────────────
+
+def _push_session(client, p_ref, sess, part, trials, kp_by_tid, prior_cum):
+    """
+    Write _info + all trial documents for one session.
+    Returns the cumulative score after all trials in this session.
+    """
+    from firebase_admin import firestore as fb
+
+    sn    = sess.get("session_number")
+    bt    = sess.get("block_type", "")
+    bn    = sess.get("block_number")
+    s_key = _session_key(sn, bt, bn)
+
+    p_ref.collection(s_key).document("_info").set({
+        "session_number":  sn,
+        "block_type":      bt.replace("_", " ").title(),
+        "block_number":    bn,
+        "started":         sess.get("started_at", ""),
+        "completed":       sess.get("completed_at"),
+        "last_synced":     fb.SERVER_TIMESTAMP,
+        "trials_synced":   len(trials),
+    }, merge=True)
+
+    trials_col = p_ref.collection(s_key)
+    batch      = client.batch()
+    ops        = 0
+    cum        = prior_cum
+
+    for t in trials:
+        doc, cum = _build_trial_doc(t, sess, part, cum, kp_by_tid)
+        t_ref = trials_col.document(_trial_key(t.get("trial_number", 0)))
+        batch.set(t_ref, doc)
+        ops += 1
+        if ops >= 490:
+            batch.commit()
+            batch = client.batch()
+            ops   = 0
+
+    if ops:
+        batch.commit()
+
+    return cum
+
+
+# ── Firestore write: incremental per-session sync ─────────────
 
 def _push(client, session_id, up_to_trial):
     from config import DEVICE_NAME
     from firebase_admin import firestore as fb
 
-    sess, part, trials, kp_by_tid = _fetch(session_id, up_to_trial)
+    sess, part, trials, kp_by_tid, prior_cum = _fetch(session_id, up_to_trial)
     if not sess or not trials:
         return
 
-    pid = sess["participant_id"]
-    sn  = sess.get("session_number")
-    bt  = sess.get("block_type", "")
-    bn  = sess.get("block_number")
+    pid   = sess["participant_id"]
+    sn    = sess.get("session_number")
+    bt    = sess.get("block_type", "")
+    bn    = sess.get("block_number")
     s_key = _session_key(sn, bt, bn)
 
-    # ── Device document ───────────────────────────────────────
     device_ref = client.collection("devices").document(DEVICE_NAME)
     device_ref.set({
         "last_active":      fb.SERVER_TIMESTAMP,
@@ -168,71 +362,70 @@ def _push(client, session_id, up_to_trial):
         "hostname":         socket.gethostname(),
     }, merge=True)
 
-    # ── Participant document ───────────────────────────────────
     p_ref = device_ref.collection("participants").document(pid)
     p_ref.set({
-        "group":      part.get("group_name", ""),
-        "age":        part.get("age"),
-        "gender":     part.get("gender", ""),
-        "handedness": part.get("handedness", ""),
-        "enrolled":   (part.get("created_at") or "")[:10],
+        "participant_id": pid,
+        "group_name":     part.get("group_name", ""),
+        "age":            part.get("age"),
+        "gender":         part.get("gender", ""),
+        "handedness":     part.get("handedness", ""),
+        "enrolled":       (part.get("created_at") or "")[:10],
     }, merge=True)
 
-    # ── Session document ──────────────────────────────────────
-    s_ref = p_ref.collection(s_key).document("_info")
-    s_ref.set({
-        "session_number": sn,
-        "block_type":     bt.replace("_", " ").title(),
-        "block_number":   bn,
-        "started":        sess.get("started_at", ""),
-        "last_synced":    fb.SERVER_TIMESTAMP,
-        "trials_synced":  up_to_trial,
+    _push_session(client, p_ref, sess, part, trials, kp_by_tid, prior_cum)
+
+    print(f"[SYNC] + {len(trials)} trials -> Firebase  "
+          f"({pid}  .  {s_key}  .  up to trial {up_to_trial})")
+
+
+# ── Firestore write: full backfill ────────────────────────────
+
+def _push_all(client):
+    from config import DEVICE_NAME
+    from firebase_admin import firestore as fb
+
+    participants, sessions, trial_by_sid, kp_by_tid = _fetch_all()
+
+    if not sessions:
+        print("[SYNC] No data to backfill.")
+        return
+
+    device_ref = client.collection("devices").document(DEVICE_NAME)
+    device_ref.set({
+        "last_active": fb.SERVER_TIMESTAMP,
+        "hostname":    socket.gethostname(),
     }, merge=True)
 
-    trials_col = p_ref.collection(s_key)
+    cum_by_pid   = {}
+    total_trials = 0
 
-    # ── Trial documents (batched, idempotent) ─────────────────
-    batch = client.batch()
-    ops   = 0
+    for sess in sessions:
+        pid    = sess["participant_id"]
+        part   = participants.get(pid, {})
+        trials = trial_by_sid.get(sess["session_id"], [])
+        if not trials:
+            continue
 
-    for t in trials:
-        tid    = t["trial_id"]
-        n_mov  = t.get("number_of_moves") or 0
-        opt    = t.get("optimal_length")  or 0
-        score  = t.get("reward_score")    or 0
-        kps    = _clean_keypresses(kp_by_tid.get(tid, []))
+        p_ref = device_ref.collection("participants").document(pid)
+        p_ref.set({
+            "participant_id": pid,
+            "group_name":     part.get("group_name", ""),
+            "age":            part.get("age"),
+            "gender":         part.get("gender", ""),
+            "handedness":     part.get("handedness", ""),
+            "enrolled":       (part.get("created_at") or "")[:10],
+        }, merge=True)
 
-        t_ref = trials_col.document(_trial_key(t.get("trial_number", 0)))
-        batch.set(t_ref, {
-            "grid_type":     t.get("grid_type", ""),
-            "start":         f"row {t.get('start_row')}, col {t.get('start_col')}",
-            "goal":          f"row {t.get('goal_row')}, col {t.get('goal_col')}",
-            "planned":       _fmt_seq(t.get("planned_sequence")),
-            "optimal":       _fmt_seq(t.get("optimal_sequence")),
-            "moves":         n_mov,
-            "optimal_moves": opt,
-            "extra_moves":   max(0, n_mov - opt),
-            "score":         score,
-            "correct":       bool(t.get("is_correct")),
-            "reaction_ms":   t.get("reaction_time_ms"),
-            "movement_ms":   t.get("movement_time_ms"),
-            "imagery_ms":    t.get("imagery_duration_ms"),
-            "boundary_hits": t.get("oob_count", 0),
-            "keypresses":    kps,
-            "recorded":      t.get("created_at", ""),
-        })
-        ops += 1
+        prior_cum = cum_by_pid.get(pid, 0)
+        new_cum   = _push_session(client, p_ref, sess, part,
+                                  trials, kp_by_tid, prior_cum)
+        cum_by_pid[pid] = new_cum
+        total_trials   += len(trials)
 
-        if ops >= 490:
-            batch.commit()
-            batch = client.batch()
-            ops   = 0
-
-    if ops:
-        batch.commit()
-
-    print(f"[SYNC] ✓ {len(trials)} trials → Firebase  "
-          f"({pid}  ·  {s_key}  ·  up to trial {up_to_trial})")
+    n_pids = len([p for p in cum_by_pid])
+    device_ref.set({"trials_synced": total_trials}, merge=True)
+    print(f"[SYNC] Backfill complete -- "
+          f"{n_pids} participant(s), {total_trials} trial(s) pushed to Firebase")
 
 
 # ── Public API ────────────────────────────────────────────────
@@ -246,5 +439,16 @@ def sync_in_background(session_id, up_to_trial):
                 _push(client, session_id, up_to_trial)
         except Exception as e:
             print(f"[SYNC] Non-fatal sync error: {e}")
+    threading.Thread(target=_worker, daemon=True).start()
 
+
+def sync_all_in_background():
+    """Backfill ALL historical SQLite data to Firebase. Non-blocking."""
+    def _worker():
+        try:
+            client = _get_client()
+            if client:
+                _push_all(client)
+        except Exception as e:
+            print(f"[SYNC] Non-fatal backfill error: {e}")
     threading.Thread(target=_worker, daemon=True).start()
