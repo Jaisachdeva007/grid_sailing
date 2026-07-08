@@ -20,7 +20,7 @@ KEY_MAPPINGS = {
 # --- Trial Timing (seconds) ---
 PLANNING_TIME_SEC    = 6    # How long the grid is shown (6–9 per protocol)
 INPUT_TIME_SEC       = 10   # Time to enter planned sequence
-ACTION_TIME_SEC      = 10   # Duration of action / imagery stage
+ACTION_TIME_SEC      = 4    # Duration of action / imagery stage
 FEEDBACK_TIME_SEC    = 2    # How long per-trial feedback is displayed
 INTERTRIAL_SEC       = 4    # Gap between trials (3–5 seconds)
 

@@ -23,7 +23,8 @@ from screens.reflection import run_reflection
 from screens.tutorial import run_tutorial
 from database.db import (
     create_session, complete_session,
-    get_resume_point, initialise_database
+    get_resume_point, initialise_database,
+    get_global_repeated_puzzle, set_global_repeated_puzzle,
 )
 
 
@@ -31,41 +32,60 @@ from database.db import (
 
 def build_puzzle_pool():
     """
-    Generate all valid puzzles from all 25 start positions.
-    Returns a list of puzzle dicts filtered to optimal length <= MAX_OPTIMAL.
+    Generate all valid puzzles from all 25 start positions, grouped by (start, goal).
 
     Each puzzle dict has:
-        start, goal, sequence (optimal), length (optimal)
+        start, goal        — unique pair
+        sequence           — one representative optimal sequence
+        sequences          — ALL sequences of minimal length reaching goal
+        length             — minimal path length (all sequences have this length)
     """
     from config import MAX_OPTIMAL_LENGTH
-    pool = []
+    from collections import defaultdict
+
+    by_pair = defaultdict(list)
     for r in range(GRID_SIZE):
         for c in range(GRID_SIZE):
-            puzzles = find_valid_paths(r, c)
-            for p in puzzles:
-                # Keep only puzzles where the optimal is at most MAX_OPTIMAL_LENGTH
-                if p["length"] <= MAX_OPTIMAL_LENGTH:
-                    pool.append(p)
-    print(f"[SESSION] Puzzle pool built: {len(pool)} valid puzzles.")
+            for p in find_valid_paths(r, c):
+                key = (tuple(p["start"]), tuple(p["goal"]))
+                by_pair[key].append(p)
+
+    pool = []
+    for (start_t, goal_t), ps in by_pair.items():
+        min_len = min(p["length"] for p in ps)
+        if min_len > MAX_OPTIMAL_LENGTH:
+            continue
+        optimal_seqs = [p["sequence"] for p in ps if p["length"] == min_len]
+        pool.append({
+            "start":     list(start_t),
+            "goal":      list(goal_t),
+            "sequence":  optimal_seqs[0],
+            "sequences": optimal_seqs,
+            "length":    min_len,
+        })
+
+    n_paths = sum(len(p["sequences"]) for p in pool)
+    print(f"[SESSION] Pool: {len(pool)} unique puzzles, {n_paths} total optimal paths.")
     return pool
 
 
-def _pick_puzzles(pool, n_trials, repeated_ratio, repeated_puzzle=None):
+def _pick_puzzles(pool, n_trials, repeated_ratio,
+                  repeated_puzzle=None, repeated_start=None, repeated_goal=None):
     """
     Select n_trials puzzles with the correct repeated:random ratio.
 
-    Args:
-        pool (list):            Full puzzle pool.
-        n_trials (int):         How many puzzles to return.
-        repeated_ratio (float): Fraction of trials that should be the repeated puzzle.
-        repeated_puzzle (dict): The fixed puzzle to reuse for repeated trials.
-                                If None, one is chosen randomly from the pool.
-
-    Returns:
-        list of (puzzle_dict, grid_type_str) tuples, shuffled.
+    repeated_start / repeated_goal: (row, col) tuples or None.
+    When set, the repeated puzzle is drawn only from puzzles matching those cells.
     """
     if repeated_puzzle is None:
-        repeated_puzzle = random.choice(pool)
+        candidates = pool
+        if repeated_start:
+            candidates = [p for p in candidates
+                          if tuple(p["start"]) == tuple(repeated_start)]
+        if repeated_goal:
+            candidates = [p for p in candidates
+                          if tuple(p["goal"]) == tuple(repeated_goal)]
+        repeated_puzzle = random.choice(candidates) if candidates else random.choice(pool)
 
     n_repeated = round(n_trials * repeated_ratio)
     n_random   = n_trials - n_repeated
@@ -75,8 +95,18 @@ def _pick_puzzles(pool, n_trials, repeated_ratio, repeated_puzzle=None):
         (repeated_puzzle, "repeated") for _ in range(n_repeated)
     ]
 
-    # Random trials use random puzzles (different from the repeated one)
-    random_pool = [p for p in pool if p != repeated_puzzle]
+    # Random trials: exclude any puzzle that shares an optimal sequence with the repeated puzzle
+    rep_seqs = frozenset(
+        tuple(s) for s in repeated_puzzle.get("sequences", [repeated_puzzle["sequence"]])
+    )
+    random_pool = [
+        p for p in pool
+        if p != repeated_puzzle
+        and not any(tuple(s) in rep_seqs
+                    for s in p.get("sequences", [p["sequence"]]))
+    ]
+    if not random_pool:
+        random_pool = [p for p in pool if p != repeated_puzzle]
     random_picks = random.choices(random_pool, k=n_random)
     trials += [(p, "random") for p in random_picks]
 
@@ -119,9 +149,33 @@ def run_block(screen, clock, fonts, block_type, block_number,
     else:  # practice
         ratio = config.get("practice_ratio", PRACTICE_REPEATED_RATIO)
 
+    # Ensure all participants share the same repeated puzzle.
+    # On the very first block of the experiment, pick one (constrained by
+    # repeated_start if Juliet set it) and save it to the DB.
+    # Every subsequent participant re-uses that saved puzzle.
+    if repeated_puzzle is None:
+        stored = get_global_repeated_puzzle()
+        if stored:
+            # Find the full pool entry so we get all_optimal_sequences too
+            stored_s = tuple(stored["start"])
+            stored_g = tuple(stored["goal"])
+            pool_match = next(
+                (p for p in pool
+                 if tuple(p["start"]) == stored_s and tuple(p["goal"]) == stored_g),
+                stored
+            )
+            repeated_puzzle = pool_match
+
+    first_pick = (repeated_puzzle is None)
+
+    repeated_start = config.get("repeated_start", None)
+    repeated_goal  = config.get("repeated_goal",  None)
     trials_list, repeated_puzzle = _pick_puzzles(
-        pool, n_trials, ratio, repeated_puzzle
+        pool, n_trials, ratio, repeated_puzzle, repeated_start, repeated_goal
     )
+
+    if first_pick:
+        set_global_repeated_puzzle(repeated_puzzle)
 
     # Create or find session record in DB
     resume = get_resume_point(participant_id, session_number, block_type, block_number)
@@ -138,31 +192,31 @@ def run_block(screen, clock, fonts, block_type, block_number,
     _show_block_intro(screen, clock, fonts, block_type, block_number,
                       session_number, group, config)
 
+    streak = 0
+
     for i, (puzzle, grid_type) in enumerate(trials_list):
         trial_number = i + 1
         if trial_number <= resume_from_trial:
             continue   # skip already-completed trials
 
         trial = TrialData(
-            session_id       = session_id,
-            participant_id   = participant_id,
-            trial_number     = trial_number,
-            grid_type        = grid_type,
-            start            = tuple(puzzle["start"]),
-            goal             = tuple(puzzle["goal"]),
-            optimal_sequence = puzzle["sequence"],
-            group            = group,
+            session_id            = session_id,
+            participant_id        = participant_id,
+            trial_number          = trial_number,
+            grid_type             = grid_type,
+            start                 = tuple(puzzle["start"]),
+            goal                  = tuple(puzzle["goal"]),
+            optimal_sequence      = puzzle["sequence"],
+            all_optimal_sequences = puzzle.get("sequences", [puzzle["sequence"]]),
+            group                 = group,
         )
-
-        # Score is hidden during familiarization and test blocks
-        show_score = block_type == "practice"
 
         result = run_trial(
             screen, clock, fonts, trial, config,
             cumulative_score, session_id,
             total_trials=n_trials,
             block_type=block_type,
-            show_score=show_score,
+            streak=streak,
         )
 
         if result.get("paused_exit"):
@@ -172,6 +226,7 @@ def run_block(screen, clock, fonts, block_type, block_number,
             return "exited"   # signal to run_session to stop
 
         cumulative_score = result["cumulative_score"]
+        streak = result.get("streak", 0)
 
     complete_session(session_id)
 
@@ -247,8 +302,8 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
     cumulative_score = 0
     repeated_puzzle  = None   # fixed across the whole session
 
-    # Show key-mapping tutorial once before the very first block
-    run_tutorial(screen, clock, fonts)
+    # Instructions shown once before the very first block
+    _show_instructions(screen, clock, fonts, group)
 
     for block_idx, block_type in enumerate(block_sequence):
         result = run_block(
@@ -271,9 +326,14 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
 
         cumulative_score, repeated_puzzle = result
 
-        # Show break screen between blocks (not after the last one)
+        # Show information slide between blocks (not after the last one)
         if block_idx < len(block_sequence) - 1:
-            _show_break(screen, clock, fonts, block_idx + 1, len(block_sequence))
+            next_block = block_sequence[block_idx + 1]
+            _show_break(screen, clock, fonts,
+                        completed_block=block_type,
+                        next_block=next_block,
+                        block_num=block_idx + 1,
+                        total_blocks=len(block_sequence))
 
     _show_session_complete(screen, clock, fonts, session_number, cumulative_score)
 
@@ -374,42 +434,111 @@ def _card_screen(screen, clock, fonts, title, title_col, badge, lines,
 
 def _show_block_intro(screen, clock, fonts, block_type, block_number,
                       session_number, group, config):
-    f_big, f_med, f_sm, f_xs = fonts
-
     descriptions = {
-        "familiarization": "Get comfortable with the keys and the grid.",
-        "pre_test":        "Baseline test — execute your planned sequence physically.",
-        "practice":        "Practice block — follow your assigned condition.",
-        "post_test":       "Final performance test — execute your planned sequence.",
+        "familiarization": "Explore the task at your own pace. No score is shown.",
+        "pre_test":        "A baseline test. Plan your route and execute it. No score shown.",
+        "practice":        "Practice block. Your score will appear after each trial.",
+        "post_test":       "Final performance test. Plan and execute. No score shown.",
     }
-    score_note = {
-        "familiarization": "No score shown during this block.",
-        "pre_test":        "No score shown during this block.",
-        "practice":        "Feedback and score will appear after each trial.",
-        "post_test":       "No score shown during this block.",
-    }
-
     badge = f"Session {session_number}  ·  Block {block_number}  ·  {group}"
-    lines = [
-        (descriptions.get(block_type, ""), DIM),
-        (score_note.get(block_type, ""),   DIM),
-    ]
+    lines = [(descriptions.get(block_type, ""), DIM)]
     _card_screen(screen, clock, fonts,
                  title=block_type.replace("_", " ").title(),
                  title_col=ACCENT, badge=badge, lines=lines,
                  hint_text="Press  SPACE  to begin")
 
 
-def _show_break(screen, clock, fonts, completed_blocks, total_blocks):
+def _show_break(screen, clock, fonts,
+                completed_block, next_block, block_num, total_blocks):
+    """Information slide shown between blocks."""
+    next_descriptions = {
+        "familiarization": "The next block is another familiarization. Continue exploring at your own pace.",
+        "pre_test":        "Next is a baseline test. Plan your route carefully — no score will be shown.",
+        "practice":        "Next is a practice block. Follow your assigned condition. Score will be shown after each trial.",
+        "post_test":       "Next is the final performance test. No score will be shown.",
+    }
+    completed_label = completed_block.replace("_", " ").title()
+    next_label      = next_block.replace("_", " ").title()
     lines = [
-        ("Take a moment to rest.",                                   DIM),
-        (f"Block {completed_blocks} of {total_blocks} complete.",    GREEN),
-        ("When you are ready, press SPACE to continue.",             DIM),
+        (f"{completed_label} complete.  Block {block_num} of {total_blocks}.", GREEN),
+        ("", DIM),
+        (next_descriptions.get(next_block, f"Next: {next_label}"), DIM),
     ]
     _card_screen(screen, clock, fonts,
-                 title="Take a Break", title_col=GREEN,
-                 badge=None, lines=lines,
-                 hint_text="Press  SPACE  when ready")
+                 title="Take a Short Break",
+                 title_col=GREEN, badge=None, lines=lines,
+                 hint_text="Press  SPACE  when you are ready to continue")
+
+
+def _show_instructions(screen, clock, fonts, group):
+    """Multi-slide instruction sequence shown once before the first block."""
+
+    def _slide(title, title_col, badge, lines, hint="Press  SPACE  to continue"):
+        _card_screen(screen, clock, fonts,
+                     title=title, title_col=title_col,
+                     badge=badge, lines=lines, hint_text=hint)
+
+    # Slide 1 — Welcome
+    _slide(
+        "Welcome",
+        ACCENT, None,
+        [
+            ("In this task, you will navigate a grid to move a", DIM),
+            ("MOUSE to a piece of CHEESE in as few steps as possible.", DIM),
+            ("", DIM),
+            ("There are three sessions in total.", DIM),
+        ],
+    )
+
+    # Slide 2 — The grid
+    _slide(
+        "The Grid",
+        ACCENT, None,
+        [
+            ("You will see a 5x5 grid.", DIM),
+            ("The blue cell is the MOUSE (start).", DIM),
+            ("The yellow cell is the CHEESE (goal).", DIM),
+            ("Plan the shortest path, then enter it using the keypad.", DIM),
+        ],
+    )
+
+    # Slide 3 — Repeated vs Random
+    _slide(
+        "Two Types of Grid",
+        AMBER, "Grid types",
+        [
+            ("REPEATED  —  the same puzzle appears many times.", WHITE),
+            ("RANDOM    —  a new puzzle each time.", DIM),
+            ("", DIM),
+            ("Learning the repeated puzzle is part of the experiment.", DIM),
+        ],
+    )
+
+    # Slide 4 — How to enter a sequence
+    _slide(
+        "Entering Your Plan",
+        ACCENT, None,
+        [
+            ("During planning, decide the shortest route.", DIM),
+            ("Then click the  1 / 2 / 3  buttons to enter your sequence.", DIM),
+            ("Click  Undo  to remove the last step,  Confirm  when done.", DIM),
+            ("You will then execute the plan in the next stage.", DIM),
+        ],
+    )
+
+    # Slide 5 — Scoring (only relevant for practice)
+    _slide(
+        "Scoring",
+        GREEN, None,
+        [
+            ("You earn points for reaching the CHEESE.", DIM),
+            ("Extra moves beyond the shortest path reduce your score.", DIM),
+            ("Scores are shown during practice blocks only.", DIM),
+            ("", DIM),
+            (f"Your assigned condition:  {group}", WHITE),
+        ],
+        hint="Press  SPACE  to start",
+    )
 
 
 def _show_session_complete(screen, clock, fonts, session_number, total_score):

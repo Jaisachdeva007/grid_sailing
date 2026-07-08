@@ -25,11 +25,10 @@ CX, CY = W // 2, H // 2
 
 
 class InputBox:
-    def __init__(self, x, y, w, h, placeholder="", secret=False):
+    def __init__(self, x, y, w, h, placeholder=""):
         self.rect        = pygame.Rect(x, y, w, h)
         self.text        = ""
         self.placeholder = placeholder
-        self.secret      = secret
         self.active      = False
 
     def handle_event(self, event):
@@ -51,9 +50,9 @@ class InputBox:
         if self.active:
             pygame.draw.rect(screen, ACCENT,
                              (self.rect.x, self.rect.y + 8, 2, self.rect.h - 16))
-        display = ("•" * len(self.text)) if self.secret else self.text
-        txt = font.render(display if display else self.placeholder,
-                          True, WHITE if display else (60, 60, 90))
+        display = self.text if self.text else self.placeholder
+        col     = WHITE if self.text else (60, 60, 90)
+        txt = font.render(display, True, col)
         screen.blit(txt, (self.rect.x + 16,
                            self.rect.y + self.rect.h // 2 - txt.get_height() // 2))
 
@@ -69,14 +68,13 @@ def run_participant_login(screen, clock, fonts, config: dict):
 
     start_t = time.time()
 
-    # Card geometry
-    CW, CH = 440, 280
+    # Card geometry — single field, shorter card
+    CW, CH = 440, 210
     CX2 = CX - CW // 2
     CY2 = CY - CH // 2 + 20
 
-    pid_box = InputBox(CX2 + 20, CY2 + 72,  CW - 40, 50, "e.g.  P001")
-    pin_box = InputBox(CX2 + 20, CY2 + 156, CW - 40, 50, "4-digit PIN", secret=True)
-    btn_r   = pygame.Rect(CX2 + 20, CY2 + 224, CW - 40, 46)
+    pid_box = InputBox(CX2 + 20, CY2 + 60, CW - 40, 50, "e.g.  P001")
+    btn_r   = pygame.Rect(CX2 + 20, CY2 + 138, CW - 40, 46)
 
     message = ""
     error_t = 0
@@ -91,7 +89,6 @@ def run_participant_login(screen, clock, fonts, config: dict):
                 pygame.quit(); sys.exit()
 
             pid_box.handle_event(event)
-            pin_box.handle_event(event)
 
             confirm = (
                 (event.type == pygame.MOUSEBUTTONDOWN and btn_r.collidepoint(event.pos))
@@ -99,16 +96,15 @@ def run_participant_login(screen, clock, fonts, config: dict):
             )
             if confirm:
                 pid = pid_box.text.strip().upper()
-                pin = pin_box.text.strip()
-                if not pid or not pin:
-                    message = "Please enter your Participant ID and PIN."
+                if not pid:
+                    message = "Please enter your Participant ID."
                     error_t = now
                 else:
-                    participant = verify_participant(pid, pin)
+                    participant = verify_participant(pid)
                     if not participant:
-                        message = "Incorrect ID or PIN — please try again."
+                        message = "Participant ID not found. Ask your researcher."
                         error_t = now
-                        pin_box.text = ""
+                        pid_box.text = ""
                     elif participant["participant_id"] != config["participant_id"]:
                         message = "This ID doesn't match today's session. Ask your researcher."
                         error_t = now
@@ -160,12 +156,6 @@ def run_participant_login(screen, clock, fonts, config: dict):
 
         pid_box.rect.topleft = (CX2 + 20, CY2 + 40)
         pid_box.draw(screen, f_body)
-
-        lbl_pin = f_lbl.render("PIN", True, DIM)
-        screen.blit(lbl_pin, (CX2 + 20, CY2 + 106))
-
-        pin_box.rect.topleft = (CX2 + 20, CY2 + 124)
-        pin_box.draw(screen, f_body)
 
         # Confirm button
         mouse = pygame.mouse.get_pos()

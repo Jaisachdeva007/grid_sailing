@@ -5,7 +5,6 @@
 # ============================================================
 
 import sqlite3
-import hashlib
 import os
 from datetime import datetime
 from config import DB_PATH
@@ -35,7 +34,7 @@ def initialise_database():
     c.execute("""
         CREATE TABLE IF NOT EXISTS participants (
             participant_id   TEXT PRIMARY KEY,
-            pin_hash         TEXT NOT NULL,
+            pin_hash         TEXT NOT NULL DEFAULT '',
             group_name       TEXT NOT NULL,
             age              INTEGER,
             gender           TEXT,
@@ -120,58 +119,99 @@ def initialise_database():
         )
     """)
 
+    # Global settings (e.g. experiment-wide repeated puzzle)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS global_settings (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+    """)
+
+    # Add all_optimal_sequences column to existing databases
+    try:
+        c.execute("ALTER TABLE trials ADD COLUMN all_optimal_sequences TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # column already exists
+
     conn.commit()
     conn.close()
     print(f"[DB] Database ready at {DB_PATH}")
 
 
+# ── Global repeated puzzle ───────────────────────────────────
+
+def get_global_repeated_puzzle():
+    """Return the experiment-wide repeated puzzle as a dict, or None if not yet set."""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT key, value FROM global_settings WHERE key IN ('rep_start','rep_goal','rep_seq')"
+    ).fetchall()
+    conn.close()
+    d = {r["key"]: r["value"] for r in rows}
+    if len(d) < 3:
+        return None
+    start = [int(x) for x in d["rep_start"].split(",")]
+    goal  = [int(x) for x in d["rep_goal"].split(",")]
+    seq   = [int(x) for x in d["rep_seq"].split(",")]
+    return {"start": start, "goal": goal, "sequence": seq, "length": len(seq)}
+
+
+def set_global_repeated_puzzle(puzzle):
+    """Save the experiment-wide repeated puzzle. Called once on the first session."""
+    conn = get_connection()
+    pairs = [
+        ("rep_start", ",".join(str(x) for x in puzzle["start"])),
+        ("rep_goal",  ",".join(str(x) for x in puzzle["goal"])),
+        ("rep_seq",   ",".join(str(x) for x in puzzle["sequence"])),
+    ]
+    for key, val in pairs:
+        conn.execute(
+            "INSERT OR REPLACE INTO global_settings (key, value) VALUES (?, ?)",
+            (key, val)
+        )
+    conn.commit()
+    conn.close()
+
+
+def clear_global_repeated_puzzle():
+    """Reset the experiment-wide repeated puzzle (use when starting a new cohort)."""
+    conn = get_connection()
+    conn.execute(
+        "DELETE FROM global_settings WHERE key IN ('rep_start','rep_goal','rep_seq')"
+    )
+    conn.commit()
+    conn.close()
+
+
 # ── Participant functions ────────────────────────────────────
 
-def hash_pin(pin: str) -> str:
-    """Hash a PIN string using SHA-256 for secure storage."""
-    return hashlib.sha256(pin.encode()).hexdigest()
-
-
-def create_participant(participant_id, pin, group_name, age, gender, handedness):
+def create_participant(participant_id, group_name, age, gender, handedness):
     """
-    Register a new participant in the database.
-
-    Args:
-        participant_id (str): Unique ID assigned by researcher (e.g. P001).
-        pin (str): 4-digit PIN chosen by participant.
-        group_name (str): Experimental group (e.g. MI-High).
-        age (int): Participant age.
-        gender (str): Participant gender.
-        handedness (str): Left / Right / Ambidextrous.
-
-    Returns:
-        bool: True if created successfully, False if ID already exists.
+    Register a new participant. Returns True on success, False if ID already exists.
     """
     conn = get_connection()
     try:
         conn.execute("""
             INSERT INTO participants (participant_id, pin_hash, group_name, age, gender, handedness)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (participant_id, hash_pin(pin), group_name, age, gender, handedness))
+            VALUES (?, '', ?, ?, ?, ?)
+        """, (participant_id, group_name, age, gender, handedness))
         conn.commit()
         return True
     except sqlite3.IntegrityError:
-        return False   # participant_id already exists
+        return False
     finally:
         conn.close()
 
 
-def verify_participant(participant_id, pin):
+def verify_participant(participant_id):
     """
-    Check that a participant ID and PIN match the database record.
-
-    Returns:
-        dict or None: Participant row if valid, None if not found or wrong PIN.
+    Look up a participant by ID. Returns the participant row or None.
     """
     conn = get_connection()
     row = conn.execute(
-        "SELECT * FROM participants WHERE participant_id = ? AND pin_hash = ?",
-        (participant_id, hash_pin(pin))
+        "SELECT * FROM participants WHERE participant_id = ?",
+        (participant_id,)
     ).fetchone()
     conn.close()
     return dict(row) if row else None
@@ -347,7 +387,8 @@ def save_trial(session_id, participant_id, trial_number, grid_type,
                planned_sequence, optimal_sequence, optimal_length,
                number_of_moves, reward_score,
                reaction_time_ms, movement_time_ms, elapsed_time_s,
-               imagery_duration_ms, is_correct):
+               imagery_duration_ms, is_correct,
+               all_optimal_sequences=None):
     """
     Save a completed trial to the database and return its trial_id.
     Called at the end of every trial regardless of outcome.
@@ -360,15 +401,15 @@ def save_trial(session_id, participant_id, trial_number, grid_type,
             planned_sequence, optimal_sequence, optimal_length,
             number_of_moves, reward_score,
             reaction_time_ms, movement_time_ms, elapsed_time_s,
-            imagery_duration_ms, is_correct
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            imagery_duration_ms, is_correct, all_optimal_sequences
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         session_id, participant_id, trial_number, grid_type,
         start_row, start_col, goal_row, goal_col,
         str(planned_sequence), str(optimal_sequence), optimal_length,
         number_of_moves, reward_score,
         reaction_time_ms, movement_time_ms, elapsed_time_s,
-        imagery_duration_ms, int(is_correct)
+        imagery_duration_ms, int(is_correct), all_optimal_sequences
     ))
     trial_id = cursor.lastrowid
     conn.commit()

@@ -16,11 +16,12 @@ import sys
 from config import (
     WINDOW_WIDTH, WINDOW_HEIGHT, GROUPS, SESSION_STRUCTURE,
     PLANNING_TIME_SEC, ACTION_TIME_SEC, FEEDBACK_TIME_SEC, INTERTRIAL_SEC,
-    PRACTICE_REPEATED_RATIO, TEST_REPEATED_RATIO, FPS
+    PRACTICE_REPEATED_RATIO, TEST_REPEATED_RATIO, GRID_SIZE, FPS
 )
 from database.db import (
     initialise_database, get_all_participants,
-    create_participant, verify_participant
+    create_participant, verify_participant,
+    get_global_repeated_puzzle, clear_global_repeated_puzzle,
 )
 from screens.export_screen import run_export_screen
 from screens.data_viewer  import run_data_viewer
@@ -85,12 +86,16 @@ def _pill(screen, font, text, fg, bg, x, y):
     return pw
 
 def _section(screen, font, label, y):
-    s = font.render(label.upper(), True, ACCENT)
-    screen.blit(s, (PAD, y))
-    lx = PAD + s.get_width() + 14
-    ly = y + s.get_height() // 2
-    pygame.draw.line(screen, BORDER, (lx, ly), (WINDOW_WIDTH - PAD, ly))
-    return s.get_height() + SEC_GAP
+    s    = font.render(label.upper(), True, ACCENT)
+    bh   = s.get_height() + 14          # band height
+    # Full-width background band
+    pygame.draw.rect(screen, SURFACE, (0, y - 5, WINDOW_WIDTH, bh))
+    # Left accent stripe
+    pygame.draw.rect(screen, ACCENT,  (0, y - 5, 3, bh))
+    # Bottom border of band (clearly below text, never through it)
+    pygame.draw.line(screen, BORDER,  (0, y - 5 + bh), (WINDOW_WIDTH, y - 5 + bh))
+    screen.blit(s, (PAD + 6, y + 2))
+    return bh + SEC_GAP
 
 def _label(screen, font, text, x, y):
     s = font.render(text, True, DIM)
@@ -249,6 +254,71 @@ class Button:
                            self.rect.y + self.rect.h//2 - lbl.get_height()//2))
 
 
+class ToggleGroup:
+    """Three-way toggle: All Random | Mixed (default %) | All Repeated."""
+    BTN_W = 150
+    GAP   = 8
+
+    def __init__(self, x, y, default_ratio):
+        self.default_ratio = default_ratio
+        self.selected      = 1   # default: Mixed
+        self._rects        = []
+        self._labels       = [
+            "All Random",
+            f"Mixed  ({int(default_ratio * 100)}%)",
+            "All Repeated",
+        ]
+        self._values = [0.0, default_ratio, 1.0]
+        self._place(x, y)
+
+    def _place(self, x, y):
+        self._rects = [
+            pygame.Rect(x + i * (self.BTN_W + self.GAP), y,
+                        self.BTN_W, ROW_H)
+            for i in range(3)
+        ]
+
+    def reposition(self, x, y):
+        self._place(x, y)
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            for i, r in enumerate(self._rects):
+                if r.collidepoint(event.pos):
+                    self.selected = i
+                    return True
+        return False
+
+    @property
+    def value(self):
+        return self._values[self.selected]
+
+    def draw(self, screen, font):
+        _cols = [ORANGE, ACCENT, GREEN]
+        for i, (r, lbl) in enumerate(zip(self._rects, self._labels)):
+            is_sel = (i == self.selected)
+            hover  = r.collidepoint(pygame.mouse.get_pos())
+            c      = _cols[i]
+            if is_sel:
+                fill   = tuple(max(0, v - 190) for v in c)
+                border = c
+                tc     = c
+            elif hover:
+                fill   = (30, 30, 52)
+                border = BORDER_LT
+                tc     = WHITE
+            else:
+                fill   = INPUT_BG
+                border = BORDER
+                tc     = DIM
+            pygame.draw.rect(screen, fill,   r, border_radius=8)
+            pygame.draw.rect(screen, border, r, width=1 if not is_sel else 2,
+                             border_radius=8)
+            ls = font.render(lbl, True, tc)
+            screen.blit(ls, (r.x + r.w // 2 - ls.get_width() // 2,
+                              r.y + r.h // 2 - ls.get_height() // 2))
+
+
 # ── Researcher Home (landing screen after admin login) ────────
 
 def run_researcher_home(screen, clock):
@@ -405,25 +475,30 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
 
     # ── Widgets ──────────────────────────────────────────────
     pid_box   = InputBox(INP_X1, 0, 190, ROW_H, "e.g. P001")
-    pin_box   = InputBox(INP_X1, 0, 190, ROW_H, "4-digit PIN", secret=True)
     age_box   = InputBox(INP_X2, 0, 100, ROW_H, "e.g. 22")
     gender_dd = Dropdown(INP_X2, 0, 190, ROW_H,
                          ["Female", "Male", "Non-binary", "Other", "Prefer not to say"])
     hand_dd   = Dropdown(INP_X2, 0, 190, ROW_H, ["Right", "Left", "Ambidextrous"])
 
     ret_pid_box = InputBox(INP_X1, 0, 190, ROW_H, "Participant ID")
-    ret_pin_box = InputBox(INP_X1, 0, 190, ROW_H, "PIN", secret=True)
 
     group_dd   = Dropdown(INP_X1, 0, 210, ROW_H, GROUPS)
     session_dd = Dropdown(INP_X1, 0, 100, ROW_H, [1, 2, 3])
 
     planning_input   = NumericInput(INP_X1, 0, PLANNING_TIME_SEC,  4, 12)
-    action_input     = NumericInput(INP_X1, 0, ACTION_TIME_SEC,    5, 20)
+    action_input     = NumericInput(INP_X1, 0, ACTION_TIME_SEC,    3, 20)
     feedback_input   = NumericInput(INP_X2, 0, FEEDBACK_TIME_SEC,  1,  5)
     intertrial_input = NumericInput(INP_X2, 0, INTERTRIAL_SEC,     2, 10)
 
-    practice_ratio_input = NumericInput(INP_X1, 0, PRACTICE_REPEATED_RATIO * 100, 50, 100, step=4)
-    test_ratio_input     = NumericInput(INP_X2,  0, TEST_REPEATED_RATIO * 100,     40,  80, step=4)
+    practice_cond = ToggleGroup(INP_X1, 0, PRACTICE_REPEATED_RATIO)
+    test_cond     = ToggleGroup(INP_X1, 0, TEST_REPEATED_RATIO)
+
+    # Mini grid for repeated puzzle start position
+    MINI_CELL          = 54
+    repeated_start     = [None]   # list so closure can mutate; (row, col) or None
+    repeated_goal      = [None]   # second click sets goal (cheese) position
+    _mini_rects        = []       # [(pygame.Rect, r, c)] — rebuilt each frame
+    _reset_btn_r       = [None]   # stored each draw frame for hit-testing
 
     BH = 46   # bottom button height
     BY = WINDOW_HEIGHT - BH - 18
@@ -435,11 +510,15 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
     message     = ""
     message_col = RED
     scroll_y    = 0          # vertical scroll offset for the form content
+    max_scroll  = [600]      # updated each draw frame from actual content height
 
     all_dropdowns = [gender_dd, hand_dd, group_dd, session_dd]
-    all_inputs    = [pid_box, pin_box, age_box, ret_pid_box, ret_pin_box]
-    all_steppers  = [planning_input, action_input, feedback_input,
-                     intertrial_input, practice_ratio_input, test_ratio_input]
+    all_inputs    = [pid_box, age_box, ret_pid_box]
+    all_steppers  = [planning_input, action_input, feedback_input, intertrial_input]
+
+    # Top-bar icon buttons — x updated each frame in case window size changes
+    _back_btn    = pygame.Rect(0, 14, 100, 32)
+    _min_btn     = pygame.Rect(0, 14, 110, 32)
 
     while True:
         clock.tick(FPS)
@@ -449,6 +528,13 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
                 pygame.quit(); sys.exit()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 return None
+
+            # ── Top-bar buttons ────────────────────────────────
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if _back_btn.collidepoint(event.pos):
+                    return None   # go back to home screen
+                if _min_btn.collidepoint(event.pos):
+                    pygame.display.iconify()
 
             for box in all_inputs:   box.handle_event(event)
             for s in all_steppers:   s.handle_event(event)
@@ -463,6 +549,34 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
             if not consumed and event.type == pygame.MOUSEBUTTONDOWN:
                 for dd in all_dropdowns: dd.close()
 
+            practice_cond.handle_event(event)
+            test_cond.handle_event(event)
+
+            # Mini grid start position selection + reset button
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                # Reset global puzzle button
+                if _reset_btn_r[0] and _reset_btn_r[0].collidepoint(event.pos):
+                    if get_global_repeated_puzzle():
+                        clear_global_repeated_puzzle()
+                        repeated_start[0] = None
+                        repeated_goal[0]  = None
+                else:
+                    # Mini grid two-click selection: first click = start, second = goal
+                    if not get_global_repeated_puzzle():
+                        for (cell_rect, r, c) in _mini_rects:
+                            if cell_rect.collidepoint(event.pos):
+                                cell_pos = (r, c)
+                                if repeated_start[0] is None:
+                                    repeated_start[0] = cell_pos        # set start (blue)
+                                elif repeated_start[0] == cell_pos:
+                                    repeated_start[0] = None            # deselect start → clear both
+                                    repeated_goal[0]  = None
+                                elif repeated_goal[0] == cell_pos:
+                                    repeated_goal[0] = None             # deselect goal
+                                else:
+                                    repeated_goal[0] = cell_pos         # set/change goal (amber)
+                                break
+
             if data_btn.handle_event(event):
                 run_data_viewer(screen, clock, fonts)
 
@@ -470,14 +584,14 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
                 run_export_screen(screen, clock, fonts)
 
             if event.type == pygame.MOUSEWHEEL:
-                scroll_y = max(0, min(scroll_y - event.y * 24, 220))
+                scroll_y = max(0, min(scroll_y - event.y * 24, max_scroll[0]))
 
             if launch_btn.handle_event(event):
                 result = _validate_and_launch(
-                    mode, pid_box, pin_box, age_box, gender_dd, hand_dd,
-                    ret_pid_box, ret_pin_box, group_dd, session_dd,
+                    mode, pid_box, age_box, gender_dd, hand_dd,
+                    ret_pid_box, group_dd, session_dd,
                     planning_input, action_input, feedback_input, intertrial_input,
-                    practice_ratio_input, test_ratio_input
+                    practice_cond, test_cond, repeated_start[0], repeated_goal[0]
                 )
                 if isinstance(result, str):
                     message = result; message_col = RED
@@ -488,10 +602,22 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
         screen.fill(BG)
 
         # ── Top title bar (fixed — never scrolls) ─────────────
-        pygame.draw.rect(screen, SURFACE, (0, 0, WINDOW_WIDTH, 60))
-        pygame.draw.line(screen, BORDER, (0, 60), (WINDOW_WIDTH, 60))
+        SW = screen.get_width()   # actual surface width (for edge-to-edge lines)
+        pygame.draw.rect(screen, SURFACE, (0, 0, SW, 60))
+        pygame.draw.line(screen, BORDER, (0, 60), (SW, 60))
         _t(screen, f_title, "Researcher Setup", WHITE, PAD, 16)
-        _t(screen, f_xs, "Grid-Sailing Task", DIM, WINDOW_WIDTH - PAD - 120, 22)
+
+        # Back-to-menu and Minimize buttons on the right
+        _back_btn.x = WINDOW_WIDTH - PAD - 222
+        _min_btn.x  = WINDOW_WIDTH - PAD - 112
+        mouse_pos = pygame.mouse.get_pos()
+        for btn_r, lbl in [(_back_btn, "Menu"), (_min_btn, "Minimize")]:
+            hov = btn_r.collidepoint(mouse_pos)
+            pygame.draw.rect(screen, (28, 28, 48) if hov else SURFACE, btn_r, border_radius=6)
+            pygame.draw.rect(screen, ACCENT if hov else BORDER, btn_r, width=1, border_radius=6)
+            bt = f_xs.render(lbl, True, WHITE if hov else DIM)
+            screen.blit(bt, (btn_r.x + btn_r.w // 2 - bt.get_width() // 2,
+                              btn_r.y + btn_r.h // 2 - bt.get_height() // 2))
 
         # ── Breadcrumb (fixed) ────────────────────────────────
         crumb_label = "New Participant" if mode == "new" else "Returning Participant"
@@ -503,9 +629,11 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
         def oy(base, extra=0):
             return base + extra - scroll_y
 
+        # Use configured dimensions for layout so the bottom bar is always at the
+        # same position regardless of whether the window is fullscreen or windowed.
         BY_LINE = WINDOW_HEIGHT - BH - 30
 
-        # Clip so content that scrolls off-screen is hidden.
+        # Clip so content that scrolls off-screen is hidden (stops at bottom bar).
         screen.set_clip(pygame.Rect(0, 96, WINDOW_WIDTH, BY_LINE - 96))
 
         y = CONTENT_TOP
@@ -516,8 +644,6 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
         if mode == "new":
             _label(screen, f_sm, "Participant ID", COL1, oy(y))
             pid_box.rect.y = oy(y);  pid_box.draw(screen, f_sm)
-            _label(screen, f_sm, "PIN (4 digits)", COL1, oy(y, ROW_H + 8))
-            pin_box.rect.y = oy(y, ROW_H + 8); pin_box.draw(screen, f_sm)
 
             _label(screen, f_sm, "Age",        COL2, oy(y))
             age_box.rect.y = oy(y); age_box.draw(screen, f_sm)
@@ -529,8 +655,6 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
         else:
             _label(screen, f_sm, "Participant ID", COL1, oy(y))
             ret_pid_box.rect.y = oy(y); ret_pid_box.draw(screen, f_sm)
-            _label(screen, f_sm, "PIN",           COL1, oy(y, ROW_H + 8))
-            ret_pin_box.rect.y = oy(y, ROW_H + 8); ret_pin_box.draw(screen, f_sm)
 
             parts = [p["participant_id"] for p in get_all_participants()]
             px = COL2; py2 = oy(y, 6)
@@ -541,7 +665,7 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
                     px = COL2; py2 += 28
             if not parts:
                 _t(screen, f_xs, "No participants yet", DIM, COL2, oy(y, 14))
-            y += ROW_H * 2 + 24
+            y += ROW_H + 24
 
         # ── §2: Group ─────────────────────────────────────────
         y += _section(screen, f_sec, "2  Group Assignment", oy(y))
@@ -594,25 +718,163 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
         intertrial_input.reposition(INP_X2, oy(y, 5)); intertrial_input.draw(screen, f_sm)
         y += ROW_H + 20
 
-        # ── §5: Ratio ─────────────────────────────────────────
-        y += _section(screen, f_sec, "5  Repeated Grid Ratio (%)", oy(y))
+        # ── §5: Grid Condition ────────────────────────────────
+        y += _section(screen, f_sec, "5  Grid Condition", oy(y))
         _label(screen, f_sm, "Practice blocks", COL1, oy(y))
-        practice_ratio_input.reposition(INP_X1, oy(y, 5)); practice_ratio_input.draw(screen, f_sm)
-        _label(screen, f_sm, "Test blocks",     COL2, oy(y))
-        test_ratio_input.reposition(INP_X2, oy(y, 5)); test_ratio_input.draw(screen, f_sm)
+        practice_cond.reposition(INP_X1, oy(y))
+        practice_cond.draw(screen, f_xs)
+        y += ROW_H + 8
+        _label(screen, f_sm, "Test blocks", COL1, oy(y))
+        test_cond.reposition(INP_X1, oy(y))
+        test_cond.draw(screen, f_xs)
+        y += ROW_H + 24
 
-        # Thin scroll indicator bar on right edge
-        content_end = y + ROW_H + 30
+        # ── §6: Repeated puzzle ───────────────────────────────
+        y += _section(screen, f_sec, "6  Repeated Puzzle  (shared across all participants)", oy(y))
+        _t(screen, f_xs, "Note: familiarisation blocks are always fully random regardless of this setting.",
+           DIM, COL1, oy(y))
+        y += 20
+
+        # Load current global puzzle status from DB each frame
+        global_puz = get_global_repeated_puzzle()
+
+        if global_puz:
+            _t(screen, f_sm, "Puzzle locked in — all participants use this same grid:",
+               GREEN, COL1, oy(y))
+            y += 22
+            _t(screen, f_xs,
+               f"MOUSE starts at  Row {global_puz['start'][0]}, Col {global_puz['start'][1]}   "
+               f"·   CHEESE is at  Row {global_puz['goal'][0]}, Col {global_puz['goal'][1]}   "
+               f"·   Optimal length  {global_puz['length']} moves",
+               DIM, COL1, oy(y))
+            y += 20
+            locked_start = tuple(global_puz["start"])
+            locked_goal  = tuple(global_puz["goal"])
+        else:
+            # Step 1
+            step1_done = repeated_start[0] is not None
+            step2_done = repeated_goal[0]  is not None
+            if step1_done:
+                r0, c0 = repeated_start[0]
+                s1_txt = f"Step 1  ✓  MOUSE placed at  Row {r0}, Col {c0}"
+                s1_col = GREEN
+            else:
+                s1_txt = "Step 1  —  Click a cell on the grid below to place the MOUSE  (start)"
+                s1_col = ORANGE
+            _t(screen, f_sm, s1_txt, s1_col, COL1, oy(y)); y += 26
+
+            if step1_done and step2_done:
+                r1, c1 = repeated_goal[0]
+                s2_txt = f"Step 2  ✓  CHEESE placed at  Row {r1}, Col {c1}"
+                s2_col = GREEN
+            elif step1_done:
+                s2_txt = "Step 2  —  Click another cell to place the CHEESE  (goal)"
+                s2_col = ORANGE
+            else:
+                s2_txt = "Step 2  —  CHEESE position  (set after placing MOUSE)"
+                s2_col = DIM
+            _t(screen, f_sm, s2_txt, s2_col, COL1, oy(y)); y += 26
+
+            if step1_done:
+                note = "To clear and start over, click the MOUSE cell again."
+            else:
+                note = "Both optional — leave blank and the system picks a random puzzle automatically."
+            _t(screen, f_xs, note, DIM, COL1, oy(y))
+            y += 20
+            locked_start = None
+            locked_goal  = None
+
+        # Mini grid — column headers above, row numbers to the left
+        _mini_rects.clear()
+        GRID_OFF_X = 22   # left margin for row numbers
+        mg_top = oy(y) + 20   # extra top margin for column headers
+        mouse_pos = pygame.mouse.get_pos()
+
+        # Column headers (0–4)
+        for c in range(GRID_SIZE):
+            ch = f_xs.render(str(c), True, DIM)
+            cx_h = COL1 + GRID_OFF_X + c * MINI_CELL + MINI_CELL // 2
+            screen.blit(ch, (cx_h - ch.get_width() // 2, mg_top - 18))
+        # "col →" label
+        cl = f_xs.render("col →", True, (50, 50, 70))
+        screen.blit(cl, (COL1 + GRID_OFF_X, mg_top - 18))
+
+        for r in range(GRID_SIZE):
+            # Row number to the left
+            rh = f_xs.render(str(r), True, DIM)
+            ry_label = mg_top + r * MINI_CELL + MINI_CELL // 2 - rh.get_height() // 2
+            screen.blit(rh, (COL1 + GRID_OFF_X - rh.get_width() - 6, ry_label))
+
+            for c in range(GRID_SIZE):
+                rx2 = COL1 + GRID_OFF_X + c * MINI_CELL + 2
+                ry2 = mg_top + r * MINI_CELL + 2
+                cr  = pygame.Rect(rx2, ry2, MINI_CELL - 4, MINI_CELL - 4)
+                _mini_rects.append((cr, r, c))
+                cell_pos = (r, c)
+
+                is_start = (locked_start and cell_pos == locked_start) or \
+                           (not locked_start and repeated_start[0] == cell_pos)
+                is_goal  = (locked_goal  and cell_pos == locked_goal)  or \
+                           (not locked_goal  and repeated_goal[0]  == cell_pos)
+
+                if is_start:
+                    bg = ACCENT; cell_label = "MOUSE"; tc2 = BG
+                elif is_goal:
+                    bg = (180, 130, 18); cell_label = "CHEESE"; tc2 = BG
+                elif locked_start:
+                    bg = (20, 20, 38); cell_label = f"{r},{c}"; tc2 = (40, 40, 60)
+                elif cr.collidepoint(mouse_pos):
+                    bg = (38, 50, 80); cell_label = f"{r},{c}"; tc2 = WHITE
+                else:
+                    bg = INPUT_BG; cell_label = f"{r},{c}"; tc2 = (50, 50, 75)
+
+                pygame.draw.rect(screen, bg,     cr, border_radius=6)
+                pygame.draw.rect(screen, BORDER, cr, width=1, border_radius=6)
+                lbl = f_xs.render(cell_label, True, tc2)
+                screen.blit(lbl, (cr.x + cr.w // 2 - lbl.get_width() // 2,
+                                  cr.y + cr.h // 2 - lbl.get_height() // 2))
+
+        # Status panel to the right of the grid
+        info_x = COL1 + GRID_OFF_X + GRID_SIZE * MINI_CELL + 24
+        info_y = mg_top
+        if locked_start:
+            _t(screen, f_xs, "Blue  = MOUSE start",  ACCENT,        info_x, info_y)
+            _t(screen, f_xs, "Amber = CHEESE goal", (200, 160, 40), info_x, info_y + 22)
+            _t(screen, f_xs, "(locked — use Reset to change)", DIM, info_x, info_y + 48)
+
+        # Reset button (only meaningful when a global puzzle is set)
+        reset_btn_r = pygame.Rect(info_x, info_y + 70, 200, 36)
+        reset_hover = reset_btn_r.collidepoint(pygame.mouse.get_pos())
+        rb_col  = (180, 60, 60) if reset_hover else (100, 40, 40)
+        rb_tc   = WHITE if global_puz else (60, 60, 80)
+        rb_fill = rb_col if global_puz else (20, 20, 36)
+        rb_border = (180, 60, 60) if global_puz else BORDER
+        pygame.draw.rect(screen, rb_fill,   reset_btn_r, border_radius=8)
+        pygame.draw.rect(screen, rb_border, reset_btn_r, width=1, border_radius=8)
+        rbl = f_xs.render("Reset Global Puzzle", True, rb_tc)
+        screen.blit(rbl, (reset_btn_r.x + reset_btn_r.w // 2 - rbl.get_width() // 2,
+                           reset_btn_r.y + reset_btn_r.h // 2 - rbl.get_height() // 2))
+        # Store rect for event check
+        _reset_btn_r[0] = reset_btn_r
+
+        mini_grid_h = 20 + GRID_SIZE * MINI_CELL + 10   # +20 for column headers
+        y += mini_grid_h + 14
+
+        # ── Dynamic scroll ceiling (must come AFTER all y updates) ──
+        content_end   = y + ROW_H + 40
+        max_scroll[0] = max(0, content_end - BY_LINE + 20)
+
+        # Scrollbar on right edge
         content_span = content_end - CONTENT_TOP
         view_span    = BY_LINE - CONTENT_TOP
         if content_span > view_span:
             sb_h  = view_span
             th    = max(28, int(sb_h * view_span / content_span))
-            ty_   = 96 + int((sb_h - th) * scroll_y / max(1, content_span - view_span))
+            ty_   = 96 + int((sb_h - th) * scroll_y / max(1, max_scroll[0]))
             pygame.draw.rect(screen, (30, 30, 52),
-                             (WINDOW_WIDTH - 6, 96, 6, sb_h), border_radius=3)
+                             (WINDOW_WIDTH - 8, 96, 6, sb_h), border_radius=3)
             pygame.draw.rect(screen, BORDER_LT,
-                             (WINDOW_WIDTH - 6, ty_, 6, th), border_radius=3)
+                             (WINDOW_WIDTH - 8, ty_, 6, th), border_radius=3)
 
         # ── Open dropdowns (still within clip) ───────────────
         if mode == "new":
@@ -624,10 +886,20 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
         # ── End content clip ──────────────────────────────────
         screen.set_clip(None)
 
-        # ── Bottom action bar (fixed) ─────────────────────────
-        pygame.draw.line(screen, BORDER,
-                         (0, WINDOW_HEIGHT - BH - 30),
-                         (WINDOW_WIDTH, WINDOW_HEIGHT - BH - 30))
+        # ── Bottom action bar (fixed — always uses WINDOW_HEIGHT) ──
+        bar_sep_y = WINDOW_HEIGHT - BH - 30
+        # Solid fill so any scrolled content never bleeds through
+        pygame.draw.rect(screen, BG, (0, bar_sep_y, WINDOW_WIDTH, BH + 30))
+        pygame.draw.line(screen, BORDER, (0, bar_sep_y), (WINDOW_WIDTH, bar_sep_y))
+
+        # Update button rects to correct positions
+        BW2 = WINDOW_WIDTH - PAD * 2
+        launch_btn.rect = pygame.Rect(PAD,                    WINDOW_HEIGHT - BH - 18,
+                                      int(BW2 * 0.45), BH)
+        data_btn.rect   = pygame.Rect(PAD + int(BW2 * 0.47), WINDOW_HEIGHT - BH - 18,
+                                      int(BW2 * 0.25), BH)
+        export_btn.rect = pygame.Rect(PAD + int(BW2 * 0.74), WINDOW_HEIGHT - BH - 18,
+                                      int(BW2 * 0.26), BH)
 
         if message:
             ms = f_sm.render(message, True, message_col)
@@ -642,28 +914,24 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
 
 # ── Validation ────────────────────────────────────────────────
 
-def _validate_and_launch(mode, pid_box, pin_box, age_box, gender_dd, hand_dd,
-                         ret_pid_box, ret_pin_box, group_dd, session_dd,
+def _validate_and_launch(mode, pid_box, age_box, gender_dd, hand_dd,
+                         ret_pid_box, group_dd, session_dd,
                          planning_input, action_input, feedback_input, intertrial_input,
-                         practice_ratio_input, test_ratio_input):
+                         practice_cond, test_cond, repeated_start, repeated_goal=None):
     if mode == "new":
         pid     = pid_box.text.strip().upper()
-        pin     = pin_box.text.strip()
         age_str = age_box.text.strip()
         if not pid:               return "Participant ID is required."
-        if not pin.isdigit() or len(pin) != 4:
-                                  return "PIN must be exactly 4 digits."
         if not age_str.isdigit(): return "Age must be a number."
-        ok = create_participant(participant_id=pid, pin=pin,
+        ok = create_participant(participant_id=pid,
                                 group_name=group_dd.value, age=int(age_str),
                                 gender=gender_dd.value, handedness=hand_dd.value)
-        if not ok: return f"Participant ID '{pid}' already exists. Use Returning tab."
+        if not ok: return f"Participant ID '{pid}' already exists."
         participant_id = pid
     else:
         pid = ret_pid_box.text.strip().upper()
-        pin = ret_pin_box.text.strip()
-        p   = verify_participant(pid, pin)
-        if not p: return "Participant not found or incorrect PIN."
+        p   = verify_participant(pid)
+        if not p: return "Participant ID not found."
         participant_id = pid
 
     return {
@@ -674,6 +942,8 @@ def _validate_and_launch(mode, pid_box, pin_box, age_box, gender_dd, hand_dd,
         "action_time":     action_input.value,
         "feedback_time":   feedback_input.value,
         "intertrial_time": intertrial_input.value,
-        "practice_ratio":  practice_ratio_input.value / 100,
-        "test_ratio":      test_ratio_input.value / 100,
+        "practice_ratio":  practice_cond.value,
+        "test_ratio":      test_cond.value,
+        "repeated_start":  repeated_start,   # (row, col) or None
+        "repeated_goal":   repeated_goal,    # (row, col) or None
     }
