@@ -326,18 +326,20 @@ def run_researcher_home(screen, clock):
     Landing screen shown after Juliet logs in.
     Returns one of: "new", "returning", "data", or None (quit).
     """
-    f_title = pygame.font.SysFont("Helvetica Neue", 42, bold=True)
-    f_med   = pygame.font.SysFont("Helvetica Neue", 23, bold=True)
-    f_sm    = pygame.font.SysFont("Helvetica Neue", 19)
-    f_xs    = pygame.font.SysFont("Helvetica Neue", 15)
+    _fs     = max(0.80, min(1.40, WINDOW_HEIGHT / 900))
+    f_title = pygame.font.SysFont("Helvetica Neue", int(42 * _fs), bold=True)
+    f_med   = pygame.font.SysFont("Helvetica Neue", int(23 * _fs), bold=True)
+    f_sm    = pygame.font.SysFont("Helvetica Neue", int(19 * _fs))
+    f_xs    = pygame.font.SysFont("Helvetica Neue", int(15 * _fs))
 
     pygame.display.set_caption("Grid-Sailing — Researcher Home")
 
     CX = WINDOW_WIDTH  // 2
     CY = WINDOW_HEIGHT // 2
 
-    CARD_W, CARD_H = 300, 220
-    GAP = 32
+    CARD_W = min(480, max(310, WINDOW_WIDTH  // 4))
+    CARD_H = min(420, max(240, int(WINDOW_HEIGHT * 0.38)))
+    GAP    = max(32, min(60, WINDOW_WIDTH // 48))
     total_w = CARD_W * 3 + GAP * 2
     start_x = CX - total_w // 2
 
@@ -394,7 +396,7 @@ def run_researcher_home(screen, clock):
 
         # Subtitle
         sub = f_sm.render("What would you like to do today?", True, DIM)
-        screen.blit(sub, (CX - sub.get_width() // 2, CY - CARD_H // 2 - 52))
+        screen.blit(sub, (CX - sub.get_width() // 2, CY - CARD_H // 2 - 44))
 
         mouse = pygame.mouse.get_pos()
 
@@ -415,24 +417,29 @@ def run_researcher_home(screen, clock):
             pygame.draw.rect(screen, col,
                              (r.x + 1, r.y + 1, r.w - 2, 6), border_radius=18)
 
-            # Icon circle — clean
-            ic = (r.x + r.w // 2, r.y + 52)
+            # Icon circle — scales with card height
+            ic_r  = min(34, max(24, CARD_H // 9))
+            ic_cy = r.y + int(CARD_H * 0.28)
+            ic    = (r.x + r.w // 2, ic_cy)
             dark_col = tuple(max(0, c - 50) for c in col)
-            pygame.draw.circle(screen, dark_col, ic, 28)
-            pygame.draw.circle(screen, col,      ic, 28, width=2)
+            pygame.draw.circle(screen, dark_col, ic, ic_r)
+            pygame.draw.circle(screen, col,      ic, ic_r, width=2)
             g = f_med.render(card["icon"], True, col)
             screen.blit(g, (ic[0] - g.get_width() // 2,
                             ic[1] - g.get_height() // 2))
 
             # Label
+            lbl_y = r.y + int(CARD_H * 0.50)
             lt = f_med.render(card["label"], True, WHITE)
-            screen.blit(lt, (r.x + r.w // 2 - lt.get_width() // 2, r.y + 94))
+            screen.blit(lt, (r.x + r.w // 2 - lt.get_width() // 2, lbl_y))
 
             # Subtitle
+            sub_y  = lbl_y + lt.get_height() + int(CARD_H * 0.06)
+            sub_dy = f_xs.get_height() + 4
             for j, line in enumerate(card["sub"].split("\n")):
                 ls = f_xs.render(line, True, DIM)
                 screen.blit(ls, (r.x + r.w // 2 - ls.get_width() // 2,
-                                 r.y + 122 + j * 20))
+                                 sub_y + j * sub_dy))
 
         # Hint
         hint = f_xs.render("ESC to return to the login screen", True, BORDER)
@@ -457,19 +464,20 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
 
     initialise_database()
 
-    # Fonts
-    f_title = pygame.font.SysFont("Helvetica Neue", 38, bold=True)
-    f_sec   = pygame.font.SysFont("Helvetica Neue", 16, bold=True)
-    f_med   = pygame.font.SysFont("Helvetica Neue", 21, bold=True)
-    f_sm    = pygame.font.SysFont("Helvetica Neue", 19)
-    f_xs    = pygame.font.SysFont("Helvetica Neue", 16)
+    # Fonts — scale to screen height
+    _fs     = max(0.80, min(1.40, WINDOW_HEIGHT / 900))
+    f_title = pygame.font.SysFont("Helvetica Neue", int(38 * _fs), bold=True)
+    f_sec   = pygame.font.SysFont("Helvetica Neue", int(16 * _fs), bold=True)
+    f_med   = pygame.font.SysFont("Helvetica Neue", int(21 * _fs), bold=True)
+    f_sm    = pygame.font.SysFont("Helvetica Neue", int(19 * _fs))
+    f_xs    = pygame.font.SysFont("Helvetica Neue", int(16 * _fs))
     # Fallback
     if not f_title.get_height():
-        f_title = pygame.font.SysFont("Arial", 38, bold=True)
-        f_sec   = pygame.font.SysFont("Arial", 16, bold=True)
-        f_med   = pygame.font.SysFont("Arial", 21, bold=True)
-        f_sm    = pygame.font.SysFont("Arial", 19)
-        f_xs    = pygame.font.SysFont("Arial", 16)
+        f_title = pygame.font.SysFont("Arial", int(38 * _fs), bold=True)
+        f_sec   = pygame.font.SysFont("Arial", int(16 * _fs), bold=True)
+        f_med   = pygame.font.SysFont("Arial", int(21 * _fs), bold=True)
+        f_sm    = pygame.font.SysFont("Arial", int(19 * _fs))
+        f_xs    = pygame.font.SysFont("Arial", int(16 * _fs))
 
     fonts = (f_med, f_med, f_sm, f_xs)
 
