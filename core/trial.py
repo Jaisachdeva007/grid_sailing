@@ -109,21 +109,24 @@ def _build_path(start, seq):
 
 # ── Layout ────────────────────────────────────────────────────
 
+PROG_H = 36   # progress bar height — referenced inside _layout
+
+
 def _layout(W, H):
-    """Compute grid + right-panel geometry centred on screen."""
-    CELL   = 128
-    GRID_W = GRID_N * CELL       # 640
-    RPANEL = 420
-    GAP    = 44
+    """Compute grid + right-panel geometry scaled to the actual screen size."""
+    HDR    = 96                             # header band height
+    RPANEL = max(360, min(520, W // 4))     # right panel: 360–520 px
+    GAP    = max(32, min(56, W // 36))      # grid↔panel gap
+    avail_h = H - HDR - PROG_H - 8
+    avail_w = W - 40 - RPANEL - GAP
+    CELL   = max(100, min(170, min(avail_h // GRID_N, avail_w // GRID_N)))
+    GRID_W = GRID_N * CELL
     TOTAL  = GRID_W + GAP + RPANEL
     GL     = max(20, (W - TOTAL) // 2)
-    GT     = 108                  # top of grid (below stage header)
+    GT     = HDR + max(0, (H - HDR - PROG_H - GRID_W) // 2 - 4)
     GR     = GL + GRID_W + GAP
     GRW    = RPANEL
     return GL, GT, GR, GRW, CELL
-
-
-PROG_H = 36
 
 
 # ── Drawing helpers ───────────────────────────────────────────
@@ -341,8 +344,9 @@ def _draw_grid(screen, fonts, trial, trail, cursor, show_arrows=False):
             else:
                 bg = CELL_DARK
 
-            pygame.draw.rect(screen, bg,          rect, border_radius=10)
-            pygame.draw.rect(screen, GRID_BORDER, rect, width=1, border_radius=10)
+            br = max(6, CELL // 14)
+            pygame.draw.rect(screen, bg,          rect, border_radius=br)
+            pygame.draw.rect(screen, GRID_BORDER, rect, width=1, border_radius=br)
 
             if (r, c) == goal:
                 _draw_cheese_icon(screen, px + sz // 2, py + sz // 2)
@@ -358,9 +362,10 @@ def _stage_header(screen, fonts, tag, tag_col, title, subtitle):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     GL, GT, GR, GRW, CELL = _layout(W, H)
-    _pill(screen, f_xs, tag, BG, tag_col, GL, 14)
-    _t(screen, f_med, title,    WHITE, GL, 48)
-    _t(screen, f_xs,  subtitle, DIM,   GL, 76)
+    _pill(screen, f_xs, tag, BG, tag_col, GL, 12)
+    title_y = 12 + f_xs.get_height() + 8
+    _t(screen, f_med, title,    WHITE, GL, title_y)
+    _t(screen, f_xs,  subtitle, DIM,   GL, title_y + f_med.get_height() + 5)
 
 
 # ── On-screen click buttons ───────────────────────────────────
@@ -968,11 +973,12 @@ def _draw_stage_input(screen, fonts, trial, typed_seq, blink_on,
                   "Click the direction buttons to build your sequence")
 
     # Grid hidden — ghost cell outlines + centre message
+    ghost_br = max(6, CELL // 14)
     for r in range(GRID_N):
         for c in range(GRID_N):
             gr = pygame.Rect(GL + c * CELL + 4, GT + r * CELL + 4, CELL - 8, CELL - 8)
-            pygame.draw.rect(screen, (16, 16, 32), gr, border_radius=10)
-            pygame.draw.rect(screen, (32, 32, 54), gr, width=1, border_radius=10)
+            pygame.draw.rect(screen, (16, 16, 32), gr, border_radius=ghost_br)
+            pygame.draw.rect(screen, (32, 32, 54), gr, width=1, border_radius=ghost_br)
 
     grid_cx = GL + (GRID_N * CELL) // 2
     grid_cy = GT + (GRID_N * CELL) // 2

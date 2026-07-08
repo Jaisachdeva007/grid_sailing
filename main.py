@@ -28,11 +28,12 @@ def main():
 
     initialise_database()
 
+    _fs = max(0.80, min(1.40, native_h / 900))
     fonts = (
-        pygame.font.SysFont("Helvetica Neue", 40, bold=True),
-        pygame.font.SysFont("Helvetica Neue", 26, bold=True),
-        pygame.font.SysFont("Helvetica Neue", 20),
-        pygame.font.SysFont("Helvetica Neue", 16),
+        pygame.font.SysFont("Helvetica Neue", int(40 * _fs), bold=True),
+        pygame.font.SysFont("Helvetica Neue", int(26 * _fs), bold=True),
+        pygame.font.SysFont("Helvetica Neue", int(20 * _fs)),
+        pygame.font.SysFont("Helvetica Neue", int(16 * _fs)),
     )
 
     # Step 1: Welcome / admin login — only once
