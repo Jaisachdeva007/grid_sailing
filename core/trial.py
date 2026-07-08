@@ -600,7 +600,21 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     p = ev.pos
                     for k in (1, 2, 3):
                         if btns.get(f"key{k}") and btns[f"key{k}"].collidepoint(p):
-                            if first_key_time is None: first_key_time = time.time()
+                            now_t  = time.time()
+                            if first_key_time is None: first_key_time = now_t
+                            before = _build_path(trial.start, typed_seq)[-1]
+                            nxt    = apply_key(before[0], before[1], k)
+                            after  = nxt if nxt else before
+                            iki    = (now_t - last_key_time) * 1000 if last_key_time else None
+                            trial.keypresses_log.append({
+                                "key":    k,
+                                "before": before,
+                                "after":  after,
+                                "abs_ms": now_t * 1000,
+                                "rel_ms": (now_t - planning_start) * 1000,
+                                "iki_ms": iki,
+                            })
+                            last_key_time = now_t
                             typed_seq.append(k)
                             break
                     else:
@@ -743,8 +757,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
         pygame.display.flip()
         clock.tick(60)
 
-    # Save PP keypresses
-    if is_pp and trial_id and trial.keypresses_log:
+    # Save INPUT-phase keypresses (logged for all groups)
+    if trial_id and trial.keypresses_log:
         for kp in trial.keypresses_log:
             save_keypress(
                 trial_id=trial_id, participant_id=trial.participant_id,
@@ -780,9 +794,6 @@ def _finalise(trial, used_seq, session_id):
     trial.oob_count = oob
     score, n, ok = _score(used_seq, trial.optimal_sequence, pos, trial.goal)
     trial.reward_score = score; trial.number_of_moves = n; trial.is_correct = ok
-    if trial.movement_time_ms is None and len(trial.keypresses_log) >= 2:
-        trial.movement_time_ms = (trial.keypresses_log[-1]["abs_ms"]
-                                  - trial.keypresses_log[0]["abs_ms"])
 
 def _save(trial, session_id):
     import json
