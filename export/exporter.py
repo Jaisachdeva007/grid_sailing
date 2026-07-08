@@ -1,13 +1,48 @@
 # ============================================================
 #  GRID-SAILING TASK — CSV Exporter
 #
-#  Exports SQLite data to clean CSV files for analysis in R or Excel.
+#  *** Juliet does NOT need to edit this file. ***
 #
-#  Export modes:
-#    export_participant(pid)  → {pid}_data.csv          (per-keypress)
-#    export_all()             → all_participants_{ts}.csv (per-keypress)
-#    export_summary()         → trial_summary_{ts}.csv   (per-trial)
-#    export_reflections()     → reflections_{ts}.csv     (MI reflections)
+#  This file converts the SQLite database into CSV spreadsheet files
+#  that can be opened in Excel or imported into R/SPSS for analysis.
+#
+#  The four export types (triggered from the Data Viewer screen):
+#    Export All         → all_participants_TIMESTAMP.csv
+#                         One row per key press — the most detailed export.
+#                         Contains every column listed in TRIAL_COLUMNS plus
+#                         the keypress columns (KEYPRESS_COLUMNS).
+#
+#    Export Summary     → trial_summary_TIMESTAMP.csv
+#                         One row per completed trial — easier for analysis.
+#                         Contains all TRIAL_COLUMNS but no per-keypress detail.
+#
+#    Export Reflections → reflections_TIMESTAMP.csv
+#                         One row per 3E report card (MI groups only).
+#
+#    Export Participant → {P001}_data.csv  (accessed from View Participant screen)
+#                         Same format as Export All but for one participant only.
+#
+#  All files are saved to the exports/ folder (defined in config.py as EXPORT_DIR).
+#
+#  Column name guide (matches the CSV headers exactly):
+#    participant_id      — e.g. "P001"
+#    group_name          — e.g. "MI-High"
+#    session_number      — 1, 2, or 3
+#    block_type          — "familiarization", "pre_test", "practice", "post_test"
+#    trial_number        — 1–20 within each block
+#    planned_sequence    — keys the participant planned, e.g. "1,2,3,1,2,3,3"
+#    optimal_sequence    — the shortest valid path, e.g. "1,3,2,1,3,2,1"
+#    all_optimal_sequences — all equally-short paths, separated by "|"
+#    number_of_moves     — how many keys the participant actually pressed
+#    extra_moves         — number_of_moves minus optimal_length (negative = fewer)
+#    is_optimal          — TRUE if correct AND used exactly optimal number of moves
+#    reward_score        — points earned this trial (0–100)
+#    penalty_pts         — points deducted for extra/fewer moves
+#    cumulative_score    — running total across all trials for this participant
+#    reaction_time_ms/s  — time from grid appearing to first key press
+#    movement_time_ms/s  — time from first key press to last key press
+#    imagery_duration_ms/s — duration of the action/imagery phase
+#    is_correct          — TRUE if the cursor reached the goal cell
 # ============================================================
 
 import csv

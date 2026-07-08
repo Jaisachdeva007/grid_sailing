@@ -1,13 +1,24 @@
 # ============================================================
 #  GRID-SAILING TASK — Session Manager
 #
-#  Manages the full session flow: which blocks run in order,
-#  which puzzles get assigned (repeated vs random),
-#  and auto-resume after a crash.
+#  *** Juliet does NOT need to edit this file. ***
 #
-#  A session contains an ordered list of blocks.
-#  Each block contains a fixed number of trials.
-#  Trial puzzles are drawn from the pre-generated puzzle pool.
+#  This file controls what happens during a session:
+#    - Which blocks run and in what order (defined by SESSION_STRUCTURE in config.py)
+#    - Which puzzles are assigned to each trial (repeated vs random)
+#    - Auto-resume: if the app crashes mid-session, it picks up from the
+#      last completed trial when restarted
+#    - Firebase sync trigger (every 5 trials or 20 seconds, whichever comes first)
+#    - Shows the tutorial (key mapping) before the first familiarisation block
+#    - Shows the reflection form (3E report card) after MI practice sessions
+#
+#  Data flow during a session:
+#    1. Puzzle pool is built from all valid grid paths
+#    2. Trials are assigned (respecting the repeated:random ratio)
+#    3. Each trial runs (via core/trial.py)
+#    4. Result is saved to the database immediately
+#    5. Firebase sync runs in background every 5 trials
+#    6. After the last trial, the session is marked complete
 # ============================================================
 
 import pygame

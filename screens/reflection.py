@@ -1,15 +1,24 @@
 # ============================================================
 #  GRID-SAILING TASK — Reflection Screen (MI Groups Only)
 #
-#  Shown after each practice session for motor imagery groups.
-#  Implements the Effect-Engage-Evolve (3E) report card.
+#  *** Juliet does NOT need to edit this file. ***
 #
-#  Fields:
-#    1. What sensations did you imagine? (free text)
-#    2. Imagery perspective (first-person / third-person / both)
-#    3. Imagery modalities (visual / kinesthetic / auditory / other)
-#    4. Overall engagement (1–5 scale)
-#    5. Goal for next session (free text)
+#  This screen is shown automatically after each PRACTICE session
+#  for participants in MI (Motor Imagery) groups only. PP and CTRL
+#  groups skip this screen entirely.
+#
+#  It implements the Effect-Engage-Evolve (3E) report card — a
+#  structured self-reflection tool for motor imagery training.
+#
+#  The five questions participants answer:
+#    1. What sensations did you imagine?       (free-text answer)
+#    2. Imagery perspective                    (First-person / Third-person / Both)
+#    3. Imagery modalities experienced         (Visual / Kinesthetic / Auditory / Other)
+#    4. Overall engagement rating              (1 = low … 5 = high)
+#    5. Goal for the next imagery session      (free-text answer)
+#
+#  Answers are saved to the "reflections" table in the database and
+#  can be exported via "Export Reflections" in the Data Viewer.
 # ============================================================
 
 import pygame

@@ -1,26 +1,38 @@
 # ============================================================
-#  GRID-SAILING TASK — Firebase Sync Layer
+#  GRID-SAILING TASK — Firebase Cloud Sync Layer
 #
-#  Syncs to Firestore every 5 trials OR every 20 seconds,
-#  whichever comes first. Runs in a background thread so it
-#  never pauses or disrupts the experiment.
+#  *** Juliet does NOT need to edit this file. ***
 #
-#  Firestore layout (human-readable, navigable in console):
+#  This file automatically backs up trial data to Firebase
+#  (a Google cloud database) in the background while the
+#  experiment runs. Data is never lost even if the hard drive fails.
 #
+#  When does it sync?
+#    - Automatically every 5 trials during the experiment
+#    - Automatically every 20 seconds (even if 5 trials haven't happened)
+#    - Immediately when a session ends or is paused
+#    - Manually via the "Sync All" button in the Data Viewer
+#
+#  The sync always runs in a background thread — the participant
+#  never sees any pause or delay because of it.
+#
+#  What data goes to Firebase?
+#    - Same fields as the CSV export (reward_score, is_correct,
+#      number_of_moves, timing fields, sequences, etc.)
+#    - Each trial is stored as its own document so it's easy to
+#      browse in the Firebase Console at console.firebase.google.com
+#
+#  Firebase structure (what you see in the console):
 #    devices/
-#      ASUS-Juliet/                ← DEVICE_NAME
-#        (fields: last_active, last_participant, trials_synced)
+#      ASUS-Juliet/                ← this machine (from local_config.py)
 #        participants/
-#          P012/                   ← participant_id
-#            (fields: participant_id, group_name, age, gender, …)
-#            s1_practice_b2/       ← session key
-#              _info               ← session metadata document
-#              01/  02/  03/ …     ← one doc per trial, fields
-#                                     match CSV export exactly
+#          P001/                   ← participant ID
+#            s1_practice_b2/       ← session 1, practice block 2
+#              _info               ← session start/end times
+#              01/  02/  03/ …     ← one document per trial
 #
-#  Field names in trial documents match the CSV column names
-#  from export/exporter.py (TRIAL_COLUMNS + KEYPRESS_COLUMNS).
-#  Idempotent: calling twice for the same trial just overwrites.
+#  Writing the same trial twice is safe — it just overwrites with
+#  the latest values. You can re-sync at any time without duplicating data.
 # ============================================================
 
 import threading

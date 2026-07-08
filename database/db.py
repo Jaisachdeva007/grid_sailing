@@ -1,7 +1,24 @@
 # ============================================================
 #  GRID-SAILING TASK — Database Layer
-#  Manages the SQLite database for all experiment data.
-#  All writes happen immediately after each event (crash-safe).
+#
+#  *** Juliet does NOT need to edit this file. ***
+#
+#  This file manages the SQLite database that stores all
+#  experiment data on the local hard drive.
+#
+#  What it does automatically:
+#    - Creates the database file (database/experiment.db) on first run
+#    - Saves every participant, session, trial and key press as it happens
+#    - Writes data immediately so nothing is lost if the computer crashes
+#    - Provides lookup functions used by the researcher setup and data viewer
+#
+#  Database tables (you can view these in Firefox → SQLite Viewer if needed):
+#    participants  — one row per registered participant (ID, age, group, etc.)
+#    sessions      — one row per block run (which participant, which session number)
+#    trials        — one row per completed trial (score, moves, timing, etc.)
+#    keypresses    — one row per key press within a trial (most granular data)
+#    reflections   — one row per 3E report card (MI groups only)
+#    global_settings — stores the shared repeated puzzle (start/goal position)
 # ============================================================
 
 import sqlite3

@@ -1,5 +1,32 @@
 # ============================================================
-#  GRID-SAILING TASK — Data Viewer  (v5 — professional)
+#  GRID-SAILING TASK — Data Viewer
+#
+#  *** Juliet does NOT need to edit this file. ***
+#
+#  This is the participant progress dashboard, reached via
+#  "View Data" from the Researcher Home or Setup screens.
+#
+#  View A — Overview table (one row per participant):
+#    Shows participant ID, group, age, sessions completed,
+#    total trials, average score, and accuracy percentage.
+#    Click any row to see that participant's session breakdown
+#    in the side panel on the right.
+#    Click again (or press Enter) to drill into View B.
+#
+#  View B — Trial-by-trial breakdown (one row per trial):
+#    Shows every trial for one participant: session, block type,
+#    trial number, grid type, result, moves vs optimal, score,
+#    reaction time, and duration.
+#
+#  Bottom bar buttons (View A):
+#    < Back             — return to Researcher Home
+#    Export All         — save all participants to a CSV (per key press)
+#    Export Summary     — save all participants to a CSV (per trial)
+#    Export Reflections — save MI group 3E report cards to a CSV
+#    Sync All           — push all existing data to Firebase cloud backup
+#
+#  The table refreshes automatically every 3 seconds so data
+#  collected in another session appears without restarting.
 # ============================================================
 
 import pygame

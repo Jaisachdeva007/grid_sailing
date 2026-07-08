@@ -1,5 +1,15 @@
 # ============================================================
 #  GRID-SAILING TASK — Welcome / Admin Login Screen
+#
+#  *** Juliet does NOT need to edit this file. ***
+#
+#  This is the very first screen shown when the app starts.
+#  It displays the experiment title and asks for the admin password.
+#
+#  - The password is set in config.py under ADMIN_PASSWORD.
+#  - Entering the correct password takes you to the Researcher Home screen.
+#  - Participants see this screen too, but only the researcher knows the password.
+#  - The password is stored as a secure hash (scrambled) — not as plain text.
 # ============================================================
 
 import pygame

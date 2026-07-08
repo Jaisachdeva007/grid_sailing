@@ -1,14 +1,41 @@
 # ============================================================
 #  GRID-SAILING TASK — Trial State Machine
 #
-#  States:
-#    PLANNING   → grid shown, countdown timer
-#    INPUT      → participant enters planned sequence
-#    COUNTDOWN  → 3-2-1 before action phase
-#    ACTION     → physical / imagery / control execution (grid hidden for PP/MI)
-#    FEEDBACK   → result + animated path replay
-#    ITI        → jittered "Get Ready" inter-trial interval
-#    DONE       → return to session
+#  *** Juliet does NOT need to edit this file. ***
+#
+#  This file runs a single trial from start to finish.
+#  Each trial passes through these stages in order:
+#
+#    PLANNING   — Grid is shown with mouse (start) and cheese (goal).
+#                 Participant studies the grid. Countdown timer runs.
+#                 Duration: PLANNING_TIME_SEC (set in config.py)
+#
+#    INPUT      — Participant types their key sequence (1, 2, 3).
+#                 They can see the cursor move on the grid.
+#                 Pressing SPACE confirms; timer runs out if they don't.
+#                 Duration: INPUT_TIME_SEC (set in config.py)
+#
+#    COUNTDOWN  — 3-2-1 visual countdown before the action phase.
+#
+#    ACTION     — MI groups: imagine the movement (grid hidden).
+#                 PP groups: physically execute the sequence (grid hidden).
+#                 CTRL groups: wait (no movement required).
+#                 Duration: ACTION_TIME_SEC (set in config.py)
+#
+#    FEEDBACK   — Shows CORRECT / MISSED, score breakdown, and an animated
+#                 replay of the cursor path on the grid.
+#                 Duration: FEEDBACK_TIME_SEC (set in config.py)
+#
+#    ITI        — Brief "Get Ready" pause before the next trial.
+#                 Duration: INTERTRIAL_SEC (set in config.py)
+#
+#    DONE       — Trial is complete; control returns to session manager.
+#
+#  Scoring:
+#    Correct + exactly optimal moves → 100 pts (OPTIMAL_SCORE)
+#    Correct + any deviation        → 100 − |deviation| × 5 pts (EXTRA_MOVE_PENALTY)
+#    Did not reach goal             → 0 pts (ERROR_SCORE)
+#  All scoring values are set in config.py.
 # ============================================================
 
 import pygame

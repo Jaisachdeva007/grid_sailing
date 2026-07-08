@@ -1,6 +1,17 @@
 # ============================================================
 #  GRID-SAILING TASK — Grid Logic
-#  Handles movement, bounds checking, and path validation.
+#
+#  *** Juliet does NOT need to edit this file. ***
+#
+#  This file handles all the grid mathematics:
+#    - Deciding whether a position (row, col) is inside the grid
+#    - Calculating where the cursor moves when a key is pressed
+#    - Finding all valid puzzles (start → goal paths of the right length)
+#
+#  The puzzle generator uses a depth-first search (DFS) algorithm to
+#  explore all possible routes through the grid and keep only the ones
+#  that meet the experiment criteria (minimum length, uses all 3 keys,
+#  never revisits a cell). This runs once at session startup.
 # ============================================================
 
 from config import GRID_SIZE, KEY_MAPPINGS, MIN_SEQUENCE_LENGTH

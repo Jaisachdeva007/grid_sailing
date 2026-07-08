@@ -1,14 +1,40 @@
 # ============================================================
-#  GRID-SAILING TASK — Researcher Setup Screen  (v3 polish)
+#  GRID-SAILING TASK — Researcher Setup Screen
 #
-#  Juliet sees this screen before every session.
-#  Sections:
-#    1. Participant  (New or Returning tab)
-#    2. Group assignment
-#    3. Session selection
-#    4. Timing overrides
-#    5. Grid ratio override
-#    Bottom bar: Launch Session | View Data | Export Data
+#  *** Juliet does NOT need to edit this file. ***
+#
+#  This is the main control screen Juliet uses before every session.
+#  After logging in, she lands on the Researcher Home (three cards),
+#  then taps "New Participant" or "Returning Participant" to reach this form.
+#
+#  The form has six sections:
+#
+#    §1 Participant   — Enter participant ID (and age/gender/hand for new ones).
+#                       Returning: just type the existing ID and pills of known
+#                       participants appear for reference.
+#
+#    §2 Group         — Choose the experimental group (MI-High, PP-Low, etc.)
+#                       Group list comes from GROUPS in config.py.
+#
+#    §3 Session       — Choose session number (1, 2, or 3).
+#                       The block sequence for that session is shown as pills.
+#
+#    §4 Timing        — Override the default timing for this session only.
+#                       Defaults come from config.py but can be adjusted here
+#                       without permanently changing the config file.
+#
+#    §5 Grid Condition — Choose the repeated:random ratio for this session.
+#                        Defaults come from PRACTICE_REPEATED_RATIO in config.py.
+#
+#    §6 Repeated Puzzle — Click two cells on the mini grid to set the shared
+#                         repeated puzzle (mouse start + cheese goal).
+#                         Once set, it locks for ALL participants. Reset button
+#                         clears it and lets you choose a new one.
+#
+#  Bottom bar buttons:
+#    Launch Session  — validates the form and starts the experiment
+#    View Data       — opens the data viewer (participant progress dashboard)
+#    Export Data     — opens the export screen (saves CSVs to exports/ folder)
 # ============================================================
 
 import pygame
