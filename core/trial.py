@@ -94,7 +94,7 @@ def _score(planned, optimal, end, goal):
     n, opt = len(planned), len(optimal)
     if end != goal:
         return ERROR_SCORE, n, False
-    extra = max(0, n - opt)
+    extra = abs(n - opt)   # penalise both more AND fewer moves than optimal
     return max(0, OPTIMAL_SCORE - extra * EXTRA_MOVE_PENALTY), n, True
 
 
@@ -838,7 +838,8 @@ def _draw_score_card(screen, fonts, trial, rx, ry, GRW):
     rc      = CORRECT if trial.is_correct else WRONG
     opt_len = len(trial.optimal_sequence)
     n_moves = trial.number_of_moves
-    extra   = max(0, n_moves - opt_len)
+    diff    = n_moves - opt_len   # positive = too many, negative = too few
+    extra   = abs(diff)
     penalty = extra * EXTRA_MOVE_PENALTY
 
     PAD  = 14
@@ -860,9 +861,13 @@ def _draw_score_card(screen, fonts, trial, rx, ry, GRW):
             ("Moves you took",  str(n_moves),           DIM, mc),
             ("Optimal path",    f"{opt_len} moves",      DIM, ACCENT),
         ]
-        if extra > 0:
+        if diff > 0:
             rows.append(("Extra moves",
-                         f"{n_moves} − {opt_len} = {extra}",
+                         f"{n_moves} − {opt_len} = +{diff}",
+                         DIM, WRONG))
+        elif diff < 0:
+            rows.append(("Fewer than optimal",
+                         f"{n_moves} − {opt_len} = {diff}",
                          DIM, WRONG))
         rows.append("div")
         rows.append(("Max possible score", f"{OPTIMAL_SCORE} pts", DIM, WHITE))
@@ -1144,14 +1149,15 @@ def _draw_stage_feedback(screen, fonts, trial, cum_score,
     all_opt = trial.all_optimal_sequences or [trial.optimal_sequence]
     n_opt   = len(all_opt)
     opt_len = len(all_opt[0])
-    n_moves = trial.number_of_moves
-    extra   = max(0, n_moves - opt_len)
+    n_moves   = trial.number_of_moves
+    diff      = n_moves - opt_len
+    extra     = abs(diff)
     new_total = cum_score + trial.reward_score
 
     if not trial.is_correct:
         formula = "0 pts  —  goal not reached"
     elif extra == 0:
-        formula = f"{OPTIMAL_SCORE} pts  —  no extra moves!"
+        formula = f"{OPTIMAL_SCORE} pts  —  perfect sequence!"
     else:
         formula = f"{OPTIMAL_SCORE} - {extra} x {EXTRA_MOVE_PENALTY} = {trial.reward_score} pts"
 

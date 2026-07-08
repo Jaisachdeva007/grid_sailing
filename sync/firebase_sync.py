@@ -141,8 +141,8 @@ def _build_trial_doc(t: dict, sess: dict, part: dict,
 
     if n_moves is not None:
         extra   = n_moves - opt_len
-        is_opt  = _bool_str(is_corr and extra <= 0)
-        penalty = max(0, extra) * 5 if is_corr else 0
+        is_opt  = _bool_str(is_corr and extra == 0)
+        penalty = abs(extra) * 5 if is_corr else 0
     else:
         extra   = None
         is_opt  = ""

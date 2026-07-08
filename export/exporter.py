@@ -156,8 +156,8 @@ def _add_derived(row: dict, cumulative_score: int) -> dict:
     if n_moves is not None:
         extra = n_moves - opt_len
         row["extra_moves"] = extra
-        row["is_optimal"]  = "TRUE" if (is_corr and extra <= 0) else "FALSE"
-        row["penalty_pts"] = max(0, extra) * 5 if is_corr else 0
+        row["is_optimal"]  = "TRUE" if (is_corr and extra == 0) else "FALSE"
+        row["penalty_pts"] = abs(extra) * 5 if is_corr else 0
     else:
         row["extra_moves"] = ""
         row["is_optimal"]  = ""
