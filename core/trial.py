@@ -183,13 +183,9 @@ def _draw_progress(screen, fonts, trial, total, block_type, session_num,
     screen.blit(pl, (pause_rect.x + pause_rect.w // 2 - pl.get_width() // 2,
                      pause_rect.y + pause_rect.h // 2 - pl.get_height() // 2))
 
-    # Score + session label to the left of Pause
-    sc_s   = f_xs.render(f"{cum_score} pts", True, CORRECT)
-    sess_s = f_xs.render(f"Session {session_num}", True, DIM)
-    label_x = pause_x - max(sc_s.get_width(), sess_s.get_width()) - 18
-    cy_mid = y + PROG_H // 2
-    screen.blit(sc_s,   (label_x, cy_mid - sc_s.get_height() - 1))
-    screen.blit(sess_s, (label_x, cy_mid + 1))
+    ss = f_xs.render(f"Session {session_num}", True, DIM)
+    screen.blit(ss, (pause_x - ss.get_width() - 18,
+                     y + PROG_H // 2 - ss.get_height() // 2))
 
     return pause_rect
 
@@ -1069,54 +1065,78 @@ def _draw_stage_feedback(screen, fonts, trial, cum_score,
         screen.blit(sl, (rx + 52, ry + sh // 2 - sl.get_height() // 2))
         ry += sh + 8
 
-    # Moves used | Optimal side-by-side
-    half = (GRW - 8) // 2
-    _panel(screen, rx, ry, half, 76, BORDER)
-    _t(screen, f_xs,  "Moves used", DIM,   rx + 14, ry + 10)
-    _t(screen, f_big, str(n_moves), WHITE,  rx + 14, ry + 28)
-    _panel(screen, rx + half + 8, ry, GRW - half - 8, 76, BORDER)
-    _t(screen, f_xs,  "Optimal",    DIM,   rx + half + 22, ry + 10)
-    _t(screen, f_big, str(opt_len), ACCENT, rx + half + 22, ry + 28)
-    ry += 84
+    # ── Score breakdown card ──────────────────────────────────
+    card_h = 188 if trial.is_correct and extra > 0 else 156
+    pygame.draw.rect(screen, (10, 14, 32), (rx, ry, GRW, card_h), border_radius=12)
+    pygame.draw.rect(screen, BORDER,       (rx, ry, GRW, card_h), width=1, border_radius=12)
+    pygame.draw.rect(screen, rc,           (rx, ry, GRW, 4),      border_radius=12)
 
-    # Score formula
-    _panel(screen, rx, ry, GRW, 72, BORDER)
-    _t(screen, f_xs, "Score calculation", DIM, rx + 14, ry + 10)
-    fs = f_sm.render(formula, True, rc)
-    screen.blit(fs, (rx + 14, ry + 36))
-    ry += 80
+    cy = ry + 16
+    _t(screen, f_xs, "SCORE BREAKDOWN", DIM, rx + 16, cy);  cy += 22
 
-    # Trial score
-    _panel(screen, rx, ry, GRW, 76, rc)
-    _t(screen, f_xs,  "Trial score",           DIM, rx + 14, ry + 10)
-    _t(screen, f_big, str(trial.reward_score), rc,  rx + 14, ry + 28)
-    ry += 84
+    # Moves info row
+    mc = CORRECT if extra == 0 else (AMBER if extra <= 2 else WRONG)
+    moves_s = f_sm.render(f"{n_moves} moves", True, mc)
+    opt_s   = f_xs.render(f"(optimal: {opt_len})", True, DIM)
+    screen.blit(moves_s, (rx + 16, cy))
+    screen.blit(opt_s,   (rx + 16 + moves_s.get_width() + 8,
+                           cy + moves_s.get_height() // 2 - opt_s.get_height() // 2))
+    cy += moves_s.get_height() + 10
 
-    # Session total
-    _panel(screen, rx, ry, GRW, 76, CORRECT)
-    _t(screen, f_xs,  "Session total", DIM,    rx + 14, ry + 10)
-    _t(screen, f_big, str(new_total),  CORRECT, rx + 14, ry + 28)
-    ry += 84
+    pygame.draw.line(screen, BORDER, (rx + 16, cy), (rx + GRW - 16, cy));  cy += 10
 
-    # Divider
-    pygame.draw.line(screen, BORDER, (rx, ry + 6), (rx + GRW, ry + 6))
-    ry += 18
+    if not trial.is_correct:
+        miss_s = f_sm.render("Goal not reached", True, WRONG)
+        screen.blit(miss_s, (rx + 16, cy));  cy += miss_s.get_height() + 8
+    else:
+        # Base
+        base_lbl = f_xs.render("Base score", True, DIM)
+        base_val = f_sm.render(f"{OPTIMAL_SCORE} pts", True, WHITE)
+        screen.blit(base_lbl, (rx + 16, cy))
+        screen.blit(base_val, (rx + GRW - base_val.get_width() - 16, cy))
+        cy += base_val.get_height() + 6
 
-    # Your sequence
+        if extra > 0:
+            pen_lbl = f_xs.render(f"{extra} extra move{'s' if extra > 1 else ''}", True, DIM)
+            pen_val = f_sm.render(f"− {extra} × {EXTRA_MOVE_PENALTY} = −{extra * EXTRA_MOVE_PENALTY} pts",
+                                  True, WRONG)
+            screen.blit(pen_lbl, (rx + 16, cy))
+            screen.blit(pen_val, (rx + GRW - pen_val.get_width() - 16, cy))
+            cy += pen_val.get_height() + 8
+
+        pygame.draw.line(screen, BORDER2, (rx + 16, cy), (rx + GRW - 16, cy));  cy += 10
+
+    # Big final score
+    big_s = f_big.render(str(trial.reward_score), True, rc)
+    pts_s = f_sm.render(" pts", True, DIM)
+    total_w = big_s.get_width() + pts_s.get_width()
+    bx = rx + GRW // 2 - total_w // 2
+    screen.blit(big_s, (bx, cy))
+    screen.blit(pts_s, (bx + big_s.get_width(),
+                         cy + big_s.get_height() - pts_s.get_height() - 4))
+    ry += card_h + 10
+
+    # ── Session total ─────────────────────────────────────────
+    _panel(screen, rx, ry, GRW, 60, CORRECT)
+    _t(screen, f_xs, "SESSION TOTAL", DIM, rx + 16, ry + 8)
+    tot_s = f_med.render(f"{new_total} pts", True, CORRECT)
+    screen.blit(tot_s, (rx + GRW - tot_s.get_width() - 16, ry + 12))
+    ry += 68
+
+    # ── Your sequence ─────────────────────────────────────────
     p_str = ", ".join(str(k) for k in trial.planned_sequence) or "—"
     _t(screen, f_xs, "Your sequence", DIM,   rx + 14, ry)
     _t(screen, f_sm, p_str,           WHITE, rx + 14, ry + 18)
     ry += 44
 
-    # "Press SPACE" prompt — pulsing, once replay finishes
-    ry += 8
+    # ── Press SPACE ───────────────────────────────────────────
+    ry += 6
     if rp_done:
         pulse = 0.55 + 0.45 * math.sin(time.time() * math.pi * 1.6)
         pc = tuple(int(c * pulse) for c in ACCENT)
         hs = f_sm.render("Press  SPACE  to continue", True, pc)
         screen.blit(hs, (rx + GRW // 2 - hs.get_width() // 2, ry))
 
-    new_total = cum_score + trial.reward_score
     return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
                           cum_score=new_total)
 
