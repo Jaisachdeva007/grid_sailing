@@ -806,6 +806,106 @@ def _save(trial, session_id):
     )
 
 
+# ── Score breakdown card (shared by ACTION preview + FEEDBACK) ─
+
+def _draw_score_card(screen, fonts, trial, rx, ry, GRW):
+    """
+    Draws a self-sizing score breakdown card.
+    Returns new ry = bottom of card + 8.
+    """
+    f_big, f_med, f_sm, f_xs = fonts
+    rc      = CORRECT if trial.is_correct else WRONG
+    opt_len = len(trial.optimal_sequence)
+    n_moves = trial.number_of_moves
+    extra   = max(0, n_moves - opt_len)
+    penalty = extra * EXTRA_MOVE_PENALTY
+
+    PAD  = 14
+    LH   = f_xs.get_height() + 10   # height of one data row
+    LCOL = rx + PAD
+    RCOL = rx + GRW - PAD
+
+    # ── Build row list ─────────────────────────────────────────
+    # Each entry: (label_str, value_str, lbl_col, val_col)  OR  "div" / "div2"
+    rows = []
+    if not trial.is_correct:
+        rows = [
+            ("Result",      "Goal not reached", DIM, WRONG),
+            ("Your score",  "0 pts",            DIM, WRONG),
+        ]
+    else:
+        mc = CORRECT if extra == 0 else (AMBER if extra <= 2 else WRONG)
+        rows = [
+            ("Moves you took",  str(n_moves),           DIM, mc),
+            ("Optimal path",    f"{opt_len} moves",      DIM, ACCENT),
+        ]
+        if extra > 0:
+            rows.append(("Extra moves",
+                         f"{n_moves} − {opt_len} = {extra}",
+                         DIM, WRONG))
+        rows.append("div")
+        rows.append(("Max possible score", f"{OPTIMAL_SCORE} pts", DIM, WHITE))
+        if extra > 0:
+            rows.append((f"Penalty  ({extra} × {EXTRA_MOVE_PENALTY} pts each)",
+                         f"−{penalty} pts", DIM, WRONG))
+        rows.append("div2")
+
+    # ── Calculate card height ──────────────────────────────────
+    hdr_h   = f_xs.get_height() + 10
+    body_h  = sum(LH if isinstance(r, tuple) else (6 if r == "div" else 14)
+                  for r in rows)
+    score_h = f_med.get_height() + PAD + 8
+    oob_h   = (f_xs.get_height() + 16) if trial.oob_count > 0 else 0
+    card_h  = 4 + PAD + hdr_h + body_h + score_h + oob_h + PAD
+
+    # ── Card background ────────────────────────────────────────
+    pygame.draw.rect(screen, (10, 14, 32), (rx, ry, GRW, card_h), border_radius=12)
+    pygame.draw.rect(screen, BORDER,       (rx, ry, GRW, card_h), width=1, border_radius=12)
+    pygame.draw.rect(screen, rc,           (rx, ry, GRW, 4),      border_radius=12)
+
+    cy = ry + 4 + PAD
+
+    # Header
+    hs = f_xs.render("SCORE BREAKDOWN", True, DIM)
+    screen.blit(hs, (LCOL, cy));  cy += hs.get_height() + 10
+
+    # Rows
+    for row in rows:
+        if row == "div":
+            pygame.draw.line(screen, BORDER,
+                             (LCOL, cy + 2), (RCOL, cy + 2));  cy += 6
+        elif row == "div2":
+            pygame.draw.line(screen, BORDER2,
+                             (LCOL, cy + 4), (RCOL, cy + 4));  cy += 14
+        else:
+            lbl, val, lc, vc = row
+            ls = f_xs.render(lbl, True, lc)
+            vs = f_sm.render(val, True, vc)
+            row_cy = cy + (LH - ls.get_height()) // 2
+            screen.blit(ls, (LCOL, row_cy))
+            screen.blit(vs, (RCOL - vs.get_width(),
+                              cy + (LH - vs.get_height()) // 2))
+            cy += LH
+
+    # Big YOUR SCORE line
+    lbl_s = f_xs.render("YOUR SCORE", True, DIM)
+    scr_s = f_med.render(f"{trial.reward_score} pts", True, rc)
+    mid_y  = cy + scr_s.get_height() // 2
+    screen.blit(lbl_s, (LCOL, mid_y - lbl_s.get_height() // 2))
+    screen.blit(scr_s, (RCOL - scr_s.get_width(), cy))
+    cy += scr_s.get_height() + PAD
+
+    # OOB warning (inside card at bottom)
+    if trial.oob_count > 0:
+        ob_s = f_xs.render(
+            f"⚠  {trial.oob_count} move{'s' if trial.oob_count > 1 else ''} hit the boundary — cursor stayed",
+            True, (255, 160, 80))
+        screen.blit(ob_s, (LCOL, cy))
+        cy += ob_s.get_height()
+
+    return ry + card_h + 8
+
+
 # ── Stage drawing ─────────────────────────────────────────────
 
 def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
@@ -992,71 +1092,11 @@ def _draw_stage_action(screen, fonts, trial, cursor, trail,
         ry += 92
 
         if pp_anim_done:
-            # Score preview card (score calculated when animation ended)
-            rc       = CORRECT if trial.is_correct else WRONG
-            n_moves  = trial.number_of_moves
-            opt_len  = len(trial.optimal_sequence)
-            extra    = max(0, n_moves - opt_len)
-            card_h   = 172 if extra > 0 else 144
-            pygame.draw.rect(screen, (10, 14, 32), (rx, ry, GRW, card_h), border_radius=12)
-            pygame.draw.rect(screen, BORDER,       (rx, ry, GRW, card_h), width=1, border_radius=12)
-            pygame.draw.rect(screen, rc,           (rx, ry, GRW, 4),      border_radius=12)
-
-            cy = ry + 14
-            _t(screen, f_xs, "SCORE BREAKDOWN", DIM, rx + 16, cy);  cy += 22
-
-            mc = CORRECT if extra == 0 else (AMBER if extra <= 2 else WRONG)
-            mv_s = f_sm.render(f"{n_moves} moves", True, mc)
-            op_s = f_xs.render(f"(optimal: {opt_len})", True, DIM)
-            screen.blit(mv_s, (rx + 16, cy))
-            screen.blit(op_s, (rx + 16 + mv_s.get_width() + 8,
-                                cy + mv_s.get_height() // 2 - op_s.get_height() // 2))
-            cy += mv_s.get_height() + 8
-            pygame.draw.line(screen, BORDER, (rx + 16, cy), (rx + GRW - 16, cy));  cy += 8
-
-            if not trial.is_correct:
-                ms = f_sm.render("Goal not reached — 0 pts", True, WRONG)
-                screen.blit(ms, (rx + 16, cy));  cy += ms.get_height() + 6
-            else:
-                b_lbl = f_xs.render("Base score", True, DIM)
-                b_val = f_sm.render(f"{OPTIMAL_SCORE} pts", True, WHITE)
-                screen.blit(b_lbl, (rx + 16, cy))
-                screen.blit(b_val, (rx + GRW - b_val.get_width() - 16, cy))
-                cy += b_val.get_height() + 4
-                if extra > 0:
-                    p_lbl = f_xs.render(f"{extra} extra move{'s' if extra > 1 else ''}", True, DIM)
-                    p_val = f_sm.render(f"− {extra} × {EXTRA_MOVE_PENALTY} = −{extra * EXTRA_MOVE_PENALTY} pts",
-                                        True, WRONG)
-                    screen.blit(p_lbl, (rx + 16, cy))
-                    screen.blit(p_val, (rx + GRW - p_val.get_width() - 16, cy))
-                    cy += p_val.get_height() + 6
-                pygame.draw.line(screen, BORDER2, (rx + 16, cy), (rx + GRW - 16, cy));  cy += 8
-
-            big_s = f_big.render(str(trial.reward_score), True, rc)
-            pts_s = f_sm.render(" pts", True, DIM)
-            tw    = big_s.get_width() + pts_s.get_width()
-            bx    = rx + GRW // 2 - tw // 2
-            screen.blit(big_s, (bx, cy))
-            screen.blit(pts_s, (bx + big_s.get_width(),
-                                 cy + big_s.get_height() - pts_s.get_height() - 4))
-            ry += card_h + 10
-
-            # OOB warning
-            if trial.oob_count > 0:
-                oh = 36
-                pygame.draw.rect(screen, (48, 20, 8), (rx, ry, GRW, oh), border_radius=8)
-                pygame.draw.rect(screen, WRONG,       (rx, ry, GRW, oh), width=1, border_radius=8)
-                ob_s = f_xs.render(
-                    f"⚠  {trial.oob_count} move{'s' if trial.oob_count > 1 else ''} out of bounds",
-                    True, (255, 160, 80))
-                screen.blit(ob_s, (rx + GRW // 2 - ob_s.get_width() // 2,
-                                   ry + oh // 2 - ob_s.get_height() // 2))
-                ry += oh + 8
-
+            ry = _draw_score_card(screen, fonts, trial, rx, ry, GRW)
             pulse = 0.55 + 0.45 * math.sin(time.time() * math.pi * 1.6)
             pc = tuple(int(c * pulse) for c in ACCENT)
             hs = f_sm.render("Press  SPACE  to continue", True, pc)
-            screen.blit(hs, (rx + GRW // 2 - hs.get_width() // 2, ry + 8))
+            screen.blit(hs, (rx + GRW // 2 - hs.get_width() // 2, ry + 6))
         else:
             dot_n  = int(time.time() * 2) % 4
             anim_s = f_xs.render("Executing" + "." * dot_n, True, DIM)
@@ -1108,18 +1148,6 @@ def _draw_stage_feedback(screen, fonts, trial, cum_score,
                      ry + 31 - rs.get_height() // 2))
     ry += 70
 
-    # Out-of-bounds warning
-    if trial.oob_count > 0:
-        oh = 40
-        pygame.draw.rect(screen, (48, 20, 8),  (rx, ry, GRW, oh), border_radius=8)
-        pygame.draw.rect(screen, WRONG,         (rx, ry, GRW, oh), width=1, border_radius=8)
-        oob_s = f_xs.render(
-            f"⚠  {trial.oob_count} move{'s' if trial.oob_count > 1 else ''} went out of bounds — cursor stayed in place",
-            True, (255, 160, 80))
-        screen.blit(oob_s, (rx + GRW // 2 - oob_s.get_width() // 2,
-                             ry + oh // 2 - oob_s.get_height() // 2))
-        ry += oh + 6
-
     # Streak indicator
     display_streak = (streak + 1) if trial.is_correct else 0
     if display_streak >= 2:
@@ -1132,55 +1160,7 @@ def _draw_stage_feedback(screen, fonts, trial, cum_score,
         ry += sh + 8
 
     # ── Score breakdown card ──────────────────────────────────
-    card_h = 188 if trial.is_correct and extra > 0 else 156
-    pygame.draw.rect(screen, (10, 14, 32), (rx, ry, GRW, card_h), border_radius=12)
-    pygame.draw.rect(screen, BORDER,       (rx, ry, GRW, card_h), width=1, border_radius=12)
-    pygame.draw.rect(screen, rc,           (rx, ry, GRW, 4),      border_radius=12)
-
-    cy = ry + 16
-    _t(screen, f_xs, "SCORE BREAKDOWN", DIM, rx + 16, cy);  cy += 22
-
-    # Moves info row
-    mc = CORRECT if extra == 0 else (AMBER if extra <= 2 else WRONG)
-    moves_s = f_sm.render(f"{n_moves} moves", True, mc)
-    opt_s   = f_xs.render(f"(optimal: {opt_len})", True, DIM)
-    screen.blit(moves_s, (rx + 16, cy))
-    screen.blit(opt_s,   (rx + 16 + moves_s.get_width() + 8,
-                           cy + moves_s.get_height() // 2 - opt_s.get_height() // 2))
-    cy += moves_s.get_height() + 10
-
-    pygame.draw.line(screen, BORDER, (rx + 16, cy), (rx + GRW - 16, cy));  cy += 10
-
-    if not trial.is_correct:
-        miss_s = f_sm.render("Goal not reached", True, WRONG)
-        screen.blit(miss_s, (rx + 16, cy));  cy += miss_s.get_height() + 8
-    else:
-        # Base
-        base_lbl = f_xs.render("Base score", True, DIM)
-        base_val = f_sm.render(f"{OPTIMAL_SCORE} pts", True, WHITE)
-        screen.blit(base_lbl, (rx + 16, cy))
-        screen.blit(base_val, (rx + GRW - base_val.get_width() - 16, cy))
-        cy += base_val.get_height() + 6
-
-        if extra > 0:
-            pen_lbl = f_xs.render(f"{extra} extra move{'s' if extra > 1 else ''}", True, DIM)
-            pen_val = f_sm.render(f"− {extra} × {EXTRA_MOVE_PENALTY} = −{extra * EXTRA_MOVE_PENALTY} pts",
-                                  True, WRONG)
-            screen.blit(pen_lbl, (rx + 16, cy))
-            screen.blit(pen_val, (rx + GRW - pen_val.get_width() - 16, cy))
-            cy += pen_val.get_height() + 8
-
-        pygame.draw.line(screen, BORDER2, (rx + 16, cy), (rx + GRW - 16, cy));  cy += 10
-
-    # Big final score
-    big_s = f_big.render(str(trial.reward_score), True, rc)
-    pts_s = f_sm.render(" pts", True, DIM)
-    total_w = big_s.get_width() + pts_s.get_width()
-    bx = rx + GRW // 2 - total_w // 2
-    screen.blit(big_s, (bx, cy))
-    screen.blit(pts_s, (bx + big_s.get_width(),
-                         cy + big_s.get_height() - pts_s.get_height() - 4))
-    ry += card_h + 10
+    ry = _draw_score_card(screen, fonts, trial, rx, ry, GRW)
 
     # ── Session total ─────────────────────────────────────────
     _panel(screen, rx, ry, GRW, 60, CORRECT)
