@@ -61,20 +61,22 @@ def run_participant_login(screen, clock, fonts, config: dict):
     f_big, f_med, f_sm, f_xs = fonts
     pygame.display.set_caption("Grid-Sailing Task")
 
-    # Local larger fonts for this screen
-    f_title = pygame.font.SysFont("Helvetica Neue", 50, bold=True)
-    f_body  = pygame.font.SysFont("Helvetica Neue", 20)
-    f_lbl   = pygame.font.SysFont("Helvetica Neue", 16)
+    # Local larger fonts for this screen — scale to screen height
+    _fs     = max(0.80, min(1.40, H / 900))
+    f_title = pygame.font.SysFont("Helvetica Neue", int(50 * _fs), bold=True)
+    f_body  = pygame.font.SysFont("Helvetica Neue", int(20 * _fs))
+    f_lbl   = pygame.font.SysFont("Helvetica Neue", int(16 * _fs))
 
     start_t = time.time()
 
-    # Card geometry — single field, shorter card
-    CW, CH = 440, 210
+    # Card geometry — scales with screen
+    CW  = min(540, max(440, int(W * 0.28)))
+    CH  = min(260, max(210, int(H * 0.24)))
     CX2 = CX - CW // 2
     CY2 = CY - CH // 2 + 20
 
-    pid_box = InputBox(CX2 + 20, CY2 + 60, CW - 40, 50, "e.g.  P001")
-    btn_r   = pygame.Rect(CX2 + 20, CY2 + 138, CW - 40, 46)
+    pid_box = InputBox(CX2 + 20, CY2 + int(CH * 0.28), CW - 40, 50, "e.g.  P001")
+    btn_r   = pygame.Rect(CX2 + 20, CY2 + int(CH * 0.65), CW - 40, 46)
 
     message = ""
     error_t = 0
