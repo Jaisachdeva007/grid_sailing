@@ -499,6 +499,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
     pp_anim_step      = 0
     pp_anim_timer     = 0
     pp_anim_done      = False
+    pp_scored         = False   # True once _finalise called on anim complete
 
     # Replay
     rp_step      = 0
@@ -584,7 +585,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
             # PP: SPACE to confirm after auto-animation completes
             if (state == ACTION and is_pp and pp_anim_done
                     and ev.type == pygame.KEYDOWN and ev.key == pygame.K_SPACE):
-                _finalise(trial, trial.planned_sequence, session_id)
+                if not pp_scored:
+                    _finalise(trial, trial.planned_sequence, session_id)
                 trial_id = _save(trial, session_id)
                 update_session_progress(session_id, trial.trial_number)
                 enter_feedback() if show_feedback else enter_iti()
@@ -658,6 +660,9 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     cursor = action_path[pp_anim_step]
                 else:
                     pp_anim_done = True
+                    if not pp_scored:
+                        _finalise(trial, trial.planned_sequence, session_id)
+                        pp_scored = True
 
         if state == FEEDBACK and not rp_done:
             if now_ms - rp_timer >= REPLAY_MS:
@@ -987,10 +992,71 @@ def _draw_stage_action(screen, fonts, trial, cursor, trail,
         ry += 92
 
         if pp_anim_done:
+            # Score preview card (score calculated when animation ended)
+            rc       = CORRECT if trial.is_correct else WRONG
+            n_moves  = trial.number_of_moves
+            opt_len  = len(trial.optimal_sequence)
+            extra    = max(0, n_moves - opt_len)
+            card_h   = 172 if extra > 0 else 144
+            pygame.draw.rect(screen, (10, 14, 32), (rx, ry, GRW, card_h), border_radius=12)
+            pygame.draw.rect(screen, BORDER,       (rx, ry, GRW, card_h), width=1, border_radius=12)
+            pygame.draw.rect(screen, rc,           (rx, ry, GRW, 4),      border_radius=12)
+
+            cy = ry + 14
+            _t(screen, f_xs, "SCORE BREAKDOWN", DIM, rx + 16, cy);  cy += 22
+
+            mc = CORRECT if extra == 0 else (AMBER if extra <= 2 else WRONG)
+            mv_s = f_sm.render(f"{n_moves} moves", True, mc)
+            op_s = f_xs.render(f"(optimal: {opt_len})", True, DIM)
+            screen.blit(mv_s, (rx + 16, cy))
+            screen.blit(op_s, (rx + 16 + mv_s.get_width() + 8,
+                                cy + mv_s.get_height() // 2 - op_s.get_height() // 2))
+            cy += mv_s.get_height() + 8
+            pygame.draw.line(screen, BORDER, (rx + 16, cy), (rx + GRW - 16, cy));  cy += 8
+
+            if not trial.is_correct:
+                ms = f_sm.render("Goal not reached — 0 pts", True, WRONG)
+                screen.blit(ms, (rx + 16, cy));  cy += ms.get_height() + 6
+            else:
+                b_lbl = f_xs.render("Base score", True, DIM)
+                b_val = f_sm.render(f"{OPTIMAL_SCORE} pts", True, WHITE)
+                screen.blit(b_lbl, (rx + 16, cy))
+                screen.blit(b_val, (rx + GRW - b_val.get_width() - 16, cy))
+                cy += b_val.get_height() + 4
+                if extra > 0:
+                    p_lbl = f_xs.render(f"{extra} extra move{'s' if extra > 1 else ''}", True, DIM)
+                    p_val = f_sm.render(f"− {extra} × {EXTRA_MOVE_PENALTY} = −{extra * EXTRA_MOVE_PENALTY} pts",
+                                        True, WRONG)
+                    screen.blit(p_lbl, (rx + 16, cy))
+                    screen.blit(p_val, (rx + GRW - p_val.get_width() - 16, cy))
+                    cy += p_val.get_height() + 6
+                pygame.draw.line(screen, BORDER2, (rx + 16, cy), (rx + GRW - 16, cy));  cy += 8
+
+            big_s = f_big.render(str(trial.reward_score), True, rc)
+            pts_s = f_sm.render(" pts", True, DIM)
+            tw    = big_s.get_width() + pts_s.get_width()
+            bx    = rx + GRW // 2 - tw // 2
+            screen.blit(big_s, (bx, cy))
+            screen.blit(pts_s, (bx + big_s.get_width(),
+                                 cy + big_s.get_height() - pts_s.get_height() - 4))
+            ry += card_h + 10
+
+            # OOB warning
+            if trial.oob_count > 0:
+                oh = 36
+                pygame.draw.rect(screen, (48, 20, 8), (rx, ry, GRW, oh), border_radius=8)
+                pygame.draw.rect(screen, WRONG,       (rx, ry, GRW, oh), width=1, border_radius=8)
+                ob_s = f_xs.render(
+                    f"⚠  {trial.oob_count} move{'s' if trial.oob_count > 1 else ''} out of bounds",
+                    True, (255, 160, 80))
+                screen.blit(ob_s, (rx + GRW // 2 - ob_s.get_width() // 2,
+                                   ry + oh // 2 - ob_s.get_height() // 2))
+                ry += oh + 8
+
             pulse = 0.55 + 0.45 * math.sin(time.time() * math.pi * 1.6)
             pc = tuple(int(c * pulse) for c in ACCENT)
             hs = f_sm.render("Press  SPACE  to continue", True, pc)
-            screen.blit(hs, (rx + GRW // 2 - hs.get_width() // 2, ry + 16))
+            screen.blit(hs, (rx + GRW // 2 - hs.get_width() // 2, ry + 8))
         else:
             dot_n  = int(time.time() * 2) % 4
             anim_s = f_xs.render("Executing" + "." * dot_n, True, DIM)
