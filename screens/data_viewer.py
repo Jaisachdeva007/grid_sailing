@@ -311,8 +311,8 @@ def _view_a(screen, clock, fonts, on_select):
                 elif thumb_r and thumb_r.collidepoint(ev.pos):
                     sb_dragging  = True
                     sb_drag_orig = (my, scroll, len(stats))
-                # Scrollbar track click
-                elif thumb_r:
+                # Scrollbar track click (only when actually in the scrollbar column)
+                elif thumb_r and SB_X <= mx <= SB_X + SB_W:
                     nv = _scrollbar_click(ev.pos, thumb_r, CLIP_TOP, CLIP_BOT,
                                           len(stats), VIS)
                     if nv is not None:
@@ -578,7 +578,7 @@ def _view_b(screen, clock, fonts, pid):
                 elif thumb_r and thumb_r.collidepoint(ev.pos):
                     sb_dragging  = True
                     sb_drag_orig = (ev.pos[1], scroll, len(trials))
-                elif thumb_r:
+                elif thumb_r and SB_X_B <= ev.pos[0] <= SB_X_B + SB_W:
                     nv = _scrollbar_click(ev.pos, thumb_r, CLIP_TOP, CLIP_BOT,
                                           len(trials), VIS)
                     if nv is not None:
