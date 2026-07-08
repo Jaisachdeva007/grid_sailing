@@ -9,7 +9,7 @@ from database.db import (
     get_participant_stats, get_session_breakdown,
     get_participant_trials
 )
-from export.exporter import export_participant, export_all, export_summary
+from export.exporter import export_participant, export_all, export_summary, export_reflections
 from config import WINDOW_WIDTH, WINDOW_HEIGHT, FPS
 
 # ── Palette ───────────────────────────────────────────────────
@@ -253,6 +253,7 @@ def _view_a(screen, clock, fonts, on_select):
     back_r    = pygame.Rect(PAD,            BBAR_Y, 110, 42)
     exp_all_r = pygame.Rect(PAD + 122,      BBAR_Y, 200, 42)
     exp_sum_r = pygame.Rect(PAD + 334,      BBAR_Y, 210, 42)
+    exp_ref_r = pygame.Rect(PAD + 556,      BBAR_Y, 230, 42)
     thumb_r   = None
 
     SB_X = PAD + TABLE_W + SB_W + 2   # scrollbar x in view A
@@ -332,6 +333,9 @@ def _view_a(screen, clock, fonts, on_select):
                     msg = f"Saved  {os.path.basename(path)}"; msg_col = GREEN
                 if exp_sum_r.collidepoint(ev.pos):
                     path = export_summary()
+                    msg = f"Saved  {os.path.basename(path)}"; msg_col = GREEN
+                if exp_ref_r.collidepoint(ev.pos):
+                    path = export_reflections()
                     msg = f"Saved  {os.path.basename(path)}"; msg_col = GREEN
 
             if ev.type == pygame.MOUSEWHEEL:
@@ -495,9 +499,10 @@ def _view_a(screen, clock, fonts, on_select):
 
         # Bottom bar
         _bottom_bar(screen)
-        _ghost_btn(screen,  fonts, "< Back",          back_r)
-        _action_btn(screen, fonts, "Export All",       "all participants CSV",  exp_all_r, ORANGE)
-        _action_btn(screen, fonts, "Export Summary",   "one row per trial",     exp_sum_r, PURPLE)
+        _ghost_btn(screen,  fonts, "< Back",             back_r)
+        _action_btn(screen, fonts, "Export All",        "all participants CSV",  exp_all_r, ORANGE)
+        _action_btn(screen, fonts, "Export Summary",    "one row per trial",     exp_sum_r, PURPLE)
+        _action_btn(screen, fonts, "Export Reflections","MI group 3E logs",      exp_ref_r, GREEN)
 
         if msg:
             ms = f_xs.render(msg, True, msg_col)
