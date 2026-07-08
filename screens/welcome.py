@@ -30,11 +30,12 @@ ADMIN_HASH = _hash(ADMIN_PASSWORD)
 
 
 def run_welcome(screen, clock):
-    f_title = pygame.font.SysFont("Helvetica Neue", 52, bold=True)
-    f_sub   = pygame.font.SysFont("Helvetica Neue", 20)
-    f_med   = pygame.font.SysFont("Helvetica Neue", 24, bold=True)
-    f_sm    = pygame.font.SysFont("Helvetica Neue", 19)
-    f_xs    = pygame.font.SysFont("Helvetica Neue", 16)
+    _fs     = max(0.80, min(1.40, H / 900))
+    f_title = pygame.font.SysFont("Helvetica Neue", int(52 * _fs), bold=True)
+    f_sub   = pygame.font.SysFont("Helvetica Neue", int(20 * _fs))
+    f_med   = pygame.font.SysFont("Helvetica Neue", int(24 * _fs), bold=True)
+    f_sm    = pygame.font.SysFont("Helvetica Neue", int(19 * _fs))
+    f_xs    = pygame.font.SysFont("Helvetica Neue", int(16 * _fs))
 
     pygame.display.set_caption("Grid-Sailing Task")
 
@@ -44,13 +45,14 @@ def run_welcome(screen, clock):
     error_t   = 0
     start_t   = time.time()
 
-    # Card geometry
-    CW, CH = 420, 230
+    # Card geometry — scales with screen
+    CW  = min(560, max(420, int(W * 0.26)))
+    CH  = min(280, max(230, int(H * 0.26)))
     CX2 = CX - CW // 2
     CY2 = CY - 40
 
-    pw_rect  = pygame.Rect(CX2 + 20, CY2 + 88, CW - 40, 46)
-    btn_rect = pygame.Rect(CX2 + 20, CY2 + 152, CW - 40, 46)
+    pw_rect  = pygame.Rect(CX2 + 20, CY2 + int(CH * 0.38), CW - 40, 46)
+    btn_rect = pygame.Rect(CX2 + 20, CY2 + int(CH * 0.66), CW - 40, 46)
 
     while True:
         clock.tick(FPS)
@@ -106,7 +108,7 @@ def run_welcome(screen, clock):
         screen.blit(sub, (CX - sub.get_width() // 2, CY - 214))
 
         # Divider
-        pygame.draw.line(screen, BORDER, (CX - 240, CY - 188), (CX + 240, CY - 188))
+        pygame.draw.line(screen, BORDER, (CX2 + 20, CY2 - 8), (CX2 + CW - 20, CY2 - 8))
 
         # ── Login card ───────────────────────────────────────
         # Shadow
