@@ -794,6 +794,9 @@ def _finalise(trial, used_seq, session_id):
     trial.oob_count = oob
     score, n, ok = _score(used_seq, trial.optimal_sequence, pos, trial.goal)
     trial.reward_score = score; trial.number_of_moves = n; trial.is_correct = ok
+    if trial.movement_time_ms is None and len(trial.keypresses_log) >= 2:
+        trial.movement_time_ms = (trial.keypresses_log[-1]["abs_ms"]
+                                  - trial.keypresses_log[0]["abs_ms"])
 
 def _save(trial, session_id):
     import json
