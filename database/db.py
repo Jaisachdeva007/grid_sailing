@@ -80,6 +80,7 @@ def initialise_database():
             elapsed_time_s       REAL,
             imagery_duration_ms  REAL,
             is_correct           INTEGER,
+            oob_count            INTEGER DEFAULT 0,
             created_at           TEXT DEFAULT (datetime('now')),
             FOREIGN KEY (session_id) REFERENCES sessions(session_id)
         )
@@ -127,12 +128,16 @@ def initialise_database():
         )
     """)
 
-    # Add all_optimal_sequences column to existing databases
-    try:
-        c.execute("ALTER TABLE trials ADD COLUMN all_optimal_sequences TEXT")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass  # column already exists
+    # Migrations for existing databases
+    for migration in [
+        "ALTER TABLE trials ADD COLUMN all_optimal_sequences TEXT",
+        "ALTER TABLE trials ADD COLUMN oob_count INTEGER DEFAULT 0",
+    ]:
+        try:
+            c.execute(migration)
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # column already exists
 
     conn.commit()
     conn.close()
@@ -388,7 +393,7 @@ def save_trial(session_id, participant_id, trial_number, grid_type,
                number_of_moves, reward_score,
                reaction_time_ms, movement_time_ms, elapsed_time_s,
                imagery_duration_ms, is_correct,
-               all_optimal_sequences=None):
+               all_optimal_sequences=None, oob_count=0):
     """
     Save a completed trial to the database and return its trial_id.
     Called at the end of every trial regardless of outcome.
@@ -401,15 +406,15 @@ def save_trial(session_id, participant_id, trial_number, grid_type,
             planned_sequence, optimal_sequence, optimal_length,
             number_of_moves, reward_score,
             reaction_time_ms, movement_time_ms, elapsed_time_s,
-            imagery_duration_ms, is_correct, all_optimal_sequences
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            imagery_duration_ms, is_correct, all_optimal_sequences, oob_count
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         session_id, participant_id, trial_number, grid_type,
         start_row, start_col, goal_row, goal_col,
         str(planned_sequence), str(optimal_sequence), optimal_length,
         number_of_moves, reward_score,
         reaction_time_ms, movement_time_ms, elapsed_time_s,
-        imagery_duration_ms, int(is_correct), all_optimal_sequences
+        imagery_duration_ms, int(is_correct), all_optimal_sequences, oob_count
     ))
     trial_id = cursor.lastrowid
     conn.commit()

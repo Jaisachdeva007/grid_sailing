@@ -803,6 +803,7 @@ def _save(trial, session_id):
         imagery_duration_ms=trial.imagery_duration_ms,
         is_correct=trial.is_correct,
         all_optimal_sequences=all_opt_json,
+        oob_count=trial.oob_count,
     )
 
 
