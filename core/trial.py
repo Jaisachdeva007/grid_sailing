@@ -80,6 +80,7 @@ class TrialData:
     reward_score:        int   = 0
     number_of_moves:     int   = 0
     is_correct:          bool  = False
+    oob_count:           int   = 0
     trial_start_time:    float = 0.0
 
 
@@ -153,7 +154,8 @@ def _pill(screen, font, text, fg, bg, x, y):
 PAUSE_BTN_W = 72
 PAUSE_BTN_H = 24
 
-def _draw_progress(screen, fonts, trial, total, block_type, session_num):
+def _draw_progress(screen, fonts, trial, total, block_type, session_num,
+                   cum_score: int = 0):
     f_big, f_med, f_sm, f_xs = fonts
     W = screen.get_width()
     H = screen.get_height()
@@ -181,9 +183,13 @@ def _draw_progress(screen, fonts, trial, total, block_type, session_num):
     screen.blit(pl, (pause_rect.x + pause_rect.w // 2 - pl.get_width() // 2,
                      pause_rect.y + pause_rect.h // 2 - pl.get_height() // 2))
 
-    ss = f_xs.render(f"Session {session_num}", True, DIM)
-    screen.blit(ss, (pause_x - ss.get_width() - 18,
-                     y + PROG_H // 2 - ss.get_height() // 2))
+    # Score + session label to the left of Pause
+    sc_s   = f_xs.render(f"{cum_score} pts", True, CORRECT)
+    sess_s = f_xs.render(f"Session {session_num}", True, DIM)
+    label_x = pause_x - max(sc_s.get_width(), sess_s.get_width()) - 18
+    cy_mid = y + PROG_H // 2
+    screen.blit(sc_s,   (label_x, cy_mid - sc_s.get_height() - 1))
+    screen.blit(sess_s, (label_x, cy_mid + 1))
 
     return pause_rect
 
@@ -689,13 +695,16 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
 
         if draw_state == PLANNING:
             pause_rect = _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
-                                              total_trials, block_type, sn)
+                                              total_trials, block_type, sn,
+                                              cum_score=cumulative_score)
         elif draw_state == INPUT:
             pause_rect = _draw_stage_input(screen, fonts, trial, typed_seq, blink_on,
-                                           total_trials, block_type, sn, btns)
+                                           total_trials, block_type, sn, btns,
+                                           cum_score=cumulative_score)
         elif draw_state == COUNTDOWN:
             pause_rect = _draw_stage_countdown(screen, fonts, trial, countdown_start,
-                                               total_trials, block_type, sn)
+                                               total_trials, block_type, sn,
+                                               cum_score=cumulative_score)
         elif draw_state == ACTION:
             pause_rect = _draw_stage_action(screen, fonts, trial, cursor, trail,
                                             typed_seq, is_mi, is_pp, sbar_down_t,
@@ -703,7 +712,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                                             a_time, action_start, btns,
                                             mi_space_held=mi_space_held,
                                             mi_space_start=mi_space_start,
-                                            pp_anim_done=pp_anim_done)
+                                            pp_anim_done=pp_anim_done,
+                                            cum_score=cumulative_score)
         elif draw_state == FEEDBACK:
             if not particles_spawned:
                 _GL, _GT, _GR, _GRW, _CELL = _layout(W, H)
@@ -722,7 +732,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                 _update_draw_particles(screen, particles, dt)
         elif draw_state == ITI:
             pause_rect = _draw_stage_iti(screen, fonts, trial, iti_start, iti_dur,
-                                         total_trials, block_type, sn)
+                                         total_trials, block_type, sn,
+                                         cum_score=cumulative_score + trial.reward_score)
 
         if state == PAUSED:
             _draw_pause_overlay(screen, fonts, trial, total_trials, block_type, sn)
@@ -757,9 +768,14 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
 
 def _finalise(trial, used_seq, session_id):
     pos = trial.start
+    oob = 0
     for k in used_seq:
         nxt = apply_key(pos[0], pos[1], k)
-        if nxt: pos = nxt
+        if nxt:
+            pos = nxt
+        else:
+            oob += 1
+    trial.oob_count = oob
     score, n, ok = _score(used_seq, trial.optimal_sequence, pos, trial.goal)
     trial.reward_score = score; trial.number_of_moves = n; trial.is_correct = ok
     if trial.movement_time_ms is None and len(trial.keypresses_log) >= 2:
@@ -792,7 +808,7 @@ def _save(trial, session_id):
 # ── Stage drawing ─────────────────────────────────────────────
 
 def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
-                         total_trials, block_type, sn):
+                         total_trials, block_type, sn, cum_score: int = 0):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     GL, GT, GR, GRW, CELL = _layout(W, H)
@@ -819,11 +835,12 @@ def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
         badge_col = ACCENT if trial.grid_type == "repeated" else AMBER
         _pill(screen, f_xs, f"  {trial.grid_type.upper()}  ", BG, badge_col, rx, ry)
 
-    return _draw_progress(screen, fonts, trial, total_trials, block_type, sn)
+    return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
+                          cum_score=cum_score)
 
 
 def _draw_stage_input(screen, fonts, trial, typed_seq, blink_on,
-                      total_trials, block_type, sn, btns):
+                      total_trials, block_type, sn, btns, cum_score: int = 0):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     GL, GT, GR, GRW, CELL = _layout(W, H)
@@ -882,11 +899,12 @@ def _draw_stage_input(screen, fonts, trial, typed_seq, blink_on,
                      "Confirm", CORRECT, has_seq, btns, "confirm")
     ry += 60
 
-    return _draw_progress(screen, fonts, trial, total_trials, block_type, sn)
+    return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
+                          cum_score=cum_score)
 
 
 def _draw_stage_countdown(screen, fonts, trial, countdown_start,
-                          total_trials, block_type, sn):
+                          total_trials, block_type, sn, cum_score: int = 0):
     global _COUNTDOWN_FONT
     if _COUNTDOWN_FONT is None:
         _COUNTDOWN_FONT = pygame.font.SysFont("Helvetica Neue", 140, bold=True)
@@ -919,7 +937,8 @@ def _draw_stage_countdown(screen, fonts, trial, countdown_start,
     seq_s   = f_sm.render(f"Sequence:  {seq_str}", True, ACCENT)
     screen.blit(seq_s, (cx - seq_s.get_width() // 2, cy + 118))
 
-    return _draw_progress(screen, fonts, trial, total_trials, block_type, sn)
+    return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
+                          cum_score=cum_score)
 
 
 def _draw_stage_action(screen, fonts, trial, cursor, trail,
@@ -927,7 +946,7 @@ def _draw_stage_action(screen, fonts, trial, cursor, trail,
                        total_trials, block_type, sn,
                        a_time=10, action_start=None, btns=None,
                        mi_space_held=False, mi_space_start=None,
-                       pp_anim_done=False):
+                       pp_anim_done=False, cum_score: int = 0):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     GL, GT, GR, GRW, CELL = _layout(W, H)
@@ -981,7 +1000,8 @@ def _draw_stage_action(screen, fonts, trial, cursor, trail,
             anim_s = f_xs.render("Executing" + "." * dot_n, True, DIM)
             screen.blit(anim_s, (rx + GRW // 2 - anim_s.get_width() // 2, ry + 18))
 
-    return _draw_progress(screen, fonts, trial, total_trials, block_type, sn)
+    return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
+                          cum_score=cum_score)
 
 
 def _draw_stage_feedback(screen, fonts, trial, cum_score,
@@ -1025,6 +1045,18 @@ def _draw_stage_feedback(screen, fonts, trial, cum_score,
     screen.blit(rs, (rx + GRW // 2 - rs.get_width() // 2,
                      ry + 31 - rs.get_height() // 2))
     ry += 70
+
+    # Out-of-bounds warning
+    if trial.oob_count > 0:
+        oh = 40
+        pygame.draw.rect(screen, (48, 20, 8),  (rx, ry, GRW, oh), border_radius=8)
+        pygame.draw.rect(screen, WRONG,         (rx, ry, GRW, oh), width=1, border_radius=8)
+        oob_s = f_xs.render(
+            f"⚠  {trial.oob_count} move{'s' if trial.oob_count > 1 else ''} went out of bounds — cursor stayed in place",
+            True, (255, 160, 80))
+        screen.blit(oob_s, (rx + GRW // 2 - oob_s.get_width() // 2,
+                             ry + oh // 2 - oob_s.get_height() // 2))
+        ry += oh + 6
 
     # Streak indicator
     display_streak = (streak + 1) if trial.is_correct else 0
@@ -1084,11 +1116,13 @@ def _draw_stage_feedback(screen, fonts, trial, cum_score,
         hs = f_sm.render("Press  SPACE  to continue", True, pc)
         screen.blit(hs, (rx + GRW // 2 - hs.get_width() // 2, ry))
 
-    return _draw_progress(screen, fonts, trial, total_trials, block_type, sn)
+    new_total = cum_score + trial.reward_score
+    return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
+                          cum_score=new_total)
 
 
 def _draw_stage_iti(screen, fonts, trial, iti_start, iti_dur,
-                    total_trials, block_type, sn):
+                    total_trials, block_type, sn, cum_score: int = 0):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     cx, cy = W // 2, H // 2 - 30
@@ -1115,4 +1149,5 @@ def _draw_stage_iti(screen, fonts, trial, iti_start, iti_dur,
         f"Trial  {trial.trial_number}  of  {total_trials}  starting…", True, DIM)
     screen.blit(next_lbl, (cx - next_lbl.get_width() // 2, cy + r_outer + 58))
 
-    return _draw_progress(screen, fonts, trial, total_trials, block_type, sn)
+    return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
+                          cum_score=cum_score)
