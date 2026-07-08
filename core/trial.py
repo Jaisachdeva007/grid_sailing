@@ -36,6 +36,7 @@ PAUSED    = "paused"
 BG          = (8,    8,   16)
 PANEL       = (20,  20,   36)
 BORDER      = (48,  48,   76)
+BORDER2     = (72,  72,  116)   # brighter divider in score card
 WHITE       = (245, 245, 255)
 DIM         = (118, 118, 158)
 ACCENT      = (88,  148, 255)   # blue
