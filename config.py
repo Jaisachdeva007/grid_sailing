@@ -76,6 +76,7 @@ DEVICE_ID            = _socket.gethostname()   # unique machine identifier
 DEVICE_NAME          = DEVICE_ID               # human-readable label (override in local_config.py)
 FIREBASE_CREDENTIALS = None                    # path to serviceAccountKey.json
 SYNC_EVERY_N_TRIALS  = 5                       # push to Firebase after every N completed trials
+SYNC_TIME_SEC        = 20                      # also push if N seconds have passed since last sync
 
 # Load per-machine overrides (local_config.py is gitignored — never committed)
 try:

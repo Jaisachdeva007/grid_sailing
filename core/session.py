@@ -12,11 +12,12 @@
 
 import pygame
 import random
+import time as _time
 from config import (
     SESSION_STRUCTURE, TRIALS_PER_BLOCK, GRID_SIZE,
     PRACTICE_REPEATED_RATIO, TEST_REPEATED_RATIO,
     FAMILIARIZATION_REPEATED_RATIO, FPS,
-    SYNC_EVERY_N_TRIALS,
+    SYNC_EVERY_N_TRIALS, SYNC_TIME_SEC,
 )
 from sync.firebase_sync import sync_in_background
 from core.grid import find_valid_paths, apply_key
@@ -194,7 +195,9 @@ def run_block(screen, clock, fonts, block_type, block_number,
     _show_block_intro(screen, clock, fonts, block_type, block_number,
                       session_number, group, config)
 
-    streak = 0
+    streak         = 0
+    last_sync_time = _time.time()
+    last_sync_trial = resume_from_trial
 
     for i, (puzzle, grid_type) in enumerate(trials_list):
         trial_number = i + 1
@@ -222,18 +225,20 @@ def run_block(screen, clock, fonts, block_type, block_number,
         )
 
         if result.get("paused_exit"):
-            # Participant (or researcher) chose Save & Exit mid-block.
-            # Data up to this trial is already saved in the DB.
             sync_in_background(session_id, trial_number - 1)
             _show_saved_exit(screen, clock, fonts)
-            return "exited"   # signal to run_session to stop
+            return "exited"
 
         cumulative_score = result["cumulative_score"]
-        streak = result.get("streak", 0)
+        streak           = result.get("streak", 0)
 
-        # Sync to Firebase every N trials (non-blocking background thread)
-        if trial_number % SYNC_EVERY_N_TRIALS == 0:
+        # Sync every N trials OR every SYNC_TIME_SEC seconds — whichever first
+        trials_due = (trial_number - last_sync_trial) >= SYNC_EVERY_N_TRIALS
+        time_due   = (_time.time() - last_sync_time)  >= SYNC_TIME_SEC
+        if trials_due or time_due:
             sync_in_background(session_id, trial_number)
+            last_sync_time  = _time.time()
+            last_sync_trial = trial_number
 
     complete_session(session_id)
     sync_in_background(session_id, n_trials)   # final sync on block complete
