@@ -15,8 +15,10 @@ import random
 from config import (
     SESSION_STRUCTURE, TRIALS_PER_BLOCK, GRID_SIZE,
     PRACTICE_REPEATED_RATIO, TEST_REPEATED_RATIO,
-    FAMILIARIZATION_REPEATED_RATIO, FPS
+    FAMILIARIZATION_REPEATED_RATIO, FPS,
+    SYNC_EVERY_N_TRIALS,
 )
+from sync.firebase_sync import sync_in_background
 from core.grid import find_valid_paths, apply_key
 from core.trial import TrialData, run_trial
 from screens.reflection import run_reflection
@@ -222,13 +224,19 @@ def run_block(screen, clock, fonts, block_type, block_number,
         if result.get("paused_exit"):
             # Participant (or researcher) chose Save & Exit mid-block.
             # Data up to this trial is already saved in the DB.
+            sync_in_background(session_id, trial_number - 1)
             _show_saved_exit(screen, clock, fonts)
             return "exited"   # signal to run_session to stop
 
         cumulative_score = result["cumulative_score"]
         streak = result.get("streak", 0)
 
+        # Sync to Firebase every N trials (non-blocking background thread)
+        if trial_number % SYNC_EVERY_N_TRIALS == 0:
+            sync_in_background(session_id, trial_number)
+
     complete_session(session_id)
+    sync_in_background(session_id, n_trials)   # final sync on block complete
 
     # Show reflection after practice blocks for MI groups
     is_mi       = group.startswith("MI")

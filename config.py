@@ -69,3 +69,16 @@ WINDOW_WIDTH       = 1100
 WINDOW_HEIGHT      = 820
 ANIMATION_DELAY_MS = 600
 FPS                = 60
+
+# --- Cloud Sync (Firebase) ---
+import socket as _socket
+DEVICE_ID            = _socket.gethostname()   # unique machine identifier
+DEVICE_NAME          = DEVICE_ID               # human-readable label (override in local_config.py)
+FIREBASE_CREDENTIALS = None                    # path to serviceAccountKey.json
+SYNC_EVERY_N_TRIALS  = 5                       # push to Firebase after every N completed trials
+
+# Load per-machine overrides (local_config.py is gitignored — never committed)
+try:
+    from local_config import *  # noqa: F401,F403
+except ImportError:
+    pass

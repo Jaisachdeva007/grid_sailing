@@ -12,3 +12,6 @@ dist/
 build/
 .idea/
 exports/
+local_config.py
+*serviceAccountKey*.json
+*firebase-adminsdk*.json
