@@ -1190,6 +1190,17 @@ def _draw_stage_feedback(screen, fonts, trial, cum_score,
     # ── Score breakdown card ──────────────────────────────────
     ry = _draw_score_card(screen, fonts, trial, rx, ry, GRW)
 
+    # ── Score formula (compact arithmetic summary) ─────────────
+    if not trial.is_correct:
+        fc = WRONG
+    elif extra == 0:
+        fc = CORRECT
+    else:
+        fc = AMBER
+    fs = f_xs.render(formula, True, fc)
+    screen.blit(fs, (rx + GRW // 2 - fs.get_width() // 2, ry + 4))
+    ry += fs.get_height() + 12
+
     # ── Session total ─────────────────────────────────────────
     _panel(screen, rx, ry, GRW, 60, CORRECT)
     _t(screen, f_xs, "SESSION TOTAL", DIM, rx + 16, ry + 8)
