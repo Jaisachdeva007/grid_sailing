@@ -158,14 +158,14 @@ def _action_btn(screen, fonts, label, sub, rect, color):
     pygame.draw.rect(screen, (4, 4, 10),
                      (rect.x + 2, rect.y + 3, rect.w, rect.h), border_radius=10)
     pygame.draw.rect(screen, col, rect, border_radius=10)
-    offset = -8 if sub else 0
+    f_sm_h  = f_sm.get_height()
+    total_h = f_sm_h + (6 + f_xs.get_height() if sub else 0)
+    ty = rect.centery - total_h // 2
     ls = f_sm.render(label, True, (8, 8, 16))
-    screen.blit(ls, (rect.centerx - ls.get_width() // 2,
-                     rect.centery + offset - ls.get_height() // 2))
+    screen.blit(ls, (rect.centerx - ls.get_width() // 2, ty))
     if sub:
         ss = f_xs.render(sub, True, (30, 30, 50))
-        screen.blit(ss, (rect.centerx - ss.get_width() // 2,
-                         rect.centery + 8 - ss.get_height() // 2))
+        screen.blit(ss, (rect.centerx - ss.get_width() // 2, ty + f_sm_h + 6))
 
 
 SB_W = 10   # scrollbar width
@@ -199,10 +199,10 @@ def _scrollbar_click(ev_pos, thumb_r, clip_top, clip_bot, total, visible):
     return max(0, min(int(frac * total), total - visible))
 
 
-def _bottom_bar(screen):
+def _bottom_bar(screen, bbar_h=96):
     """Draw the bottom bar background + divider — call before drawing buttons."""
-    pygame.draw.rect(screen, SURFACE, (0, H - 96, W, 96))
-    pygame.draw.line(screen, BORDER, (0, H - 96), (W, H - 96))
+    pygame.draw.rect(screen, SURFACE, (0, H - bbar_h, W, bbar_h))
+    pygame.draw.line(screen, BORDER, (0, H - bbar_h), (W, H - bbar_h))
 
 
 # ── Column builders ───────────────────────────────────────────
@@ -264,8 +264,10 @@ def _view_a(screen, clock, fonts, on_select):
     TABLE_W  = W - PAD * 2 - SIDE_W - GAP
     SIDE_X   = PAD + TABLE_W + GAP
     HDR_H    = 40
-    CLIP_TOP = TABLE_Y + HDR_H                 # 240
-    CLIP_BOT = H - 96
+    CLIP_TOP = TABLE_Y + HDR_H
+    btn_h    = max(52, f_sm.get_height() + f_xs.get_height() + 16)
+    BBAR_H   = max(96, btn_h + 20)
+    CLIP_BOT = H - BBAR_H
     VIS      = max(1, (CLIP_BOT - CLIP_TOP) // ROW_H)
 
     COLS = _cols_a(TABLE_W, f_xs)
@@ -279,12 +281,15 @@ def _view_a(screen, clock, fonts, on_select):
     sb_dragging  = False
     sb_drag_orig = (0, 0, 0)   # (mouse_y_start, scroll_start, total)
 
-    BBAR_Y    = H - 76
-    back_r    = pygame.Rect(PAD,            BBAR_Y, 110, 42)
-    exp_all_r = pygame.Rect(PAD + 122,      BBAR_Y, 200, 42)
-    exp_sum_r = pygame.Rect(PAD + 334,      BBAR_Y, 210, 42)
-    exp_ref_r  = pygame.Rect(PAD + 556,      BBAR_Y, 230, 42)
-    sync_all_r = pygame.Rect(PAD + 798,      BBAR_Y, 190, 42)
+    def _abw(lbl, sub):
+        return max(f_sm.size(lbl)[0], f_xs.size(sub)[0]) + 32
+
+    BBAR_Y     = H - BBAR_H + (BBAR_H - btn_h) // 2
+    back_r     = pygame.Rect(PAD,                  BBAR_Y, max(110, f_xs.size("< Back")[0] + 24), btn_h)
+    exp_all_r  = pygame.Rect(back_r.right    + 12, BBAR_Y, _abw("Export All",         "all participants CSV"),  btn_h)
+    exp_sum_r  = pygame.Rect(exp_all_r.right + 12, BBAR_Y, _abw("Export Summary",     "one row per trial"),     btn_h)
+    exp_ref_r  = pygame.Rect(exp_sum_r.right + 12, BBAR_Y, _abw("Export Reflections", "MI group 3E logs"),      btn_h)
+    sync_all_r = pygame.Rect(exp_ref_r.right + 12, BBAR_Y, _abw("Sync All",           "push all to Firebase"),  btn_h)
     thumb_r   = None
 
     SB_X = PAD + TABLE_W + SB_W + 2   # scrollbar x in view A
@@ -543,7 +548,7 @@ def _view_a(screen, clock, fonts, on_select):
                DIM, SIDE_X + 16, TABLE_Y + 24)
 
         # Bottom bar
-        _bottom_bar(screen)
+        _bottom_bar(screen, BBAR_H)
         _ghost_btn(screen,  fonts, "< Back",             back_r)
         _action_btn(screen, fonts, "Export All",        "all participants CSV",  exp_all_r, ORANGE)
         _action_btn(screen, fonts, "Export Summary",    "one row per trial",     exp_sum_r, PURPLE)
@@ -578,16 +583,20 @@ def _view_b(screen, clock, fonts, pid):
     HDR_Y    = STATS_Y + STATS_H + 14
     HDR_H    = 40
     CLIP_TOP = HDR_Y + HDR_H                   # 238
-    CLIP_BOT = H - 96
+    btn_h    = max(52, f_sm.get_height() + f_xs.get_height() + 16)
+    BBAR_H   = max(96, btn_h + 20)
+    CLIP_BOT = H - BBAR_H
     TW       = W - PAD * 2
     VIS      = max(1, (CLIP_BOT - CLIP_TOP) // ROW_H)
 
     COLS = _cols_b(TW)
 
-    BBAR_Y      = H - 76
-    back_r      = pygame.Rect(PAD,       BBAR_Y, 110, 42)
-    exp_r       = pygame.Rect(PAD + 122, BBAR_Y, 250, 42)
-    graphs_r    = pygame.Rect(PAD + 386, BBAR_Y, 150, 42)
+    BBAR_Y   = H - BBAR_H + (BBAR_H - btn_h) // 2
+    back_r   = pygame.Rect(PAD,                BBAR_Y, max(110, f_xs.size("< Back")[0] + 24), btn_h)
+    exp_w    = max(f_sm.size(f"Export  {pid}")[0], f_xs.size("full keypress CSV")[0]) + 32
+    exp_r    = pygame.Rect(back_r.right + 12,  BBAR_Y, exp_w, btn_h)
+    graphs_w = max(f_sm.size("Graphs")[0], f_xs.size("pre/post test charts")[0]) + 32
+    graphs_r = pygame.Rect(exp_r.right  + 12,  BBAR_Y, graphs_w, btn_h)
     thumb_r     = None
     sb_dragging = False
     sb_drag_orig = (0, 0, 0)
@@ -751,7 +760,7 @@ def _view_b(screen, clock, fonts, pid):
                              CLIP_TOP, CLIP_BOT, len(trials), VIS, scroll)
 
         # Bottom bar
-        _bottom_bar(screen)
+        _bottom_bar(screen, BBAR_H)
         _ghost_btn(screen,  fonts, "< Back",             back_r)
         _action_btn(screen, fonts, f"Export  {pid}",
                     "full keypress CSV",                  exp_r,    ACCENT)
