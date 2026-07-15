@@ -183,9 +183,6 @@ def _pill(screen, font, text, fg, bg, x, y):
     return pw
 
 
-PAUSE_BTN_W = 72
-PAUSE_BTN_H = 24
-
 def _draw_progress(screen, fonts, trial, total, block_type, session_num,
                    cum_score: int = 0):
     f_big, f_med, f_sm, f_xs = fonts
@@ -206,27 +203,30 @@ def _draw_progress(screen, fonts, trial, total, block_type, session_num,
     screen.blit(bs, (W // 2 - bs.get_width() // 2,
                      y + PROG_H // 2 - bs.get_height() // 2))
 
-    pause_x = W - PAUSE_BTN_W - 14
-    pause_y = y + PROG_H // 2 - PAUSE_BTN_H // 2
-    pause_rect = pygame.Rect(pause_x, pause_y, PAUSE_BTN_W, PAUSE_BTN_H)
+    # Size buttons from actual rendered text so they always contain it.
+    btn_h = PROG_H - 8
+    btn_y = y + PROG_H // 2 - btn_h // 2
+
+    pl      = f_xs.render("II  Pause", True, DIM)
+    p_bw    = pl.get_width() + 20
+    pause_x = W - p_bw - 10
+    pause_rect = pygame.Rect(pause_x, btn_y, p_bw, btn_h)
     pygame.draw.rect(screen, (38, 38, 62), pause_rect, border_radius=6)
     pygame.draw.rect(screen, BORDER,       pause_rect, width=1, border_radius=6)
-    pl = f_xs.render("II  Pause", True, DIM)
-    screen.blit(pl, (pause_rect.x + pause_rect.w // 2 - pl.get_width() // 2,
-                     pause_rect.y + pause_rect.h // 2 - pl.get_height() // 2))
+    screen.blit(pl, (pause_rect.centerx - pl.get_width() // 2,
+                     pause_rect.centery - pl.get_height() // 2))
 
-    RES_BTN_W = 78
-    res_x  = pause_x - RES_BTN_W - 6
-    res_y  = pause_y
-    res_r  = pygame.Rect(res_x, res_y, RES_BTN_W, PAUSE_BTN_H)
+    rl   = f_xs.render("RES", True, DIM)
+    r_bw = rl.get_width() + 20
+    res_x = pause_x - r_bw - 5
+    res_r = pygame.Rect(res_x, btn_y, r_bw, btn_h)
     pygame.draw.rect(screen, (28, 28, 48), res_r, border_radius=6)
     pygame.draw.rect(screen, BORDER,       res_r, width=1, border_radius=6)
-    rl = f_xs.render("Researcher", True, DIM)
-    screen.blit(rl, (res_r.x + res_r.w // 2 - rl.get_width() // 2,
-                     res_r.y + res_r.h // 2 - rl.get_height() // 2))
+    screen.blit(rl, (res_r.centerx - rl.get_width() // 2,
+                     res_r.centery - rl.get_height() // 2))
 
     ss = f_xs.render(f"Session {session_num}", True, DIM)
-    screen.blit(ss, (res_x - ss.get_width() - 18,
+    screen.blit(ss, (res_x - ss.get_width() - 14,
                      y + PROG_H // 2 - ss.get_height() // 2))
 
     return pause_rect, res_r

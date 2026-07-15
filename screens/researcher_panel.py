@@ -657,13 +657,16 @@ def _side_panel(screen, clock, fonts, session_state, bg_snap):
 
         screen.set_clip(None)
 
-        # Scroll arrows
-        if scroll_y > 0:
-            a_s = f_xs.render("▲  scroll", True, DIM)
-            screen.blit(a_s, (panel_cx - a_s.get_width()//2, LIST_Y + 4))
-        if scroll_y < max_scroll:
-            a_s = f_xs.render("▼  scroll", True, DIM)
-            screen.blit(a_s, (panel_cx - a_s.get_width()//2, LIST_BOT - a_s.get_height() - 4))
+        # Scrollbar (only when content is taller than the list area)
+        SB_W = 6
+        sb_x = W - SB_W - 2
+        if total_list_h > LIST_H:
+            track_h  = LIST_H - 8
+            track_y  = LIST_Y + 4
+            thumb_h  = max(28, int(track_h * LIST_H / total_list_h))
+            thumb_y  = track_y + int((track_h - thumb_h) * scroll_y / max(1, max_scroll))
+            pygame.draw.rect(screen, (32, 32, 56), (sb_x, track_y, SB_W, track_h), border_radius=3)
+            pygame.draw.rect(screen, ACCENT,        (sb_x, thumb_y, SB_W, thumb_h), border_radius=3)
 
         # List border lines
         pygame.draw.line(screen, BORDER, (panel_x, LIST_Y),  (W, LIST_Y))
