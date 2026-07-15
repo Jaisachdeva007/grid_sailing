@@ -1,33 +1,34 @@
 # ============================================================
 #  GRID-SAILING TASK — Researcher Setup Screen
 #
-#  *** Juliet does NOT need to edit this file. ***
+#  You don't need to touch this file.
 #
-#  This is the main control screen Juliet uses before every session.
-#  After logging in, she lands on the Researcher Home (three cards),
-#  then taps "New Participant" or "Returning Participant" to reach this form.
+#  This is the main form you fill in before every session. You reach
+#  it by clicking "New Participant" or "Returning Participant" on
+#  the home screen after logging in.
 #
 #  The form has six sections:
 #
-#    §1 Participant   — Enter participant ID (and age/gender/hand for new ones).
-#                       Returning: just type the existing ID and pills of known
-#                       participants appear for reference.
+#    §1 Participant   — Enter the participant ID (plus age/gender/hand for
+#                       new ones). For returning participants, just type
+#                       their ID — you'll see their existing info appear.
 #
-#    §2 Group         — Choose the experimental group (MI-High, PP-Low, etc.)
-#                       Group list comes from GROUPS in config.py.
+#    §2 Group         — Pick their experimental group (MI-High, PP-Low, etc.)
+#                       The list of groups comes from GROUPS in config.py,
+#                       so add or remove groups there if needed.
 #
-#    §3 Session       — Choose session number (1, 2, or 3).
-#                       The block sequence for that session is shown as pills.
+#    §3 Session       — Choose session 1, 2, or 3.
+#                       The block order for that session is shown as pills.
 #
-#    §4 Timing        — Override the default timing for this session only.
-#                       Defaults come from config.py but can be adjusted here
-#                       without permanently changing the config file.
+#    §4 Timing        — Adjust timing for THIS session only.
+#                       Defaults come from config.py, but you can tweak
+#                       them here without permanently changing the file.
 #
-#    §5 Grid Condition — Choose the repeated:random ratio for this session.
-#                        Defaults come from PRACTICE_REPEATED_RATIO in config.py.
+#    §5 Grid Condition — Set the repeated:random puzzle ratio for this session.
+#                        Defaults come from config.py.
 #
-#    §6 Repeated Puzzle — Click two cells on the mini grid to set the shared
-#                         repeated puzzle (mouse start + cheese goal).
+#    §6 Repeated Puzzle — Click two cells on the mini grid to set the
+#                         shared repeated puzzle (start + goal positions).
 #                         Once set, it locks for ALL participants. Reset button
 #                         clears it and lets you choose a new one.
 #

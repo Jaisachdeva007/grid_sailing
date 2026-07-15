@@ -1,32 +1,31 @@
 # ============================================================
 #  GRID-SAILING TASK — Data Viewer
 #
-#  *** Juliet does NOT need to edit this file. ***
+#  You don't need to touch this file.
 #
-#  This is the participant progress dashboard, reached via
-#  "View Data" from the Researcher Home or Setup screens.
+#  This is the dashboard you get when you click "View Data."
+#  It has two views:
 #
-#  View A — Overview table (one row per participant):
-#    Shows participant ID, group, age, sessions completed,
-#    total trials, average score, and accuracy percentage.
-#    Click any row to see that participant's session breakdown
-#    in the side panel on the right.
-#    Click again (or press Enter) to drill into View B.
+#  View A — participant overview (the main table):
+#    One row per participant. Shows their ID, group, age, how many
+#    sessions they've done, total trials, average score, and accuracy.
+#    Click a row to see their session breakdown in the right panel.
+#    Click again (or press Enter) to zoom in to View B.
 #
-#  View B — Trial-by-trial breakdown (one row per trial):
-#    Shows every trial for one participant: session, block type,
-#    trial number, grid type, result, moves vs optimal, score,
-#    reaction time, and duration.
+#  View B — trial-by-trial breakdown for one participant:
+#    Shows every single trial they've done: which session, block type,
+#    trial number, grid type, whether they got it right, how many moves
+#    vs the optimal, their score, reaction time, and how long it took.
 #
-#  Bottom bar buttons (View A):
-#    < Back             — return to Researcher Home
-#    Export All         — save all participants to a CSV (per key press)
-#    Export Summary     — save all participants to a CSV (per trial)
-#    Export Reflections — save MI group 3E report cards to a CSV
-#    Sync All           — push all existing data to Firebase cloud backup
+#  Buttons across the bottom (in View A):
+#    < Back             — go back to the home screen
+#    Export All         — CSV with every key press from everyone
+#    Export Summary     — CSV with one row per trial (easier to use)
+#    Export Reflections — CSV with all the 3E reflection forms
+#    Sync All           — push everything to Firebase right now
 #
-#  The table refreshes automatically every 3 seconds so data
-#  collected in another session appears without restarting.
+#  The table auto-refreshes every 3 seconds, so if a session is
+#  running on another window, the numbers update without restarting.
 # ============================================================
 
 import pygame
