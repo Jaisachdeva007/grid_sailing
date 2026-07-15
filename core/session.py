@@ -455,6 +455,43 @@ def _card_screen(screen, clock, fonts, title, title_col, badge, lines,
     if hint_col is None:
         hint_col = ACCENT
 
+    # Card width — slightly wider than original to fit larger fonts
+    CW = min(W - 80, 660)
+    max_body_w = CW - 56
+
+    # Word-wrap body text so long lines never overflow the card
+    def _wrap(text):
+        if not text:
+            return [""]
+        words, out, cur = text.split(), [], ""
+        for w in words:
+            test = (cur + " " + w).strip()
+            if f_sm.size(test)[0] <= max_body_w:
+                cur = test
+            else:
+                if cur:
+                    out.append(cur)
+                cur = w
+        if cur:
+            out.append(cur)
+        return out or [""]
+
+    wrapped = []
+    for text, col in lines:
+        if text:
+            for sub in _wrap(text):
+                wrapped.append((sub, col))
+        else:
+            wrapped.append(("", col))
+
+    # Compute card height from actual font sizes
+    f_big_h = f_big.get_height()
+    f_sm_h  = f_sm.get_height()
+    f_xs_h  = f_xs.get_height()
+    line_h  = f_sm_h + 8
+    badge_h = (f_xs_h + 10 + 10) if badge else 0
+    CH = max(240, 16 + badge_h + f_big_h + 14 + 12 + len(wrapped) * line_h + f_sm_h + 24)
+
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -471,7 +508,6 @@ def _card_screen(screen, clock, fonts, title, title_col, badge, lines,
                 pygame.draw.circle(screen, (18, 18, 36), (gx, gy), 1)
 
         # Card
-        CW, CH = 560, max(220, 80 + len(lines) * 34 + 80)
         cx2 = CX - CW // 2
         cy2 = CY - CH // 2
         pygame.draw.rect(screen, (4, 4, 10),
@@ -481,34 +517,40 @@ def _card_screen(screen, clock, fonts, title, title_col, badge, lines,
         pygame.draw.rect(screen, title_col,
                          (cx2 + 1, cy2 + 1, CW - 2, 6), border_radius=20)
 
+        y = cy2 + 16
+
         # Badge pill
         if badge:
-            bs = f_xs.render(badge, True, title_col)
-            bw = bs.get_width() + 24
-            bx = CX - bw // 2
+            bs     = f_xs.render(badge, True, title_col)
+            bw     = bs.get_width() + 24
+            pill_h = f_xs_h + 10
+            bx     = CX - bw // 2
             pygame.draw.rect(screen, (20, 20, 40),
-                             (bx, cy2 + 20, bw, 26), border_radius=13)
+                             (bx, y, bw, pill_h), border_radius=pill_h // 2)
             pygame.draw.rect(screen, title_col,
-                             (bx, cy2 + 20, bw, 26), width=1, border_radius=13)
-            screen.blit(bs, (CX - bs.get_width() // 2, cy2 + 24))
+                             (bx, y, bw, pill_h), width=1, border_radius=pill_h // 2)
+            screen.blit(bs, (CX - bs.get_width() // 2, y + 5))
+            y += pill_h + 10
 
         # Title
         ts = f_big.render(title, True, WHITE)
-        screen.blit(ts, (CX - ts.get_width() // 2, cy2 + 58))
+        screen.blit(ts, (CX - ts.get_width() // 2, y))
+        y += f_big_h + 14
 
-        pygame.draw.line(screen, BORDER,
-                         (cx2 + 32, cy2 + 102), (cx2 + CW - 32, cy2 + 102))
+        # Divider
+        pygame.draw.line(screen, BORDER, (cx2 + 32, y), (cx2 + CW - 32, y))
+        y += 12
 
         # Body lines
-        ly = cy2 + 118
-        for line, col in lines:
-            ls = f_sm.render(line, True, col)
-            screen.blit(ls, (CX - ls.get_width() // 2, ly))
-            ly += 34
+        for text, col in wrapped:
+            if text:
+                ls = f_sm.render(text, True, col)
+                screen.blit(ls, (CX - ls.get_width() // 2, y))
+            y += line_h
 
-        # Hint
+        # Hint (anchored to card bottom)
         hs = f_sm.render(hint_text, True, hint_col)
-        screen.blit(hs, (CX - hs.get_width() // 2, cy2 + CH - 44))
+        screen.blit(hs, (CX - hs.get_width() // 2, cy2 + CH - f_sm_h - 16))
 
         # Footer
         ft = f_xs.render("Press  SPACE  to continue", True, (44, 44, 72))

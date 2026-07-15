@@ -401,9 +401,12 @@ def _stage_header(screen, fonts, tag, tag_col, title, subtitle):
     W, H = screen.get_width(), screen.get_height()
     GL, GT, GR, GRW, CELL = _layout(W, H)
     _pill(screen, f_xs, tag, BG, tag_col, GL, 12)
-    title_y = 12 + f_xs.get_height() + 8
-    _t(screen, f_med, title,    WHITE, GL, title_y)
-    _t(screen, f_xs,  subtitle, DIM,   GL, title_y + f_med.get_height() + 5)
+    title_y  = 12 + f_xs.get_height() + 8
+    _t(screen, f_med, title, WHITE, GL, title_y)
+    sub_y    = title_y + f_med.get_height() + 5
+    screen.set_clip(pygame.Rect(GL, sub_y, GR - GL - 8, f_xs.get_height() + 4))
+    _t(screen, f_xs, subtitle, DIM, GL, sub_y)
+    screen.set_clip(None)
 
 
 # ── On-screen click buttons ───────────────────────────────────
@@ -1012,9 +1015,9 @@ def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
     if show_timer:
         rem      = max(0, p_time - elapsed)
         tc       = WRONG if rem < 2 else (AMBER if rem < 4 else WHITE)
-        subtitle = "Plan the shortest route from MOUSE to CHEESE   ·   Grid hides when timer ends"
+        subtitle = "Plan the shortest route — grid hides when the timer ends"
     else:
-        subtitle = "Take your time — press  SPACE  when you're ready to enter your sequence"
+        subtitle = "Take your time — press  SPACE  when you're ready"
 
     _stage_header(screen, fonts,
                   "PLANNING", ACCENT,
@@ -1024,18 +1027,25 @@ def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
 
     rx, ry = GR, GT
 
-    _panel(screen, rx, ry, GRW, 100, BORDER)
+    f_big_h = f_big.get_height()
+    f_sm_h  = f_sm.get_height()
+    f_xs_h  = f_xs.get_height()
+
     if show_timer:
+        card_h = 12 + f_big_h + 8 + f_xs_h + 12
+        _panel(screen, rx, ry, GRW, card_h, BORDER)
         ts = f_big.render(f"{rem:.1f}s", True, tc)
         screen.blit(ts, (rx + GRW // 2 - ts.get_width() // 2, ry + 12))
         tl = f_xs.render("Time remaining", True, DIM)
-        screen.blit(tl, (rx + GRW // 2 - tl.get_width() // 2, ry + 72))
+        screen.blit(tl, (rx + GRW // 2 - tl.get_width() // 2, ry + 12 + f_big_h + 8))
     else:
+        card_h = 12 + f_sm_h + 8 + f_xs_h + 12
+        _panel(screen, rx, ry, GRW, card_h, BORDER)
         rs = f_sm.render("No time limit", True, ACCENT)
-        screen.blit(rs, (rx + GRW // 2 - rs.get_width() // 2, ry + 20))
+        screen.blit(rs, (rx + GRW // 2 - rs.get_width() // 2, ry + 12))
         hs = f_xs.render("Press  SPACE  when ready", True, DIM)
-        screen.blit(hs, (rx + GRW // 2 - hs.get_width() // 2, ry + 62))
-    ry += 116
+        screen.blit(hs, (rx + GRW // 2 - hs.get_width() // 2, ry + 12 + f_sm_h + 8))
+    ry += card_h + 16
 
     return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
                           cum_score=cum_score)
@@ -1070,21 +1080,24 @@ def _draw_stage_input(screen, fonts, trial, typed_seq, blink_on,
     rx, ry = GR, GT
 
     # ── Sequence display ──────────────────────────────────────
-    _panel(screen, rx, ry, GRW, 110, ACCENT)
+    seq_y  = 10 + f_xs.get_height() + 8
+    cnt_y  = seq_y + f_sm.get_height() + 8
+    card_h = cnt_y + f_xs.get_height() + 10
+    _panel(screen, rx, ry, GRW, card_h, ACCENT)
     _t(screen, f_xs, "Your sequence", DIM, rx + 14, ry + 10)
 
     seq_str = ", ".join(str(k) for k in typed_seq) if typed_seq else "—"
     seq_col = WHITE if typed_seq else DIM
     ss = f_sm.render(seq_str, True, seq_col)
-    screen.blit(ss, (rx + 14, ry + 36))
+    screen.blit(ss, (rx + 14, ry + seq_y))
 
     if blink_on and typed_seq:
         bx = rx + 14 + ss.get_width() + 5
-        pygame.draw.rect(screen, ACCENT, (bx, ry + 36, 2, ss.get_height()))
+        pygame.draw.rect(screen, ACCENT, (bx, ry + seq_y, 2, ss.get_height()))
 
     cnt = f_xs.render(f"{len(typed_seq)} key(s) entered", True, DIM)
-    screen.blit(cnt, (rx + 14, ry + 82))
-    ry += 120
+    screen.blit(cnt, (rx + 14, ry + cnt_y))
+    ry += card_h + 10
 
     # ── Direction buttons (1 / 2 / 3) ────────────────────────
     btn_w = (GRW - 24) // 3   # 3 buttons, 12px gaps
@@ -1184,11 +1197,13 @@ def _draw_stage_action(screen, fonts, trial, cursor, trail,
 
         rx, ry = GR, GT
         seq_str = ", ".join(str(k) for k in trial.planned_sequence)
-        _panel(screen, rx, ry, GRW, 80, ACCENT)
+        seq_y  = 10 + f_xs.get_height() + 8
+        card_h = seq_y + f_sm.get_height() + 10
+        _panel(screen, rx, ry, GRW, card_h, ACCENT)
         _t(screen, f_xs, "Your planned sequence", DIM, rx + 14, ry + 10)
         ss = f_sm.render(seq_str, True, WHITE)
-        screen.blit(ss, (rx + 14, ry + 34))
-        ry += 92
+        screen.blit(ss, (rx + 14, ry + seq_y))
+        ry += card_h + 12
 
         if pp_anim_done:
             if show_score:

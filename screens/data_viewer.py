@@ -130,12 +130,13 @@ def _stat_card(screen, fonts, x, y, w, h, label, value, sub, col):
     _panel(screen, x, y, w, h, border_col=BORDER, r=14, fill=PANEL)
     pygame.draw.rect(screen, col, (x + 1, y + 1, w - 2, 4), border_radius=14)   # top bar
     lbl_s = f_xs.render(label.upper(), True, DIM)
-    screen.blit(lbl_s, (x + 18, y + 14))
+    screen.blit(lbl_s, (x + 18, y + 12))
+    val_y = y + 12 + f_xs.get_height() + 6
     val_s = f_big.render(value, True, col)
-    screen.blit(val_s, (x + 18, y + 34))
+    screen.blit(val_s, (x + 18, val_y))
     if sub:
         sub_s = f_xs.render(sub, True, DIM2)
-        screen.blit(sub_s, (x + 18, y + h - 20))
+        screen.blit(sub_s, (x + 18, val_y + f_big.get_height() + 6))
 
 
 def _ghost_btn(screen, fonts, label, rect):
@@ -253,9 +254,9 @@ def _cols_b(tw):
 def _view_a(screen, clock, fonts, on_select):
     f_big, f_med, f_sm, f_xs = fonts
 
-    CARD_H   = 104
+    CARD_H   = max(104, 12 + f_xs.get_height() + 6 + f_big.get_height() + 6 + f_xs.get_height() + 10)
     CARDS_Y  = 80
-    TABLE_Y  = CARDS_Y + CARD_H + 16          # 200
+    TABLE_Y  = CARDS_Y + CARD_H + 16
     SIDE_W   = 304
     GAP      = 24
     TABLE_W  = W - PAD * 2 - SIDE_W - GAP
@@ -559,9 +560,9 @@ def _view_b(screen, clock, fonts, pid):
     scroll   = 0
     msg = ""; msg_col = GREEN
 
-    STATS_H  = 104
+    STATS_H  = max(104, 12 + f_xs.get_height() + 6 + f_big.get_height() + 10)
     STATS_Y  = 80
-    HDR_Y    = STATS_Y + STATS_H + 14          # 198
+    HDR_Y    = STATS_Y + STATS_H + 14
     HDR_H    = 40
     CLIP_TOP = HDR_Y + HDR_H                   # 238
     CLIP_BOT = H - 96
