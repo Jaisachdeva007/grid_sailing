@@ -486,9 +486,22 @@ def _side_panel(screen, clock, fonts, session_state, bg_snap):
                     scroll_y = max(0, scroll_y - ROW_H)
 
             if ev.type == pygame.MOUSEWHEEL:
-                scroll_y = max(0, min(max_scroll, scroll_y - ev.y * ROW_H))
+                # precise_y handles macOS trackpad smooth scroll (fractional values);
+                # ev.y is an integer and rounds to 0 for small trackpad gestures.
+                dy = getattr(ev, 'precise_y', None)
+                if dy is None or (dy == 0 and ev.y != 0):
+                    dy = float(ev.y)
+                scroll_y = max(0, min(max_scroll, scroll_y - int(dy * ROW_H // 2)))
 
             if ev.type == pygame.MOUSEBUTTONDOWN:
+                # Button 4/5 = legacy scroll-wheel events (trackpad fallback)
+                if ev.button == 4:
+                    scroll_y = max(0, scroll_y - ROW_H)
+                    continue
+                if ev.button == 5:
+                    scroll_y = min(max_scroll, scroll_y + ROW_H)
+                    continue
+
                 mx, my = ev.pos
 
                 # Footer buttons

@@ -462,48 +462,66 @@ def _draw_pause_overlay(screen, fonts, trial, total, block_type, sn):
     dim.fill((0, 0, 0, 160))
     screen.blit(dim, (0, 0))
 
-    card_w, card_h = 380, 260
+    info_text = (f"Trial {trial.trial_number} of {total}  ·  "
+                 f"{block_type.replace('_',' ').title()}  ·  Session {sn}")
+    info_s  = f_xs.render(info_text, True, DIM)
+    warn_s  = f_xs.render("Progress up to this trial is already saved.", True, DIM)
+    hint_s  = f_xs.render("P or ESC to resume", True, DIM)
+
+    f_big_h = f_big.get_height()
+    f_sm_h  = f_sm.get_height()
+    f_xs_h  = f_xs.get_height()
+    btn_h   = max(46, f_sm_h + 16)
+
+    # Card wide enough for the widest text line
+    card_w = max(btn_h * 2 + btn_h, info_s.get_width() + 56,
+                 warn_s.get_width() + 56)
+    card_h = 18 + f_big_h + 10 + f_xs_h + 14 + btn_h + 12 + f_xs_h + 8 + f_xs_h + 14
     card_x = cx - card_w // 2
     card_y = cy - card_h // 2
+
     pygame.draw.rect(screen, (22, 22, 40), (card_x, card_y, card_w, card_h), border_radius=16)
     pygame.draw.rect(screen, BORDER,       (card_x, card_y, card_w, card_h), width=1, border_radius=16)
 
+    y = card_y + 18
+
     ts = f_big.render("Paused", True, WHITE)
-    screen.blit(ts, (cx - ts.get_width() // 2, card_y + 22))
+    screen.blit(ts, (cx - ts.get_width() // 2, y))
+    y += f_big_h + 10
 
-    info = f_xs.render(
-        f"Trial {trial.trial_number} of {total}  ·  "
-        f"{block_type.replace('_',' ').title()}  ·  Session {sn}",
-        True, DIM)
-    screen.blit(info, (cx - info.get_width() // 2, card_y + 66))
+    screen.blit(info_s, (cx - info_s.get_width() // 2, y))
+    y += f_xs_h + 10
 
-    pygame.draw.line(screen, BORDER,
-                     (card_x + 24, card_y + 92), (card_x + card_w - 24, card_y + 92))
+    pygame.draw.line(screen, BORDER, (card_x + 24, y), (card_x + card_w - 24, y))
+    y += 14
 
-    resume_r = pygame.Rect(cx - 160, card_y + 110, 148, 46)
+    btn_w    = 148
+    btn_gap  = 16
+    resume_r = pygame.Rect(cx - btn_w - btn_gap // 2, y, btn_w, btn_h)
+    exit_r   = pygame.Rect(cx + btn_gap // 2,         y, btn_w, btn_h)
+
     mouse = pygame.mouse.get_pos()
     rc = tuple(min(255, c + 20) for c in CORRECT) if resume_r.collidepoint(mouse) else CORRECT
     pygame.draw.rect(screen, (8, 8, 16),
                      (resume_r.x + 2, resume_r.y + 3, resume_r.w, resume_r.h), border_radius=10)
     pygame.draw.rect(screen, rc, resume_r, border_radius=10)
     rl = f_sm.render("Resume", True, (10, 10, 20))
-    screen.blit(rl, (resume_r.x + resume_r.w // 2 - rl.get_width() // 2,
-                     resume_r.y + resume_r.h // 2 - rl.get_height() // 2))
+    screen.blit(rl, (resume_r.centerx - rl.get_width() // 2,
+                     resume_r.centery - rl.get_height() // 2))
 
-    exit_r = pygame.Rect(cx + 12, card_y + 110, 148, 46)
     DANGER = (180, 50, 50)
     ec = tuple(min(255, c + 20) for c in DANGER) if exit_r.collidepoint(mouse) else DANGER
     pygame.draw.rect(screen, (8, 8, 16),
                      (exit_r.x + 2, exit_r.y + 3, exit_r.w, exit_r.h), border_radius=10)
     pygame.draw.rect(screen, ec, exit_r, border_radius=10)
     el = f_sm.render("Save & Exit", True, WHITE)
-    screen.blit(el, (exit_r.x + exit_r.w // 2 - el.get_width() // 2,
-                     exit_r.y + exit_r.h // 2 - el.get_height() // 2))
+    screen.blit(el, (exit_r.centerx - el.get_width() // 2,
+                     exit_r.centery - el.get_height() // 2))
 
-    hint = f_xs.render("P or ESC to resume", True, DIM)
-    screen.blit(hint, (cx - hint.get_width() // 2, card_y + 178))
-    warning = f_xs.render("Progress up to this trial is already saved.", True, DIM)
-    screen.blit(warning, (cx - warning.get_width() // 2, card_y + 210))
+    y += btn_h + 12
+    screen.blit(hint_s, (cx - hint_s.get_width() // 2, y))
+    y += f_xs_h + 8
+    screen.blit(warn_s, (cx - warn_s.get_width() // 2, y))
 
     return resume_r, exit_r
 
