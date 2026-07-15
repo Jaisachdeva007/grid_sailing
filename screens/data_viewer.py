@@ -207,15 +207,17 @@ def _bottom_bar(screen):
 
 # ── Column builders ───────────────────────────────────────────
 
-def _cols_a(table_w):
+def _cols_a(table_w, f_xs=None):
     """View A column definitions. Last column fills the remainder."""
+    def _w(lbl, base):
+        return max(base, f_xs.size(lbl)[0] + 28) if f_xs else base
     fixed = [
-        (164, "PARTICIPANT"),
-        (148, "GROUP"),
-        (68,  "AGE"),
-        (96,  "SESSIONS"),
-        (88,  "TRIALS"),
-        (106, "AVG SCORE"),
+        (_w("PARTICIPANT", 164), "PARTICIPANT"),
+        (_w("GROUP",       148), "GROUP"),
+        (_w("AGE",          68), "AGE"),
+        (_w("SESSIONS",     96), "SESSIONS"),
+        (_w("TRIALS",       88), "TRIALS"),
+        (_w("AVG SCORE",   106), "AVG SCORE"),
     ]
     used = sum(w for w, _ in fixed)
     cols, x = [], 0
@@ -266,7 +268,7 @@ def _view_a(screen, clock, fonts, on_select):
     CLIP_BOT = H - 96
     VIS      = max(1, (CLIP_BOT - CLIP_TOP) // ROW_H)
 
-    COLS = _cols_a(TABLE_W)
+    COLS = _cols_a(TABLE_W, f_xs)
 
     stats        = []
     sessions     = []
@@ -485,43 +487,54 @@ def _view_a(screen, clock, fonts, on_select):
                          border_radius=12)
 
         if stats:
-            pid  = stats[sel]["participant_id"]
-            grp  = stats[sel]["group_name"]
-            gcol = GROUP_COLORS.get(grp, DIM)
-            _t(screen, f_sm, pid, WHITE, SIDE_X + 16, TABLE_Y + 14)
-            _pill(screen, f_xs, grp, (8, 8, 16), gcol, SIDE_X + 16, TABLE_Y + 44)
-            pygame.draw.line(screen, BORDER,
-                             (SIDE_X + 12, TABLE_Y + 74),
-                             (SIDE_X + SIDE_W - 12, TABLE_Y + 74))
-            hdr_s = f_xs.render("SESSIONS", True, DIM)
-            screen.blit(hdr_s, (SIDE_X + 16, TABLE_Y + 82))
+            pid    = stats[sel]["participant_id"]
+            grp    = stats[sel]["group_name"]
+            gcol   = GROUP_COLORS.get(grp, DIM)
+            f_sm_h = f_sm.get_height()
+            f_xs_h = f_xs.get_height()
+            pill_h = f_xs_h + 6
 
-            ry2 = TABLE_Y + 108
+            sy = TABLE_Y + 14
+            _t(screen, f_sm, pid, WHITE, SIDE_X + 16, sy)
+            sy += f_sm_h + 8
+            _pill(screen, f_xs, grp, (8, 8, 16), gcol, SIDE_X + 16, sy)
+            sy += pill_h + 10
+            pygame.draw.line(screen, BORDER,
+                             (SIDE_X + 12, sy), (SIDE_X + SIDE_W - 12, sy))
+            sy += 8
+            hdr_s = f_xs.render("SESSIONS", True, DIM)
+            screen.blit(hdr_s, (SIDE_X + 16, sy))
+            ry2 = sy + f_xs_h + 10
+
+            card_h_sess = max(60, f_sm_h + f_xs_h + 34)
             for s in sessions:
-                if ry2 + 66 > TABLE_Y + ph - 10:
+                if ry2 + card_h_sess > TABLE_Y + ph - 10:
                     break
                 done = bool(s["completed"])
                 bc   = GREEN if done else BORDER
-                _shadow(screen, SIDE_X + 10, ry2, SIDE_W - 20, 60, r=10)
+                _shadow(screen, SIDE_X + 10, ry2, SIDE_W - 20, card_h_sess, r=10)
                 pygame.draw.rect(screen, PANEL2,
-                                 (SIDE_X + 10, ry2, SIDE_W - 20, 60), border_radius=10)
+                                 (SIDE_X + 10, ry2, SIDE_W - 20, card_h_sess), border_radius=10)
                 pygame.draw.rect(screen, bc,
-                                 (SIDE_X + 10, ry2, SIDE_W - 20, 60), width=1,
+                                 (SIDE_X + 10, ry2, SIDE_W - 20, card_h_sess), width=1,
                                  border_radius=10)
                 if done:
                     pygame.draw.rect(screen, GREEN,
-                                     (SIDE_X + 10, ry2, 3, 60), border_radius=3)
+                                     (SIDE_X + 10, ry2, 3, card_h_sess), border_radius=3)
                 lbl2 = (f"S{s['session_number']}  "
                         f"{s['block_type'].replace('_', ' ').title()}")
+                ty = ry2 + 10
                 _t(screen, f_sm, lbl2,
-                   WHITE if done else DIM, SIDE_X + 20, ry2 + 8)
+                   WHITE if done else DIM, SIDE_X + 20, ty)
+                stats_y = ty + f_sm_h + 6
                 _t(screen, f_xs,
                    f"Trials: {int(s['trials'])}    Acc: {s['accuracy_pct']:.0f}%",
-                   DIM, SIDE_X + 20, ry2 + 32)
-                _bar(screen, SIDE_X + 20, ry2 + 50, SIDE_W - 40, 4,
+                   DIM, SIDE_X + 20, stats_y)
+                bar_y = stats_y + f_xs_h + 4
+                _bar(screen, SIDE_X + 20, bar_y, SIDE_W - 40, 4,
                      s["accuracy_pct"] / 100.0,
                      GREEN if s["accuracy_pct"] >= 70 else ORANGE)
-                ry2 += 68
+                ry2 += card_h_sess + 8
 
             if not sessions:
                 _t(screen, f_xs, "No sessions yet.", DIM, SIDE_X + 16, TABLE_Y + 110)
