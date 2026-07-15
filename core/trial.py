@@ -1005,10 +1005,6 @@ def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
         screen.blit(hs, (rx + GRW // 2 - hs.get_width() // 2, ry + 62))
     ry += 116
 
-    if block_type != "familiarization":
-        badge_col = ACCENT if trial.grid_type == "repeated" else AMBER
-        _pill(screen, f_xs, f"  {trial.grid_type.upper()}  ", BG, badge_col, rx, ry)
-
     return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
                           cum_score=cum_score)
 
@@ -1104,13 +1100,9 @@ def _draw_stage_countdown(screen, fonts, trial, countdown_start,
     ns = _COUNTDOWN_FONT.render(str(cd_num), True, WHITE)
     screen.blit(ns, (cx - ns.get_width() // 2, cy - ns.get_height() // 2 - 30))
 
-    # Labels
-    ready_s = f_med.render("Get ready to execute", True, DIM)
-    screen.blit(ready_s, (cx - ready_s.get_width() // 2, cy + 80))
-
     seq_str = "   →   ".join(str(k) for k in trial.planned_sequence)
     seq_s   = f_sm.render(f"Sequence:  {seq_str}", True, ACCENT)
-    screen.blit(seq_s, (cx - seq_s.get_width() // 2, cy + 118))
+    screen.blit(seq_s, (cx - seq_s.get_width() // 2, cy + 80))
 
     return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
                           cum_score=cum_score)

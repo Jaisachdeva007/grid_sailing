@@ -57,10 +57,10 @@ def main():
     # on the ASUS (1080p) and any other display we use.
     _fs = max(0.80, min(1.40, native_h / 900))   # 1.0 = baseline at 900px height
     fonts = (
-        pygame.font.SysFont("Helvetica Neue", int(40 * _fs), bold=True),  # f_big  — large headings
-        pygame.font.SysFont("Helvetica Neue", int(26 * _fs), bold=True),  # f_med  — medium labels
-        pygame.font.SysFont("Helvetica Neue", int(20 * _fs)),              # f_sm   — body text
-        pygame.font.SysFont("Helvetica Neue", int(16 * _fs)),              # f_xs   — small captions
+        pygame.font.SysFont("Helvetica Neue", int(52 * _fs), bold=True),  # f_big  — large headings
+        pygame.font.SysFont("Helvetica Neue", int(34 * _fs), bold=True),  # f_med  — medium labels
+        pygame.font.SysFont("Helvetica Neue", int(26 * _fs)),              # f_sm   — body text
+        pygame.font.SysFont("Helvetica Neue", int(20 * _fs)),              # f_xs   — small captions
     )
 
     # ── Step 1: Welcome screen ────────────────────────────────
