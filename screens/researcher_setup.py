@@ -497,14 +497,16 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
     f_sec   = pygame.font.SysFont("Helvetica Neue", int(16 * _fs), bold=True)
     f_med   = pygame.font.SysFont("Helvetica Neue", int(21 * _fs), bold=True)
     f_sm    = pygame.font.SysFont("Helvetica Neue", int(19 * _fs))
-    f_xs    = pygame.font.SysFont("Helvetica Neue", int(16 * _fs))
+    f_xs      = pygame.font.SysFont("Helvetica Neue", int(16 * _fs))
+    f_cell_lbl = pygame.font.SysFont("Helvetica Neue", max(8, int(10 * _fs)))
     # Fallback
     if not f_title.get_height():
-        f_title = pygame.font.SysFont("Arial", int(38 * _fs), bold=True)
-        f_sec   = pygame.font.SysFont("Arial", int(16 * _fs), bold=True)
-        f_med   = pygame.font.SysFont("Arial", int(21 * _fs), bold=True)
-        f_sm    = pygame.font.SysFont("Arial", int(19 * _fs))
-        f_xs    = pygame.font.SysFont("Arial", int(16 * _fs))
+        f_title    = pygame.font.SysFont("Arial", int(38 * _fs), bold=True)
+        f_sec      = pygame.font.SysFont("Arial", int(16 * _fs), bold=True)
+        f_med      = pygame.font.SysFont("Arial", int(21 * _fs), bold=True)
+        f_sm       = pygame.font.SysFont("Arial", int(19 * _fs))
+        f_xs       = pygame.font.SysFont("Arial", int(16 * _fs))
+        f_cell_lbl = pygame.font.SysFont("Arial", max(8, int(10 * _fs)))
 
     fonts = (f_med, f_med, f_sm, f_xs)
 
@@ -865,7 +867,8 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
 
                 pygame.draw.rect(screen, bg,     cr, border_radius=6)
                 pygame.draw.rect(screen, BORDER, cr, width=1, border_radius=6)
-                lbl = f_xs.render(cell_label, True, tc2)
+                _lf  = f_cell_lbl if cell_label in ("MOUSE", "CHEESE") else f_xs
+                lbl  = _lf.render(cell_label, True, tc2)
                 screen.blit(lbl, (cr.x + cr.w // 2 - lbl.get_width() // 2,
                                   cr.y + cr.h // 2 - lbl.get_height() // 2))
 

@@ -428,6 +428,8 @@ def _side_panel(screen, clock, fonts, session_state, bg_snap):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
 
+    HDR_H = max(116, 14 + f_med.get_height() + 8 + f_xs.get_height() + 12 + f_xs.get_height() + 10)
+
     trials     = session_state["trials"]
     block_type = session_state["block_type"]
     block_num  = session_state["block_number"]

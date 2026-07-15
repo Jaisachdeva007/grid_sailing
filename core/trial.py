@@ -142,7 +142,8 @@ PROG_H = 36   # progress bar height — referenced inside _layout
 
 def _layout(W, H):
     """Compute grid + right-panel geometry scaled to the actual screen size."""
-    HDR    = 96                             # header band height
+    _fs    = max(0.80, min(1.40, H / 900))
+    HDR    = max(96, int(33 + 96 * _fs))   # fits pill + f_med title + f_xs subtitle at this _fs
     RPANEL = max(360, min(520, W // 4))     # right panel: 360–520 px
     GAP    = max(32, min(56, W // 36))      # grid↔panel gap
     avail_h = H - HDR - PROG_H - 8

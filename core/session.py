@@ -349,14 +349,19 @@ def _show_saved_exit(screen, clock, fonts):
 
         screen.fill((12, 12, 22))
 
+        f_big_h = f_big.get_height()
+        f_sm_h  = f_sm.get_height()
+        f_xs_h  = f_xs.get_height()
+        start_y = cy - (f_big_h + 14 + f_sm_h + 10 + f_xs_h) // 2
+
         ts = f_big.render("Progress Saved", True, (58, 196, 108))
-        screen.blit(ts, (cx - ts.get_width() // 2, cy - 60))
+        screen.blit(ts, (cx - ts.get_width() // 2, start_y))
 
         ms = f_sm.render("All completed trials have been recorded.", True, (100, 100, 138))
-        screen.blit(ms, (cx - ms.get_width() // 2, cy - 10))
+        screen.blit(ms, (cx - ms.get_width() // 2, start_y + f_big_h + 14))
 
         hs = f_xs.render("Returning to the start screen...", True, (60, 60, 90))
-        screen.blit(hs, (cx - hs.get_width() // 2, cy + 40))
+        screen.blit(hs, (cx - hs.get_width() // 2, start_y + f_big_h + 14 + f_sm_h + 10))
 
         pygame.display.flip()
 
