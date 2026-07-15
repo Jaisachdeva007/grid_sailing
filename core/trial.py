@@ -215,11 +215,21 @@ def _draw_progress(screen, fonts, trial, total, block_type, session_num,
     screen.blit(pl, (pause_rect.x + pause_rect.w // 2 - pl.get_width() // 2,
                      pause_rect.y + pause_rect.h // 2 - pl.get_height() // 2))
 
+    RES_BTN_W = 78
+    res_x  = pause_x - RES_BTN_W - 6
+    res_y  = pause_y
+    res_r  = pygame.Rect(res_x, res_y, RES_BTN_W, PAUSE_BTN_H)
+    pygame.draw.rect(screen, (28, 28, 48), res_r, border_radius=6)
+    pygame.draw.rect(screen, BORDER,       res_r, width=1, border_radius=6)
+    rl = f_xs.render("Researcher", True, DIM)
+    screen.blit(rl, (res_r.x + res_r.w // 2 - rl.get_width() // 2,
+                     res_r.y + res_r.h // 2 - rl.get_height() // 2))
+
     ss = f_xs.render(f"Session {session_num}", True, DIM)
-    screen.blit(ss, (pause_x - ss.get_width() - 18,
+    screen.blit(ss, (res_x - ss.get_width() - 18,
                      y + PROG_H // 2 - ss.get_height() // 2))
 
-    return pause_rect
+    return pause_rect, res_r
 
 
 def _draw_mouse_icon(surf, cx, cy):
@@ -501,7 +511,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
               cumulative_score: int, session_id: int,
               total_trials: int = 20, block_type: str = "practice",
               streak: int = 0, show_timer: bool = True,
-              show_score: bool = True) -> dict:
+              show_score: bool = True,
+              session_state: dict = None) -> dict:
 
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
@@ -524,6 +535,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
     blink_on        = True
     blink_t         = pygame.time.get_ticks()
     pause_rect      = None
+    researcher_rect = None
     btns            = {}   # on-screen button rects; populated each draw frame
 
     particles         = []
@@ -634,6 +646,21 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
             if ev.type == pygame.MOUSEBUTTONDOWN and state != PAUSED:
                 if pause_rect and pause_rect.collidepoint(ev.pos):
                     pre_pause_state = state; state = PAUSED
+
+                elif (researcher_rect and researcher_rect.collidepoint(ev.pos)
+                      and session_state is not None):
+                    from screens.researcher_panel import run_researcher_access
+                    mi_space_held = False   # clear any in-progress imagery hold
+                    action, target = run_researcher_access(screen, clock, fonts, session_state)
+                    if action == "jump":
+                        return {"researcher_jump": target, "reward_score": 0,
+                                "is_correct": False, "cumulative_score": cumulative_score,
+                                "trial_id": None}
+                    elif action == "exit":
+                        return {"paused_exit": True, "reward_score": 0,
+                                "is_correct": False, "cumulative_score": cumulative_score,
+                                "trial_id": None}
+                    # action == "resume": fall through, trial continues
 
                 elif state == INPUT and ev.button == 1:
                     p = ev.pos
@@ -749,28 +776,31 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
         draw_state = pre_pause_state if state == PAUSED else state
 
         if draw_state == PLANNING:
-            pause_rect = _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
-                                              total_trials, block_type, sn,
-                                              cum_score=cumulative_score,
-                                              show_timer=show_timer)
+            pause_rect, researcher_rect = _draw_stage_planning(
+                screen, fonts, trial, elapsed, p_time,
+                total_trials, block_type, sn,
+                cum_score=cumulative_score, show_timer=show_timer)
         elif draw_state == INPUT:
-            pause_rect = _draw_stage_input(screen, fonts, trial, typed_seq, blink_on,
-                                           total_trials, block_type, sn, btns,
-                                           cum_score=cumulative_score)
+            pause_rect, researcher_rect = _draw_stage_input(
+                screen, fonts, trial, typed_seq, blink_on,
+                total_trials, block_type, sn, btns,
+                cum_score=cumulative_score)
         elif draw_state == COUNTDOWN:
-            pause_rect = _draw_stage_countdown(screen, fonts, trial, countdown_start,
-                                               total_trials, block_type, sn,
-                                               cum_score=cumulative_score)
+            pause_rect, researcher_rect = _draw_stage_countdown(
+                screen, fonts, trial, countdown_start,
+                total_trials, block_type, sn,
+                cum_score=cumulative_score)
         elif draw_state == ACTION:
-            pause_rect = _draw_stage_action(screen, fonts, trial, cursor, trail,
-                                            typed_seq, is_mi, is_pp, sbar_down_t,
-                                            total_trials, block_type, sn,
-                                            a_time, action_start, btns,
-                                            mi_space_held=mi_space_held,
-                                            mi_space_start=mi_space_start,
-                                            pp_anim_done=pp_anim_done,
-                                            cum_score=cumulative_score,
-                                            show_score=show_score)
+            pause_rect, researcher_rect = _draw_stage_action(
+                screen, fonts, trial, cursor, trail,
+                typed_seq, is_mi, is_pp, sbar_down_t,
+                total_trials, block_type, sn,
+                a_time, action_start, btns,
+                mi_space_held=mi_space_held,
+                mi_space_start=mi_space_start,
+                pp_anim_done=pp_anim_done,
+                cum_score=cumulative_score,
+                show_score=show_score)
         elif draw_state == FEEDBACK:
             if not particles_spawned:
                 _GL, _GT, _GR, _GRW, _CELL = _layout(W, H)
@@ -781,16 +811,18 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     particles = _spawn_particles(
                         _pcx, _pcy, trial.reward_score == OPTIMAL_SCORE)
                 particles_spawned = True
-            pause_rect = _draw_stage_feedback(screen, fonts, trial, cumulative_score,
-                                              rp_cursor, rp_trail, rp_done,
-                                              total_trials, block_type, sn,
-                                              streak=streak)
+            pause_rect, researcher_rect = _draw_stage_feedback(
+                screen, fonts, trial, cumulative_score,
+                rp_cursor, rp_trail, rp_done,
+                total_trials, block_type, sn,
+                streak=streak)
             if particles:
                 _update_draw_particles(screen, particles, dt)
         elif draw_state == ITI:
-            pause_rect = _draw_stage_iti(screen, fonts, trial, iti_start, iti_dur,
-                                         total_trials, block_type, sn,
-                                         cum_score=cumulative_score + trial.reward_score)
+            pause_rect, researcher_rect = _draw_stage_iti(
+                screen, fonts, trial, iti_start, iti_dur,
+                total_trials, block_type, sn,
+                cum_score=cumulative_score + trial.reward_score)
 
         if state == PAUSED:
             _draw_pause_overlay(screen, fonts, trial, total_trials, block_type, sn)

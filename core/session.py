@@ -206,8 +206,8 @@ def run_block(screen, clock, fonts, block_type, block_number,
     _show_block_intro(screen, clock, fonts, block_type, block_number,
                       session_number, group, config)
 
-    streak         = 0
-    last_sync_time = _time.time()
+    streak          = 0
+    last_sync_time  = _time.time()
     last_sync_trial = resume_from_trial
 
     # Fam block 1 has no planning timer (still recorded, just not shown).
@@ -216,10 +216,36 @@ def run_block(screen, clock, fonts, block_type, block_number,
     show_timer = not (block_type == "familiarization" and block_number == 1)
     show_score = block_type not in ("familiarization", "pre_test", "post_test")
 
-    for i, (puzzle, grid_type) in enumerate(trials_list):
+    # Session state passed to the researcher panel so it can show trial status live.
+    session_state = {
+        "trials": [
+            {
+                "trial_number": idx + 1,
+                "grid_type":    gt,
+                "status":       "done" if (idx + 1) <= resume_from_trial else "pending",
+                "result":       None,
+            }
+            for idx, (_, gt) in enumerate(trials_list)
+        ],
+        "block_type":     block_type,
+        "block_number":   block_number,
+        "session_number": session_number,
+        "participant_id": participant_id,
+        "group":          group,
+    }
+    completed_in_session = set()   # trial numbers saved to DB this run
+
+    i = 0
+    while i < len(trials_list):
         trial_number = i + 1
-        if trial_number <= resume_from_trial:
-            continue   # skip already-completed trials
+
+        # Skip trials already completed (from a prior crash/resume or a same-session jump)
+        if trial_number <= resume_from_trial or trial_number in completed_in_session:
+            i += 1
+            continue
+
+        puzzle, grid_type = trials_list[i]
+        session_state["trials"][i]["status"] = "current"
 
         trial = TrialData(
             session_id            = session_id,
@@ -241,12 +267,38 @@ def run_block(screen, clock, fonts, block_type, block_number,
             streak=streak,
             show_timer=show_timer,
             show_score=show_score,
+            session_state=session_state,
         )
 
         if result.get("paused_exit"):
             sync_in_background(session_id, trial_number - 1)
             _show_saved_exit(screen, clock, fonts)
             return "exited"
+
+        # Researcher jumped to a different trial — abandon current, skip in-between.
+        if "researcher_jump" in result:
+            target = result["researcher_jump"]
+            session_state["trials"][i]["status"] = "skipped"
+            for skip_i in range(i + 1, target - 1):
+                if skip_i < len(trials_list):
+                    session_state["trials"][skip_i]["status"] = "skipped"
+            i = target - 1   # jump; continue skips i += 1
+            continue
+
+        completed_in_session.add(trial_number)
+        session_state["trials"][i]["status"] = "done"
+        session_state["trials"][i]["result"] = {
+            "reward_score":     trial.reward_score,
+            "is_correct":       trial.is_correct,
+            "cumulative_score": result["cumulative_score"],
+            "start":            trial.start,
+            "goal":             trial.goal,
+            "planned_sequence": list(trial.planned_sequence),
+            "optimal_sequence": list(trial.optimal_sequence),
+            "number_of_moves":  trial.number_of_moves,
+            "reaction_time_ms": trial.reaction_time_ms,
+            "movement_time_ms": trial.movement_time_ms,
+        }
 
         cumulative_score = result["cumulative_score"]
         streak           = result.get("streak", 0)
@@ -258,6 +310,8 @@ def run_block(screen, clock, fonts, block_type, block_number,
             sync_in_background(session_id, trial_number)
             last_sync_time  = _time.time()
             last_sync_trial = trial_number
+
+        i += 1
 
     complete_session(session_id)
     sync_in_background(session_id, n_trials)   # final sync on block complete
