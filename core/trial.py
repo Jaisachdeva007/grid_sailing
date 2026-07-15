@@ -1,33 +1,34 @@
 # ============================================================
-#  GRID-SAILING TASK — Trial State Machine
+#  GRID-SAILING TASK — Trial Engine
 #
-#  *** Juliet does NOT need to edit this file. ***
+#  You don't need to touch this file.
 #
-#  This file runs a single trial from start to finish.
-#  Each trial passes through these stages in order:
+#  This file runs one trial from start to finish. Every time a
+#  participant presses keys on the keypad, this is what's running.
+#  Trials go through these stages in order:
 #
-#    PLANNING   — Grid is shown with mouse (start) and cheese (goal).
-#                 Participant studies the grid. Countdown timer runs.
-#                 Duration: PLANNING_TIME_SEC (set in config.py)
+#    PLANNING   — The grid appears with the start + goal positions.
+#                 Participant studies it. Timer counts down.
+#                 Duration set by PLANNING_TIME_SEC in config.py
 #
-#    INPUT      — Participant types their key sequence (1, 2, 3).
-#                 They can see the cursor move on the grid.
-#                 Pressing SPACE confirms; timer runs out if they don't.
-#                 Duration: INPUT_TIME_SEC (set in config.py)
+#    INPUT      — Participant types their sequence (keys 1, 2, 3).
+#                 They can watch the cursor move as they type.
+#                 SPACE confirms early; timer runs out otherwise.
+#                 Duration set by INPUT_TIME_SEC in config.py
 #
-#    COUNTDOWN  — 3-2-1 visual countdown before the action phase.
+#    COUNTDOWN  — A quick 3-2-1 visual before the action phase.
 #
-#    ACTION     — MI groups: imagine the movement (grid hidden).
-#                 PP groups: physically execute the sequence (grid hidden).
-#                 CTRL groups: wait (no movement required).
-#                 Duration: ACTION_TIME_SEC (set in config.py)
+#    ACTION     — MI groups:   imagine doing the movement (grid hidden).
+#                 PP groups:   physically press the keys again (grid hidden).
+#                 CTRL groups: just wait, nothing required.
+#                 Duration set by ACTION_TIME_SEC in config.py
 #
-#    FEEDBACK   — Shows CORRECT / MISSED, score breakdown, and an animated
-#                 replay of the cursor path on the grid.
-#                 Duration: FEEDBACK_TIME_SEC (set in config.py)
+#    FEEDBACK   — Shows CORRECT / MISSED, the score breakdown, and a
+#                 slow-motion replay of their cursor path on the grid.
+#                 Duration set by FEEDBACK_TIME_SEC in config.py
 #
-#    ITI        — Brief "Get Ready" pause before the next trial.
-#                 Duration: INTERTRIAL_SEC (set in config.py)
+#    ITI        — "Get Ready" pause before the next trial starts.
+#                 Duration set by INTERTRIAL_SEC in config.py
 #
 #    DONE       — Trial is complete; control returns to session manager.
 #
@@ -499,7 +500,8 @@ def _draw_pause_overlay(screen, fonts, trial, total, block_type, sn):
 def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
               cumulative_score: int, session_id: int,
               total_trials: int = 20, block_type: str = "practice",
-              streak: int = 0) -> dict:
+              streak: int = 0, show_timer: bool = True,
+              show_score: bool = True) -> dict:
 
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
@@ -600,6 +602,11 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                 elif state not in (DONE,):
                     pre_pause_state = state; state = PAUSED
 
+            # Fam block 1 (no timer): SPACE manually advances PLANNING → INPUT
+            if state == PLANNING and not show_timer:
+                if ev.type == pygame.KEYDOWN and ev.key == pygame.K_SPACE:
+                    state = INPUT; typed_seq = []; first_key_time = None
+
             # MI imagery: hold SPACE → release to record duration and advance
             if state == ACTION and is_mi:
                 if ev.type == pygame.KEYDOWN and ev.key == pygame.K_SPACE:
@@ -683,7 +690,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                 state = ITI; iti_start = now_s
 
         # Auto-transitions
-        if state == PLANNING and elapsed >= p_time:
+        if state == PLANNING and show_timer and elapsed >= p_time:
             state = INPUT; typed_seq = []; first_key_time = None
 
         if state == COUNTDOWN and countdown_start:
@@ -744,7 +751,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
         if draw_state == PLANNING:
             pause_rect = _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
                                               total_trials, block_type, sn,
-                                              cum_score=cumulative_score)
+                                              cum_score=cumulative_score,
+                                              show_timer=show_timer)
         elif draw_state == INPUT:
             pause_rect = _draw_stage_input(screen, fonts, trial, typed_seq, blink_on,
                                            total_trials, block_type, sn, btns,
@@ -761,7 +769,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                                             mi_space_held=mi_space_held,
                                             mi_space_start=mi_space_start,
                                             pp_anim_done=pp_anim_done,
-                                            cum_score=cumulative_score)
+                                            cum_score=cumulative_score,
+                                            show_score=show_score)
         elif draw_state == FEEDBACK:
             if not particles_spawned:
                 _GL, _GT, _GR, _GRW, _CELL = _layout(W, H)
@@ -962,27 +971,38 @@ def _draw_score_card(screen, fonts, trial, rx, ry, GRW):
 # ── Stage drawing ─────────────────────────────────────────────
 
 def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
-                         total_trials, block_type, sn, cum_score: int = 0):
+                         total_trials, block_type, sn, cum_score: int = 0,
+                         show_timer: bool = True):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     GL, GT, GR, GRW, CELL = _layout(W, H)
 
-    rem = max(0, p_time - elapsed)
-    tc  = WRONG if rem < 2 else (AMBER if rem < 4 else WHITE)
+    if show_timer:
+        rem      = max(0, p_time - elapsed)
+        tc       = WRONG if rem < 2 else (AMBER if rem < 4 else WHITE)
+        subtitle = "Plan the shortest route from MOUSE to CHEESE   ·   Grid hides when timer ends"
+    else:
+        subtitle = "Take your time — press  SPACE  when you're ready to enter your sequence"
 
     _stage_header(screen, fonts,
                   "PLANNING", ACCENT,
                   "Study the grid",
-                  "Plan the shortest route from MOUSE to CHEESE   ·   Grid hides when timer ends")
+                  subtitle)
     _draw_grid(screen, fonts, trial, {}, trial.start)
 
     rx, ry = GR, GT
 
     _panel(screen, rx, ry, GRW, 100, BORDER)
-    ts = f_big.render(f"{rem:.1f}s", True, tc)
-    screen.blit(ts, (rx + GRW // 2 - ts.get_width() // 2, ry + 12))
-    tl = f_xs.render("Time remaining", True, DIM)
-    screen.blit(tl, (rx + GRW // 2 - tl.get_width() // 2, ry + 72))
+    if show_timer:
+        ts = f_big.render(f"{rem:.1f}s", True, tc)
+        screen.blit(ts, (rx + GRW // 2 - ts.get_width() // 2, ry + 12))
+        tl = f_xs.render("Time remaining", True, DIM)
+        screen.blit(tl, (rx + GRW // 2 - tl.get_width() // 2, ry + 72))
+    else:
+        rs = f_sm.render("No time limit", True, ACCENT)
+        screen.blit(rs, (rx + GRW // 2 - rs.get_width() // 2, ry + 20))
+        hs = f_xs.render("Press  SPACE  when ready", True, DIM)
+        screen.blit(hs, (rx + GRW // 2 - hs.get_width() // 2, ry + 62))
     ry += 116
 
     if block_type != "familiarization":
@@ -1101,7 +1121,8 @@ def _draw_stage_action(screen, fonts, trial, cursor, trail,
                        total_trials, block_type, sn,
                        a_time=10, action_start=None, btns=None,
                        mi_space_held=False, mi_space_start=None,
-                       pp_anim_done=False, cum_score: int = 0):
+                       pp_anim_done=False, cum_score: int = 0,
+                       show_score: bool = True):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     GL, GT, GR, GRW, CELL = _layout(W, H)
@@ -1146,7 +1167,8 @@ def _draw_stage_action(screen, fonts, trial, cursor, trail,
         ry += 92
 
         if pp_anim_done:
-            ry = _draw_score_card(screen, fonts, trial, rx, ry, GRW)
+            if show_score:
+                ry = _draw_score_card(screen, fonts, trial, rx, ry, GRW)
             pulse = 0.55 + 0.45 * math.sin(time.time() * math.pi * 1.6)
             pc = tuple(int(c * pulse) for c in ACCENT)
             hs = f_sm.render("Press  SPACE  to continue", True, pc)

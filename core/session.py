@@ -1,24 +1,24 @@
 # ============================================================
 #  GRID-SAILING TASK — Session Manager
 #
-#  *** Juliet does NOT need to edit this file. ***
+#  You don't need to touch this file.
 #
-#  This file controls what happens during a session:
-#    - Which blocks run and in what order (defined by SESSION_STRUCTURE in config.py)
-#    - Which puzzles are assigned to each trial (repeated vs random)
-#    - Auto-resume: if the app crashes mid-session, it picks up from the
-#      last completed trial when restarted
-#    - Firebase sync trigger (every 5 trials or 20 seconds, whichever comes first)
-#    - Shows the tutorial (key mapping) before the first familiarisation block
-#    - Shows the reflection form (3E report card) after MI practice sessions
+#  This is the bit that ties everything together during a session.
+#  Once you hit START on the setup screen, this takes over and:
+#    - Runs the right blocks in the right order (from SESSION_STRUCTURE)
+#    - Assigns puzzles to each trial (repeated vs random at the right ratio)
+#    - Auto-resumes if the app crashes — it checks what's already saved
+#      and picks up from the last completed trial, not the beginning
+#    - Triggers the Firebase cloud backup every 5 trials in the background
+#    - Shows the key tutorial before the very first familiarisation block
+#    - Shows the 3E reflection form after MI practice sessions
 #
-#  Data flow during a session:
-#    1. Puzzle pool is built from all valid grid paths
-#    2. Trials are assigned (respecting the repeated:random ratio)
-#    3. Each trial runs (via core/trial.py)
-#    4. Result is saved to the database immediately
-#    5. Firebase sync runs in background every 5 trials
-#    6. After the last trial, the session is marked complete
+#  Data flow per trial:
+#    1. Puzzles are picked from the pool for this block
+#    2. Trial runs (core/trial.py takes over for each one)
+#    3. Result is saved to the database immediately after
+#    4. Every 5 trials → data is backed up to Firebase
+#    5. After the last trial → session is marked as complete
 # ============================================================
 
 import pygame
@@ -210,6 +210,12 @@ def run_block(screen, clock, fonts, block_type, block_number,
     last_sync_time = _time.time()
     last_sync_trial = resume_from_trial
 
+    # Fam block 1 has no planning timer (still recorded, just not shown).
+    # Fam block 2 and pre/post-test have a normal 6s timer.
+    # Score is hidden for fam, pre-test, and post-test — only shown in practice.
+    show_timer = not (block_type == "familiarization" and block_number == 1)
+    show_score = block_type not in ("familiarization", "pre_test", "post_test")
+
     for i, (puzzle, grid_type) in enumerate(trials_list):
         trial_number = i + 1
         if trial_number <= resume_from_trial:
@@ -233,6 +239,8 @@ def run_block(screen, clock, fonts, block_type, block_number,
             total_trials=n_trials,
             block_type=block_type,
             streak=streak,
+            show_timer=show_timer,
+            show_score=show_score,
         )
 
         if result.get("paused_exit"):
@@ -458,14 +466,19 @@ def _card_screen(screen, clock, fonts, title, title_col, badge, lines,
 
 def _show_block_intro(screen, clock, fonts, block_type, block_number,
                       session_number, group, config):
-    descriptions = {
-        "familiarization": "Explore the task at your own pace. No score is shown.",
-        "pre_test":        "A baseline test. Plan your route and execute it. No score shown.",
-        "practice":        "Practice block. Your score will appear after each trial.",
-        "post_test":       "Final performance test. Plan and execute. No score shown.",
-    }
+    if block_type == "familiarization" and block_number == 1:
+        desc = "Take as long as you need to look at each grid — no timer and no score. Just explore!"
+    elif block_type == "familiarization":
+        desc = "Same as before but now there's a 6-second planning timer. Still no score shown."
+    else:
+        desc = {
+            "pre_test":  "A baseline test. Plan your route and execute it. No score shown.",
+            "practice":  "Practice block. Your score will appear after each trial.",
+            "post_test": "Final performance test. Plan and execute. No score shown.",
+        }.get(block_type, "")
+
     badge = f"Session {session_number}  ·  Block {block_number}  ·  {group}"
-    lines = [(descriptions.get(block_type, ""), DIM)]
+    lines = [(desc, DIM)]
     _card_screen(screen, clock, fonts,
                  title=block_type.replace("_", " ").title(),
                  title_col=ACCENT, badge=badge, lines=lines,
