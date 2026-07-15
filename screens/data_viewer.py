@@ -37,7 +37,7 @@ from database.db import (
 )
 from export.exporter import export_participant, export_all, export_summary, export_reflections
 from sync.firebase_sync import sync_all_in_background
-from config import WINDOW_WIDTH, WINDOW_HEIGHT, FPS
+from config import WINDOW_WIDTH, WINDOW_HEIGHT, FPS, SESSION_STRUCTURE
 
 # ── Palette ───────────────────────────────────────────────────
 BG      = (8,    8,   16)
@@ -253,6 +253,39 @@ def _cols_b(tw):
 #  VIEW A — Participant summary list
 # ──────────────────────────────────────────────────────────────
 
+def _build_roadmap(actual_sessions):
+    """Merge the study plan (SESSION_STRUCTURE) with actual DB sessions.
+    Returns an ordered list of dicts; each has a 'status' key:
+      'done'     — block completed
+      'active'   — block started but not finished
+      'upcoming' — block not yet started
+    """
+    actual_map = {}
+    for s in actual_sessions:
+        key = (s["session_number"], s["block_number"])
+        actual_map[key] = s
+
+    roadmap = []
+    for sn in sorted(SESSION_STRUCTURE.keys()):
+        for bn, bt in enumerate(SESSION_STRUCTURE[sn], start=1):
+            key = (sn, bn)
+            if key in actual_map:
+                row = dict(actual_map[key])
+                row["status"] = "done" if row["completed"] else "active"
+            else:
+                row = {
+                    "session_number": sn,
+                    "block_number":   bn,
+                    "block_type":     bt,
+                    "status":         "upcoming",
+                    "trials":         0,
+                    "accuracy_pct":   0,
+                    "completed":      False,
+                }
+            roadmap.append(row)
+    return roadmap
+
+
 def _view_a(screen, clock, fonts, on_select):
     f_big, f_med, f_sm, f_xs = fonts
 
@@ -267,19 +300,22 @@ def _view_a(screen, clock, fonts, on_select):
     CLIP_TOP = TABLE_Y + HDR_H
     btn_h    = max(52, f_sm.get_height() + f_xs.get_height() + 16)
     BBAR_H   = max(96, btn_h + 20)
-    CLIP_BOT = H - BBAR_H
-    VIS      = max(1, (CLIP_BOT - CLIP_TOP) // ROW_H)
+    card_h_sess  = max(60, f_sm.get_height() + f_xs.get_height() + 34)
+    CLIP_BOT     = H - BBAR_H - f_xs.get_height() - 12   # reserve hint row above bar
+    VIS          = max(1, (CLIP_BOT - CLIP_TOP) // ROW_H)
 
     COLS = _cols_a(TABLE_W, f_xs)
 
-    stats        = []
-    sessions     = []
-    sel          = 0
-    scroll       = 0
-    refresh_t    = 0
+    stats          = []
+    full_sessions  = []
+    sel            = 0
+    scroll         = 0
+    sess_scroll    = 0
+    sess_max_scroll = 0
+    refresh_t      = 0
     msg = ""; msg_col = GREEN
-    sb_dragging  = False
-    sb_drag_orig = (0, 0, 0)   # (mouse_y_start, scroll_start, total)
+    sb_dragging    = False
+    sb_drag_orig   = (0, 0, 0)   # (mouse_y_start, scroll_start, total)
 
     def _abw(lbl, sub):
         return max(f_sm.size(lbl)[0], f_xs.size(sub)[0]) + 32
@@ -305,8 +341,11 @@ def _view_a(screen, clock, fonts, on_select):
             stats = get_participant_stats()
             if stats:
                 sel = min(sel, len(stats) - 1)
-                sessions = get_session_breakdown(stats[sel]["participant_id"])
+                full_sessions = _build_roadmap(
+                    get_session_breakdown(stats[sel]["participant_id"]))
             refresh_t = now
+
+        mx_ev, my_ev = pygame.mouse.get_pos()
 
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
@@ -316,15 +355,23 @@ def _view_a(screen, clock, fonts, on_select):
                 if ev.key == pygame.K_ESCAPE:
                     return
                 if ev.key == pygame.K_DOWN and stats:
+                    prev = sel
                     sel = min(sel + 1, len(stats) - 1)
                     if sel >= scroll + VIS:
                         scroll += 1
-                    sessions = get_session_breakdown(stats[sel]["participant_id"])
+                    if sel != prev:
+                        sess_scroll = 0
+                        full_sessions = _build_roadmap(
+                            get_session_breakdown(stats[sel]["participant_id"]))
                 if ev.key == pygame.K_UP and stats:
+                    prev = sel
                     sel = max(sel - 1, 0)
                     if sel < scroll:
                         scroll -= 1
-                    sessions = get_session_breakdown(stats[sel]["participant_id"])
+                    if sel != prev:
+                        sess_scroll = 0
+                        full_sessions = _build_roadmap(
+                            get_session_breakdown(stats[sel]["participant_id"]))
 
             if ev.type == pygame.MOUSEBUTTONUP:
                 sb_dragging = False
@@ -358,8 +405,7 @@ def _view_a(screen, clock, fonts, on_select):
                     ri  = (my - CLIP_TOP) // ROW_H
                     idx = ri + scroll
                     if 0 <= idx < len(stats):
-                        sel      = idx
-                        sessions = get_session_breakdown(stats[sel]["participant_id"])
+                        sel = idx
                         on_select(stats[sel]["participant_id"])
                         return
                 if back_r.collidepoint(ev.pos):
@@ -378,7 +424,15 @@ def _view_a(screen, clock, fonts, on_select):
                     msg = "Syncing all data to Firebase..."; msg_col = ACCENT
 
             if ev.type == pygame.MOUSEWHEEL:
-                scroll = max(0, min(scroll - ev.y * 3, max(0, len(stats) - VIS)))
+                dy = getattr(ev, 'precise_y', None)
+                if dy is None or (dy == 0 and ev.y != 0):
+                    dy = float(ev.y)
+                if SIDE_X <= mx_ev <= SIDE_X + SIDE_W:
+                    sess_scroll = max(0, min(sess_max_scroll,
+                                             sess_scroll - int(dy * card_h_sess // 2)))
+                else:
+                    scroll = max(0, min(scroll - int(dy) * 3,
+                                        max(0, len(stats) - VIS)))
 
         # ── Draw ─────────────────────────────────────────────
         screen.fill(BG)
@@ -507,16 +561,25 @@ def _view_a(screen, clock, fonts, on_select):
             pygame.draw.line(screen, BORDER,
                              (SIDE_X + 12, sy), (SIDE_X + SIDE_W - 12, sy))
             sy += 8
-            hdr_s = f_xs.render("SESSIONS", True, DIM)
-            screen.blit(hdr_s, (SIDE_X + 16, sy))
-            ry2 = sy + f_xs_h + 10
+            screen.blit(f_xs.render("SESSIONS", True, DIM), (SIDE_X + 16, sy))
 
-            card_h_sess = max(60, f_sm_h + f_xs_h + 34)
-            for s in sessions:
-                if ry2 + card_h_sess > TABLE_Y + ph - 10:
-                    break
-                done = bool(s["completed"])
-                bc   = GREEN if done else BORDER
+            SESS_LIST_TOP = sy + f_xs_h + 8
+            SESS_LIST_BOT = TABLE_Y + ph - 10
+            total_sess_h  = len(full_sessions) * (card_h_sess + 8)
+            sess_max_scroll = max(0, total_sess_h - (SESS_LIST_BOT - SESS_LIST_TOP))
+
+            screen.set_clip(pygame.Rect(SIDE_X + 8, SESS_LIST_TOP,
+                                        SIDE_W - 16, SESS_LIST_BOT - SESS_LIST_TOP))
+            ry2 = SESS_LIST_TOP - sess_scroll
+            for s in full_sessions:
+                if ry2 + card_h_sess < SESS_LIST_TOP or ry2 > SESS_LIST_BOT:
+                    ry2 += card_h_sess + 8
+                    continue
+                status = s["status"]
+                done   = (status == "done")
+                bc = (GREEN  if done else
+                      ACCENT if status == "active" else (30, 30, 50))
+                title_col = WHITE if status in ("done", "active") else (55, 55, 85)
                 _shadow(screen, SIDE_X + 10, ry2, SIDE_W - 20, card_h_sess, r=10)
                 pygame.draw.rect(screen, PANEL2,
                                  (SIDE_X + 10, ry2, SIDE_W - 20, card_h_sess), border_radius=10)
@@ -526,23 +589,26 @@ def _view_a(screen, clock, fonts, on_select):
                 if done:
                     pygame.draw.rect(screen, GREEN,
                                      (SIDE_X + 10, ry2, 3, card_h_sess), border_radius=3)
+                elif status == "active":
+                    pygame.draw.rect(screen, ACCENT,
+                                     (SIDE_X + 10, ry2, 3, card_h_sess), border_radius=3)
                 lbl2 = (f"S{s['session_number']}  "
                         f"{s['block_type'].replace('_', ' ').title()}")
                 ty = ry2 + 10
-                _t(screen, f_sm, lbl2,
-                   WHITE if done else DIM, SIDE_X + 20, ty)
+                _t(screen, f_sm, lbl2, title_col, SIDE_X + 20, ty)
                 stats_y = ty + f_sm_h + 6
-                _t(screen, f_xs,
-                   f"Trials: {int(s['trials'])}    Acc: {s['accuracy_pct']:.0f}%",
-                   DIM, SIDE_X + 20, stats_y)
-                bar_y = stats_y + f_xs_h + 4
-                _bar(screen, SIDE_X + 20, bar_y, SIDE_W - 40, 4,
-                     s["accuracy_pct"] / 100.0,
-                     GREEN if s["accuracy_pct"] >= 70 else ORANGE)
+                if status == "upcoming":
+                    _t(screen, f_xs, "Upcoming", (55, 55, 85), SIDE_X + 20, stats_y)
+                else:
+                    _t(screen, f_xs,
+                       f"Trials: {int(s['trials'])}    Acc: {s['accuracy_pct']:.0f}%",
+                       DIM, SIDE_X + 20, stats_y)
+                    bar_y = stats_y + f_xs_h + 4
+                    _bar(screen, SIDE_X + 20, bar_y, SIDE_W - 40, 4,
+                         s["accuracy_pct"] / 100.0,
+                         GREEN if s["accuracy_pct"] >= 70 else ORANGE)
                 ry2 += card_h_sess + 8
-
-            if not sessions:
-                _t(screen, f_xs, "No sessions yet.", DIM, SIDE_X + 16, TABLE_Y + 110)
+            screen.set_clip(None)
         else:
             _t(screen, f_xs, "Select a participant to preview.",
                DIM, SIDE_X + 16, TABLE_Y + 24)
@@ -555,14 +621,15 @@ def _view_a(screen, clock, fonts, on_select):
         _action_btn(screen, fonts, "Export Reflections","MI group 3E logs",      exp_ref_r, GREEN)
         _action_btn(screen, fonts, "Sync All",          "push all to Firebase",  sync_all_r, ACCENT)
 
+        hint_y = H - BBAR_H - 6 - f_xs.get_height()
         if msg:
             ms = f_xs.render(msg, True, msg_col)
-            screen.blit(ms, (W - PAD - ms.get_width(), H - 54))
-
-        hint = (f"Auto-refreshes every 3 s  "
-                f"·  {n_parts} participant(s)  ·  {n_trials} total trial(s)")
-        hs = f_xs.render(hint, True, DIM2)
-        screen.blit(hs, (W // 2 - hs.get_width() // 2, H - 20))
+            screen.blit(ms, (W // 2 - ms.get_width() // 2, hint_y))
+        else:
+            hint = (f"Auto-refreshes every 3 s  "
+                    f"·  {n_parts} participant(s)  ·  {n_trials} total trial(s)")
+            hs = f_xs.render(hint, True, DIM2)
+            screen.blit(hs, (W // 2 - hs.get_width() // 2, hint_y))
 
         pygame.display.flip()
 
