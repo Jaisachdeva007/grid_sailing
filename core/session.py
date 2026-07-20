@@ -1,24 +1,24 @@
 # ============================================================
 #  GRID-SAILING TASK — Session Manager
 #
-#  *** Juliet does NOT need to edit this file. ***
+#  You don't need to touch this file.
 #
-#  This file controls what happens during a session:
-#    - Which blocks run and in what order (defined by SESSION_STRUCTURE in config.py)
-#    - Which puzzles are assigned to each trial (repeated vs random)
-#    - Auto-resume: if the app crashes mid-session, it picks up from the
-#      last completed trial when restarted
-#    - Firebase sync trigger (every 5 trials or 20 seconds, whichever comes first)
-#    - Shows the tutorial (key mapping) before the first familiarisation block
-#    - Shows the reflection form (3E report card) after MI practice sessions
+#  This is the bit that ties everything together during a session.
+#  Once you hit START on the setup screen, this takes over and:
+#    - Runs the right blocks in the right order (from SESSION_STRUCTURE)
+#    - Assigns puzzles to each trial (repeated vs random at the right ratio)
+#    - Auto-resumes if the app crashes — it checks what's already saved
+#      and picks up from the last completed trial, not the beginning
+#    - Triggers the Firebase cloud backup every 5 trials in the background
+#    - Shows the key tutorial before the very first familiarisation block
+#    - Shows the 3E reflection form after MI practice sessions
 #
-#  Data flow during a session:
-#    1. Puzzle pool is built from all valid grid paths
-#    2. Trials are assigned (respecting the repeated:random ratio)
-#    3. Each trial runs (via core/trial.py)
-#    4. Result is saved to the database immediately
-#    5. Firebase sync runs in background every 5 trials
-#    6. After the last trial, the session is marked complete
+#  Data flow per trial:
+#    1. Puzzles are picked from the pool for this block
+#    2. Trial runs (core/trial.py takes over for each one)
+#    3. Result is saved to the database immediately after
+#    4. Every 5 trials → data is backed up to Firebase
+#    5. After the last trial → session is marked as complete
 # ============================================================
 
 import pygame
@@ -32,12 +32,12 @@ from config import (
 )
 from sync.firebase_sync import sync_in_background
 from core.grid import find_valid_paths, apply_key
-from core.trial import TrialData, run_trial
+from core.trial import TrialData, run_trial, run_explore_trial
 from screens.reflection import run_reflection
 from screens.tutorial import run_tutorial
 from database.db import (
     create_session, complete_session,
-    get_resume_point, initialise_database,
+    get_resume_point, get_completed_blocks, initialise_database,
     get_global_repeated_puzzle, set_global_repeated_puzzle,
 )
 
@@ -206,14 +206,47 @@ def run_block(screen, clock, fonts, block_type, block_number,
     _show_block_intro(screen, clock, fonts, block_type, block_number,
                       session_number, group, config)
 
-    streak         = 0
-    last_sync_time = _time.time()
+    streak          = 0
+    last_sync_time  = _time.time()
     last_sync_trial = resume_from_trial
 
-    for i, (puzzle, grid_type) in enumerate(trials_list):
+    # Fam block 1 → free exploration mode (no timer, no planning, no sequence input).
+    # Fam block 2 and all other blocks → 6-second planning timer.
+    # Score shown only during practice blocks.
+    is_explore = (block_type == "familiarization" and block_number == 1)
+    show_timer = not is_explore
+    show_score = (block_type == "practice")
+
+    # Session state passed to the researcher panel so it can show trial status live.
+    session_state = {
+        "trials": [
+            {
+                "trial_number": idx + 1,
+                "grid_type":    gt,
+                "status":       "done" if (idx + 1) <= resume_from_trial else "pending",
+                "result":       None,
+            }
+            for idx, (_, gt) in enumerate(trials_list)
+        ],
+        "block_type":     block_type,
+        "block_number":   block_number,
+        "session_number": session_number,
+        "participant_id": participant_id,
+        "group":          group,
+    }
+    completed_in_session = set()   # trial numbers saved to DB this run
+
+    i = 0
+    while i < len(trials_list):
         trial_number = i + 1
-        if trial_number <= resume_from_trial:
-            continue   # skip already-completed trials
+
+        # Skip trials already completed (from a prior crash/resume or a same-session jump)
+        if trial_number <= resume_from_trial or trial_number in completed_in_session:
+            i += 1
+            continue
+
+        puzzle, grid_type = trials_list[i]
+        session_state["trials"][i]["status"] = "current"
 
         trial = TrialData(
             session_id            = session_id,
@@ -227,18 +260,55 @@ def run_block(screen, clock, fonts, block_type, block_number,
             group                 = group,
         )
 
-        result = run_trial(
-            screen, clock, fonts, trial, config,
-            cumulative_score, session_id,
-            total_trials=n_trials,
-            block_type=block_type,
-            streak=streak,
-        )
+        if is_explore:
+            result = run_explore_trial(
+                screen, clock, fonts, trial, config,
+                cumulative_score, session_id,
+                total_trials=n_trials,
+                block_type=block_type,
+                session_state=session_state,
+            )
+        else:
+            result = run_trial(
+                screen, clock, fonts, trial, config,
+                cumulative_score, session_id,
+                total_trials=n_trials,
+                block_type=block_type,
+                streak=streak,
+                show_timer=show_timer,
+                show_score=show_score,
+                session_state=session_state,
+            )
 
         if result.get("paused_exit"):
             sync_in_background(session_id, trial_number - 1)
             _show_saved_exit(screen, clock, fonts)
             return "exited"
+
+        # Researcher jumped to a different trial — abandon current, skip in-between.
+        if "researcher_jump" in result:
+            target = result["researcher_jump"]
+            session_state["trials"][i]["status"] = "skipped"
+            for skip_i in range(i + 1, target - 1):
+                if skip_i < len(trials_list):
+                    session_state["trials"][skip_i]["status"] = "skipped"
+            i = target - 1   # jump; continue skips i += 1
+            continue
+
+        completed_in_session.add(trial_number)
+        session_state["trials"][i]["status"] = "done"
+        session_state["trials"][i]["result"] = {
+            "reward_score":     trial.reward_score,
+            "is_correct":       trial.is_correct,
+            "cumulative_score": result["cumulative_score"],
+            "start":            trial.start,
+            "goal":             trial.goal,
+            "planned_sequence": list(trial.planned_sequence),
+            "optimal_sequence": list(trial.optimal_sequence),
+            "number_of_moves":  trial.number_of_moves,
+            "reaction_time_ms": trial.reaction_time_ms,
+            "movement_time_ms": trial.movement_time_ms,
+        }
 
         cumulative_score = result["cumulative_score"]
         streak           = result.get("streak", 0)
@@ -250,6 +320,8 @@ def run_block(screen, clock, fonts, block_type, block_number,
             sync_in_background(session_id, trial_number)
             last_sync_time  = _time.time()
             last_sync_trial = trial_number
+
+        i += 1
 
     complete_session(session_id)
     sync_in_background(session_id, n_trials)   # final sync on block complete
@@ -287,14 +359,19 @@ def _show_saved_exit(screen, clock, fonts):
 
         screen.fill((12, 12, 22))
 
+        f_big_h = f_big.get_height()
+        f_sm_h  = f_sm.get_height()
+        f_xs_h  = f_xs.get_height()
+        start_y = cy - (f_big_h + 14 + f_sm_h + 10 + f_xs_h) // 2
+
         ts = f_big.render("Progress Saved", True, (58, 196, 108))
-        screen.blit(ts, (cx - ts.get_width() // 2, cy - 60))
+        screen.blit(ts, (cx - ts.get_width() // 2, start_y))
 
         ms = f_sm.render("All completed trials have been recorded.", True, (100, 100, 138))
-        screen.blit(ms, (cx - ms.get_width() // 2, cy - 10))
+        screen.blit(ms, (cx - ms.get_width() // 2, start_y + f_big_h + 14))
 
         hs = f_xs.render("Returning to the start screen...", True, (60, 60, 90))
-        screen.blit(hs, (cx - hs.get_width() // 2, cy + 40))
+        screen.blit(hs, (cx - hs.get_width() // 2, start_y + f_big_h + 14 + f_sm_h + 10))
 
         pygame.display.flip()
 
@@ -322,14 +399,27 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
     _show_loading(screen, fonts)
     pool = build_puzzle_pool()
 
-    block_sequence  = SESSION_STRUCTURE.get(session_number, [])
+    block_sequence   = SESSION_STRUCTURE.get(session_number, [])
     cumulative_score = 0
     repeated_puzzle  = None   # fixed across the whole session
+    start_from_block = config.get("start_from_block", 1)
 
-    # Instructions shown once before the very first block
-    _show_instructions(screen, clock, fonts, group)
+    # Auto-advance past already-completed blocks so a restart never re-runs them.
+    completed_blocks = get_completed_blocks(participant_id, session_number)
+    if completed_blocks:
+        auto_start = max(completed_blocks) + 1
+        if auto_start > start_from_block:
+            start_from_block = auto_start
+            print(f"[SESSION] Auto-resuming from block {start_from_block} "
+                  f"(blocks {sorted(completed_blocks)} already done)")
+
+    # Skip instructions when jumping into the middle of a session
+    if start_from_block <= 1:
+        _show_instructions(screen, clock, fonts, group)
 
     for block_idx, block_type in enumerate(block_sequence):
+        if block_idx + 1 < start_from_block:
+            continue   # already completed or researcher chose to skip
         result = run_block(
             screen         = screen,
             clock          = clock,
@@ -393,6 +483,43 @@ def _card_screen(screen, clock, fonts, title, title_col, badge, lines,
     if hint_col is None:
         hint_col = ACCENT
 
+    # Card width — slightly wider than original to fit larger fonts
+    CW = min(W - 80, 660)
+    max_body_w = CW - 56
+
+    # Word-wrap body text so long lines never overflow the card
+    def _wrap(text):
+        if not text:
+            return [""]
+        words, out, cur = text.split(), [], ""
+        for w in words:
+            test = (cur + " " + w).strip()
+            if f_sm.size(test)[0] <= max_body_w:
+                cur = test
+            else:
+                if cur:
+                    out.append(cur)
+                cur = w
+        if cur:
+            out.append(cur)
+        return out or [""]
+
+    wrapped = []
+    for text, col in lines:
+        if text:
+            for sub in _wrap(text):
+                wrapped.append((sub, col))
+        else:
+            wrapped.append(("", col))
+
+    # Compute card height from actual font sizes
+    f_big_h = f_big.get_height()
+    f_sm_h  = f_sm.get_height()
+    f_xs_h  = f_xs.get_height()
+    line_h  = f_sm_h + 8
+    badge_h = (f_xs_h + 10 + 10) if badge else 0
+    CH = max(240, 16 + badge_h + f_big_h + 14 + 12 + len(wrapped) * line_h + f_sm_h + 24)
+
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -409,7 +536,6 @@ def _card_screen(screen, clock, fonts, title, title_col, badge, lines,
                 pygame.draw.circle(screen, (18, 18, 36), (gx, gy), 1)
 
         # Card
-        CW, CH = 560, max(220, 80 + len(lines) * 34 + 80)
         cx2 = CX - CW // 2
         cy2 = CY - CH // 2
         pygame.draw.rect(screen, (4, 4, 10),
@@ -419,34 +545,40 @@ def _card_screen(screen, clock, fonts, title, title_col, badge, lines,
         pygame.draw.rect(screen, title_col,
                          (cx2 + 1, cy2 + 1, CW - 2, 6), border_radius=20)
 
+        y = cy2 + 16
+
         # Badge pill
         if badge:
-            bs = f_xs.render(badge, True, title_col)
-            bw = bs.get_width() + 24
-            bx = CX - bw // 2
+            bs     = f_xs.render(badge, True, title_col)
+            bw     = bs.get_width() + 24
+            pill_h = f_xs_h + 10
+            bx     = CX - bw // 2
             pygame.draw.rect(screen, (20, 20, 40),
-                             (bx, cy2 + 20, bw, 26), border_radius=13)
+                             (bx, y, bw, pill_h), border_radius=pill_h // 2)
             pygame.draw.rect(screen, title_col,
-                             (bx, cy2 + 20, bw, 26), width=1, border_radius=13)
-            screen.blit(bs, (CX - bs.get_width() // 2, cy2 + 24))
+                             (bx, y, bw, pill_h), width=1, border_radius=pill_h // 2)
+            screen.blit(bs, (CX - bs.get_width() // 2, y + 5))
+            y += pill_h + 10
 
         # Title
         ts = f_big.render(title, True, WHITE)
-        screen.blit(ts, (CX - ts.get_width() // 2, cy2 + 58))
+        screen.blit(ts, (CX - ts.get_width() // 2, y))
+        y += f_big_h + 14
 
-        pygame.draw.line(screen, BORDER,
-                         (cx2 + 32, cy2 + 102), (cx2 + CW - 32, cy2 + 102))
+        # Divider
+        pygame.draw.line(screen, BORDER, (cx2 + 32, y), (cx2 + CW - 32, y))
+        y += 12
 
         # Body lines
-        ly = cy2 + 118
-        for line, col in lines:
-            ls = f_sm.render(line, True, col)
-            screen.blit(ls, (CX - ls.get_width() // 2, ly))
-            ly += 34
+        for text, col in wrapped:
+            if text:
+                ls = f_sm.render(text, True, col)
+                screen.blit(ls, (CX - ls.get_width() // 2, y))
+            y += line_h
 
-        # Hint
+        # Hint (anchored to card bottom)
         hs = f_sm.render(hint_text, True, hint_col)
-        screen.blit(hs, (CX - hs.get_width() // 2, cy2 + CH - 44))
+        screen.blit(hs, (CX - hs.get_width() // 2, cy2 + CH - f_sm_h - 16))
 
         # Footer
         ft = f_xs.render("Press  SPACE  to continue", True, (44, 44, 72))
@@ -458,14 +590,26 @@ def _card_screen(screen, clock, fonts, title, title_col, badge, lines,
 
 def _show_block_intro(screen, clock, fonts, block_type, block_number,
                       session_number, group, config):
-    descriptions = {
-        "familiarization": "Explore the task at your own pace. No score is shown.",
-        "pre_test":        "A baseline test. Plan your route and execute it. No score shown.",
-        "practice":        "Practice block. Your score will appear after each trial.",
-        "post_test":       "Final performance test. Plan and execute. No score shown.",
-    }
+    if block_type == "familiarization" and block_number == 1:
+        desc = ("Explore the grid freely! Press 1, 2, or 3 on the keypad to move the mouse. "
+                "When you reach the cheese the next trial starts automatically. "
+                "No timer, no score — just learn how the keys move the cursor.")
+    elif block_type == "familiarization":
+        desc = ("Now you will plan first, then act. Study the grid for 6 seconds, enter your "
+                "sequence, then physically press the keys on the keypad. "
+                "Press SPACE when you are done. No score shown.")
+    else:
+        desc = {
+            "pre_test":  ("Baseline test. 6-second planning timer. Enter your sequence, "
+                          "then execute it on the keypad. No score shown."),
+            "practice":  ("Practice block. 6-second planning timer. Enter your sequence, "
+                          "execute it on the keypad, then see your score and replay."),
+            "post_test": ("Final test. 6-second planning timer. Enter your sequence, "
+                          "then execute it on the keypad. No score shown."),
+        }.get(block_type, "")
+
     badge = f"Session {session_number}  ·  Block {block_number}  ·  {group}"
-    lines = [(descriptions.get(block_type, ""), DIM)]
+    lines = [(desc, DIM)]
     _card_screen(screen, clock, fonts,
                  title=block_type.replace("_", " ").title(),
                  title_col=ACCENT, badge=badge, lines=lines,
@@ -494,6 +638,16 @@ def _show_break(screen, clock, fonts,
                  hint_text="Press  SPACE  when you are ready to continue")
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# JULIET — INSTRUCTION TEXT IS HERE
+#
+# _show_instructions()  →  the 5 slides shown once before Session 1 begins.
+# _show_block_intro()   →  the short screen shown before every block.
+# _show_break()         →  the "Take a short break" screen between blocks.
+#
+# To change what participants see, edit the string literals inside the
+# _slide() / _card_screen() calls below.  Each line is a (text, colour) tuple.
+# ════════════════════════════════════════════════════════════════════════════
 def _show_instructions(screen, clock, fonts, group):
     """Multi-slide instruction sequence shown once before the first block."""
 
@@ -539,14 +693,18 @@ def _show_instructions(screen, clock, fonts, group):
     )
 
     # Slide 4 — How to enter a sequence
+    # ── EDIT INSTRUCTIONS HERE ──────────────────────────────────────────
+    # This is the slide that explains how to enter a movement sequence.
+    # Change the text strings in the list below to update what participants see.
+    # ────────────────────────────────────────────────────────────────────
     _slide(
         "Entering Your Plan",
         ACCENT, None,
         [
-            ("During planning, decide the shortest route.", DIM),
-            ("Then click the  1 / 2 / 3  buttons to enter your sequence.", DIM),
-            ("Click  Undo  to remove the last step,  Confirm  when done.", DIM),
-            ("You will then execute the plan in the next stage.", DIM),
+            ("You have 6 seconds to study the grid and plan your route.", DIM),
+            ("Then the grid hides — click  1 / 2 / 3  or press the keypad", DIM),
+            ("to enter your sequence.", DIM),
+            ("Press  Confirm  when done. You will then execute the plan.", DIM),
         ],
     )
 

@@ -1,32 +1,31 @@
 # ============================================================
-#  GRID-SAILING TASK — Firebase Cloud Sync Layer
+#  GRID-SAILING TASK — Firebase Cloud Backup
 #
-#  *** Juliet does NOT need to edit this file. ***
+#  You don't need to touch this file.
 #
-#  This file automatically backs up trial data to Firebase
-#  (a Google cloud database) in the background while the
-#  experiment runs. Data is never lost even if the hard drive fails.
+#  This runs in the background and copies all trial data to
+#  Firebase (Google's cloud) while the experiment is running.
+#  Think of it as an automatic off-site backup — even if the
+#  laptop dies, the data is already in the cloud.
 #
 #  When does it sync?
-#    - Automatically every 5 trials during the experiment
-#    - Automatically every 20 seconds (even if 5 trials haven't happened)
-#    - Immediately when a session ends or is paused
-#    - Manually via the "Sync All" button in the Data Viewer
+#    - Every 5 completed trials (automatically, in the background)
+#    - Every 20 seconds regardless (whichever comes first)
+#    - When you click "Sync All" in the Data Viewer
 #
-#  The sync always runs in a background thread — the participant
-#  never sees any pause or delay because of it.
+#  The participant never notices — it runs on a separate thread
+#  so there's no pause or loading screen during trials.
 #
-#  What data goes to Firebase?
+#  What goes to Firebase?
 #    - Same fields as the CSV export (reward_score, is_correct,
-#      number_of_moves, timing fields, sequences, etc.)
-#    - Each trial is stored as its own document so it's easy to
-#      browse in the Firebase Console at console.firebase.google.com
+#      number_of_moves, timing, sequences, etc.)
+#    - Each trial is its own document in the Firebase Console
 #
-#  Firebase structure (what you see in the console):
+#  What you see in the Firebase Console:
 #    devices/
-#      ASUS-Juliet/                ← this machine (from local_config.py)
+#      ASUS-Juliet/                ← this laptop (set in local_config.py)
 #        participants/
-#          P001/                   ← participant ID
+#          P001/                   ← participant
 #            s1_practice_b2/       ← session 1, practice block 2
 #              _info               ← session start/end times
 #              01/  02/  03/ …     ← one document per trial

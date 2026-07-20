@@ -1,18 +1,16 @@
 # ============================================================
 #  GRID-SAILING TASK — Participant Login Screen
 #
-#  *** Juliet does NOT need to edit this file. ***
+#  You don't need to touch this file.
 #
-#  This screen is shown to the PARTICIPANT (not Juliet) right before
-#  their session starts. They type their own participant ID to confirm
-#  they are the correct person for today's session.
+#  After you finish the setup form, the app hands the keyboard to
+#  the PARTICIPANT and asks them to type their own ID.
+#  It's just a quick confirmation step — stops us from accidentally
+#  running a session under the wrong person's ID.
 #
-#  Why this step exists:
-#    - Prevents accidentally running a session under the wrong participant ID
-#    - Gives the participant a moment to settle in before trials begin
-#
-#  The ID they type must exactly match what Juliet entered in the setup form.
-#  If it doesn't match, a clear error message is shown and they can try again.
+#  - What they type has to exactly match the ID you entered in setup.
+#  - If it doesn't match, a red error message comes up and they can retry.
+#  - Once it matches, the session starts automatically.
 # ============================================================
 
 import pygame
