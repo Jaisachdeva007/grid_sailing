@@ -1,30 +1,31 @@
 # ============================================================
 #  GRID-SAILING TASK — CSV Exporter
 #
-#  *** Juliet does NOT need to edit this file. ***
+#  You don't need to touch this file.
 #
-#  This file converts the SQLite database into CSV spreadsheet files
-#  that can be opened in Excel or imported into R/SPSS for analysis.
+#  This is what runs when you click Export in the Data Viewer.
+#  It reads the database and writes CSV files you can open in
+#  Excel or import into R / SPSS.
 #
-#  The four export types (triggered from the Data Viewer screen):
+#  The four export options (triggered from the Data Viewer):
 #    Export All         → all_participants_TIMESTAMP.csv
-#                         One row per key press — the most detailed export.
-#                         Contains every column listed in TRIAL_COLUMNS plus
-#                         the keypress columns (KEYPRESS_COLUMNS).
+#                         One row per key press — the most detailed option.
+#                         Use this if you want to look at individual presses.
 #
 #    Export Summary     → trial_summary_TIMESTAMP.csv
-#                         One row per completed trial — easier for analysis.
-#                         Contains all TRIAL_COLUMNS but no per-keypress detail.
+#                         One row per trial — this is usually what you want
+#                         for most analyses (scores, times, accuracy, etc.)
 #
 #    Export Reflections → reflections_TIMESTAMP.csv
-#                         One row per 3E report card (MI groups only).
+#                         One row per 3E reflection form (MI groups only).
 #
-#    Export Participant → {P001}_data.csv  (accessed from View Participant screen)
-#                         Same format as Export All but for one participant only.
+#    Export Participant → {P001}_data.csv  (from the View Participant screen)
+#                         Same as Export All but just for one person.
 #
-#  All files are saved to the exports/ folder (defined in config.py as EXPORT_DIR).
+#  All files go to the exports/ folder next to main.py.
+#  Files are timestamped so they never overwrite each other.
 #
-#  Column name guide (matches the CSV headers exactly):
+#  Column name guide (these are the exact CSV headers):
 #    participant_id      — e.g. "P001"
 #    group_name          — e.g. "MI-High"
 #    session_number      — 1, 2, or 3

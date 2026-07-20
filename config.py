@@ -1,54 +1,44 @@
 # ============================================================
-#  GRID-SAILING TASK — Master Configuration File
+#  GRID-SAILING TASK — Main Settings File
 #
-#  *** THIS IS THE MAIN FILE JULIET WILL NEED TO EDIT ***
+#  Hey Juliet — this is basically the only file you'll ever
+#  need to open. Everything that controls how the experiment
+#  runs is in here: timing, scoring, groups, password, etc.
 #
-#  Everything that controls how the experiment runs lives here.
-#  You do NOT need to touch any other file for normal changes.
+#  How to change something:
+#    1. Find the setting below
+#    2. Change the number or text on the RIGHT side of the =
+#    3. Ctrl+S to save
+#    4. Close and reopen the app for the change to kick in
 #
-#  How to make a change:
-#    1. Find the setting you want to change below
-#    2. Edit the number or text on the right side of the = sign
-#    3. Save the file (Ctrl+S)
-#    4. Restart the experiment app for the change to take effect
-#
-#  IMPORTANT: Only change the VALUES (right side of =).
-#             Do not delete the variable name (left side).
-#             Do not remove the # comment lines — they explain things.
+#  One rule: only change the VALUE (the right side).
+#  Don't delete the variable name on the left or the # lines.
 # ============================================================
 
 
 # ── Grid ──────────────────────────────────────────────────────
-# The grid is a square of cells that the participant navigates.
 
-# How many rows AND columns the grid has. 5 = a 5×5 grid (25 cells total).
-# Changing this changes the whole experiment structure — only change if
-# you know what you're doing, as it affects puzzle generation.
+# The grid is a square — this sets how many rows AND columns it has.
+# 5 means a 5×5 grid (25 cells). We built the whole study around this
+# so don't change it unless you're redesigning the experiment.
 GRID_SIZE = 5
 
-# The maximum number of key presses an "optimal" path can have.
-# Puzzles where the shortest valid route needs MORE than this many presses
-# are thrown out. Currently 7 means: optimal paths are at most 7 moves long.
+# The longest "optimal" route we'll accept for a puzzle.
+# Any puzzle that needs more than 7 moves to solve is thrown out.
+# Shorter = harder to find; longer = easier. Leave at 7 for our protocol.
 MAX_OPTIMAL_LENGTH = 7
 
-# The MINIMUM number of key presses a valid puzzle path must have.
-# Puzzles shorter than this are thrown out (too easy).
-# Must be less than or equal to MAX_OPTIMAL_LENGTH.
+# The shortest route we'll accept. Puzzles shorter than this get thrown out
+# because they're too easy. Has to be ≤ MAX_OPTIMAL_LENGTH.
 MIN_SEQUENCE_LENGTH = 7
 
 
 # ── Key Mappings ──────────────────────────────────────────────
-# This maps each key number (1, 2, 3) to a direction on the grid.
-# Format: key_number: (row_change, column_change)
-#   row_change: negative = move UP a row, positive = move DOWN a row
-#   col_change: negative = move LEFT a column, positive = move RIGHT a column
-#
-# Current mapping:
-#   Key 1 (index finger)  → moves UP           (one row up, same column)
-#   Key 2 (middle finger) → moves DOWN-RIGHT    (one row down, one column right)
-#   Key 3 (ring finger)   → moves DOWN-LEFT     (one row down, one column left)
-#
-# Only change this if you physically remap which finger presses which key.
+# This links each key number to a direction on the grid.
+# Only change this if you physically rewire which finger uses which key.
+#   Key 1 = index finger  → moves UP
+#   Key 2 = middle finger → moves DOWN-RIGHT
+#   Key 3 = ring finger   → moves DOWN-LEFT
 KEY_MAPPINGS = {
     1: (-1,  0),   # Key 1 → UP
     2: ( 1,  1),   # Key 2 → DOWN-RIGHT
@@ -57,114 +47,109 @@ KEY_MAPPINGS = {
 
 
 # ── Trial Timing ──────────────────────────────────────────────
-# All times are in SECONDS. Adjust these to make the experiment
-# easier (more time) or harder (less time).
+# Everything here is in SECONDS. These are the defaults — you can
+# also override them per-session from the Researcher Setup screen
+# without permanently changing this file.
 
-# How long the participant can SEE the grid before the planning phase starts.
-# They study the grid during this time. Range from the protocol: 6–9 seconds.
+# How long participants get to stare at the grid and plan their route
+# before anything happens. Protocol says 6–9 seconds.
 PLANNING_TIME_SEC = 6
 
-# How long the participant has to TYPE their planned key sequence.
-# If they run out of time, the trial is recorded as incorrect.
+# How long they have to actually TYPE their key sequence after planning.
+# If the timer runs out, that trial gets marked as incorrect.
 INPUT_TIME_SEC = 10
 
-# How long the action/imagery phase lasts AFTER the participant submits
-# their sequence. For MI groups this is when they imagine doing the movement.
-# For PP groups this is when they physically execute it.
+# How long the action / imagery phase lasts after they submit their sequence.
+# MI groups: they imagine doing the movement during this time.
+# PP groups: they physically press the keys.
+# CTRL groups: they just wait.
 ACTION_TIME_SEC = 4
 
-# How long the feedback screen (showing score, correct/incorrect) stays visible
-# between trials. Longer = more time to read the result.
+# How long the feedback card (score, correct/incorrect) stays on screen
+# between trials. Longer gives them more time to read it.
 FEEDBACK_TIME_SEC = 2
 
-# The gap (blank screen / "get ready") between one trial ending and the next starting.
-# Protocol recommends 3–5 seconds.
+# The blank "Get Ready" gap between one trial finishing and the next starting.
+# Protocol says 3–5 seconds.
 INTERTRIAL_SEC = 4
 
 
 # ── Scoring ───────────────────────────────────────────────────
-# How points are awarded and deducted each trial.
 
-# Points awarded for reaching the goal using EXACTLY the optimal number of moves.
-# This is the maximum score possible on a single trial.
+# Maximum points for a perfect trial — reached the goal in exactly the
+# optimal number of moves.
 OPTIMAL_SCORE = 100
 
-# Points DEDUCTED for each move that is more OR fewer than the optimal number.
-# Example: optimal = 7 moves, participant used 9 → 2 extra → penalty = 2 × 5 = 10 pts
-#          optimal = 7 moves, participant used 5 → 2 fewer  → penalty = 2 × 5 = 10 pts
+# Points taken off for every move that's MORE or FEWER than optimal.
+# e.g. optimal = 7, participant used 9 → 2 off → penalty = 2 × 5 = 10 pts
+#      optimal = 7, participant used 5 → 2 short → penalty = 2 × 5 = 10 pts
+# Both directions are penalised equally.
 EXTRA_MOVE_PENALTY = 5
 
-# Score given if the participant does NOT reach the goal at all (incorrect trial).
-# Leave at 0 — there is no partial credit.
+# Score when the participant doesn't reach the goal at all. Leave at 0.
 ERROR_SCORE = 0
 
 
 # ── Experiment Structure ──────────────────────────────────────
-# How many sessions and trials make up the full experiment.
 
-# Total number of sessions each participant completes across all their visits.
+# Total number of sessions per participant across all their visits.
 NUM_SESSIONS = 3
 
-# Number of trials in every block (one block = one continuous run of trials).
+# Number of trials in every single block (one block = one continuous run).
 TRIALS_PER_BLOCK = 20
 
-# How many familiarisation blocks come at the START of Session 1.
-# Familiarisation uses 100% random puzzles so the participant learns the controls.
+# How many familiarisation blocks are in Session 1.
+# These use random puzzles only — purely for learning the controls.
 FAMILIARIZATION_BLOCKS = 2
 
 
 # ── Grid Ratios ───────────────────────────────────────────────
-# What proportion of puzzles in each block type are the REPEATED puzzle
-# (the same grid shown across all participants) vs. a new random puzzle.
-# 0.72 means 72% repeated, 28% random. 0.0 means 100% random.
+# What fraction of puzzles in each block are the REPEATED puzzle
+# (the same grid used across all participants) versus a random one.
+# 0.72 = 72% repeated, 28% random.
 
-# Ratio for PRACTICE blocks (the main training phase).
-PRACTICE_REPEATED_RATIO = 0.72   # 72% repeated, 28% random
+# For practice blocks (the main training phase).
+PRACTICE_REPEATED_RATIO = 0.72
 
-# Ratio for TEST blocks (pre-test and post-test measurement sessions).
-TEST_REPEATED_RATIO = 0.60       # 60% repeated, 40% random
+# For pre-test and post-test blocks.
+TEST_REPEATED_RATIO = 0.60
 
-# Ratio for FAMILIARISATION blocks.
-# This is ALWAYS 0.0 (fully random) — do not change.
-# Familiarisation is about learning the controls, not the specific grid.
+# For familiarisation — always fully random. Don't change this.
 FAMILIARIZATION_REPEATED_RATIO = 0.00
 
 
 # ── Experimental Groups ───────────────────────────────────────
-# The list of groups participants can be assigned to.
-# Each group name appears as an option in the researcher setup screen.
-# MI  = Motor Imagery  (participants imagine doing the movement)
-# PP  = Physical Practice  (participants physically press the keys)
-# CTRL = Control  (participants only plan, no movement or imagery)
-# High/Low refers to the level of sensory feedback on the keypad device.
+# The list that appears in the Group dropdown on the setup screen.
+# MI  = Motor Imagery
+# PP  = Physical Practice
+# CTRL = Control (planning only, no movement)
+# High/Low = level of sensory feedback on the keypad
 #
-# To add a group: add a new line like "My-Group", inside the square brackets.
-# To remove a group: delete that line.
-# To rename a group: change the text (but this will affect existing data labels).
+# To add a group: add a new line inside the square brackets like "New-Group"
+# To remove one: delete that line
+# To rename: change the text (but this changes labels in existing data too)
 GROUPS = [
-    "MI-High",    # Motor imagery — high sensory feedback keypad
-    "MI-Low",     # Motor imagery — low sensory feedback keypad
-    "PP-High",    # Physical practice — high sensory feedback keypad
-    "PP-Low",     # Physical practice — low sensory feedback keypad
-    "CTRL-High",  # Control (planning only) — high sensory feedback
-    "CTRL-Low",   # Control (planning only) — low sensory feedback
+    "MI-High",
+    "MI-Low",
+    "PP-High",
+    "PP-Low",
+    "CTRL-High",
+    "CTRL-Low",
 ]
 
 
 # ── Session Structure ─────────────────────────────────────────
-# Defines exactly which block types run in each session, in order.
-# Each session number (1, 2, 3) maps to a list of block type names.
+# This is what runs in each session, in order.
+# Each session number maps to a list of block types.
 #
-# Block types available:
-#   "familiarization" — random puzzles only, teaches the controls
-#   "pre_test"        — test measurement taken BEFORE practice
-#   "practice"        — main training blocks (uses PRACTICE_REPEATED_RATIO)
-#   "post_test"       — test measurement taken AFTER practice
+# Available block types:
+#   "familiarization" — 100% random, just learning the controls
+#   "pre_test"        — measurement before training starts
+#   "practice"        — main training (uses PRACTICE_REPEATED_RATIO above)
+#   "post_test"       — measurement after training
 #
-# Example: session 1 runs 2 familiarisation blocks, then 1 pre-test, then 2 practice.
-# Each block has TRIALS_PER_BLOCK trials (currently 20).
-#
-# Do NOT change this unless you are redesigning the experiment structure.
+# Each block runs TRIALS_PER_BLOCK trials (currently 20).
+# Don't change this unless we're redesigning the study structure.
 SESSION_STRUCTURE = {
     1: ["familiarization", "familiarization", "pre_test", "practice", "practice"],
     2: ["practice", "practice"],
@@ -172,65 +157,58 @@ SESSION_STRUCTURE = {
 }
 
 
-# ── Admin Access ──────────────────────────────────────────────
-# The password Juliet types on the login screen to access the researcher setup.
-# Change this to any password you want — just remember what you set it to!
-# The password is case-sensitive (uppercase and lowercase matter).
+# ── Admin Password ────────────────────────────────────────────
+# The password you type on the first screen to get into the researcher setup.
+# Change it to anything you want — just remember what you set it to!
+# It's case-sensitive (capital and lowercase letters matter).
 ADMIN_PASSWORD = "2110"
 
 
-# ── Database & Export ─────────────────────────────────────────
-# Where the experiment data is stored on this computer.
-# These are file paths relative to the folder where main.py lives.
+# ── Database & Export Paths ───────────────────────────────────
+# Where the data lives on this computer. These are paths relative to
+# the grid_sailing folder. Don't change these unless you move stuff around.
 
-# The SQLite database file. All trial data is saved here automatically.
-# DO NOT change this unless you move the database/  folder.
+# The database file — all trial data gets saved here automatically.
 DB_PATH = "database/experiment.db"
 
-# The folder where CSV export files are saved when you click "Export" in the app.
-# The folder is created automatically if it doesn't exist.
+# Where CSV files go when you click Export. Created automatically if missing.
 EXPORT_DIR = "exports/"
 
 
 # ── Display ───────────────────────────────────────────────────
-# Screen and visual settings. The app runs fullscreen, so WINDOW_WIDTH
-# and WINDOW_HEIGHT are overwritten automatically at startup with the
-# actual screen resolution. You generally do NOT need to change these.
-
-WINDOW_WIDTH       = 1100   # default fallback — overwritten at runtime
-WINDOW_HEIGHT      = 820    # default fallback — overwritten at runtime
-ANIMATION_DELAY_MS = 600    # milliseconds between steps in the cursor replay animation
-FPS                = 60     # frames per second (screen refresh rate)
+# The app runs fullscreen and auto-detects your screen size at startup,
+# so these two get overwritten automatically. You don't need to touch them.
+WINDOW_WIDTH       = 1100
+WINDOW_HEIGHT      = 820
+ANIMATION_DELAY_MS = 600   # how fast the cursor replay animation plays (ms)
+FPS                = 60    # screen refresh rate
 
 
-# ── Cloud Sync (Firebase) ─────────────────────────────────────
-# Settings for automatically backing up data to the Firebase cloud database.
-# The actual credentials (the key file) live in local_config.py on each machine.
-# See local_config.template.py for instructions on how to set that up.
+# ── Firebase Cloud Backup ─────────────────────────────────────
+# Settings for syncing data to the cloud in the background.
+# The credentials file (the JSON key) lives in local_config.py on each machine
+# — see local_config.template.py for how to set that up on a new computer.
 
 import socket as _socket
 
-# The unique name for THIS computer in the Firebase database.
-# Overridden in local_config.py — e.g. "ASUS-Juliet" or "MacBook-Jai"
-DEVICE_ID   = _socket.gethostname()   # uses computer's network name as default
+# The name for this computer in the Firebase dashboard.
+# Set to something like "ASUS-Juliet" in local_config.py.
+DEVICE_ID   = _socket.gethostname()
 DEVICE_NAME = DEVICE_ID
 
-# Full path to the Firebase credentials JSON file on this machine.
-# Set this in local_config.py — see local_config.template.py for an example.
-# If left as None, syncing is disabled (no crash, just no cloud backup).
+# Path to the Firebase key file. Set this in local_config.py.
+# If it's left as None, cloud sync is simply skipped (no crash).
 FIREBASE_CREDENTIALS = None
 
-# How many trials to complete before automatically syncing to the cloud.
-# 5 means: after every 5 trials, the data is pushed to Firebase in the background.
+# Push to Firebase after this many completed trials.
 SYNC_EVERY_N_TRIALS = 5
 
-# Also sync if this many SECONDS have passed since the last sync,
-# even if 5 trials haven't been completed yet. Whichever comes first.
+# Also push if this many seconds have passed since the last sync
+# — whichever of the two comes first triggers it.
 SYNC_TIME_SEC = 20
 
-# Load per-machine overrides from local_config.py.
-# That file is gitignored and never shared — it holds machine-specific settings
-# like the Firebase key path and device name. Safe to ignore if the file doesn't exist.
+# Load per-machine settings (local_config.py is private to each computer
+# and never gets uploaded to GitHub).
 try:
     from local_config import *  # noqa: F401,F403
 except ImportError:

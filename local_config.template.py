@@ -1,36 +1,36 @@
 # ============================================================
-#  GRID-SAILING TASK — Per-Machine Configuration Template
+#  GRID-SAILING TASK — Setting Up a New Computer
 #
-#  *** HOW TO SET UP A NEW COMPUTER ***
+#  Hey Juliet — if you're reading this, you're setting up the ASUS
+#  (or any new machine) for the first time. This file tells the app
+#  which computer it's running on and where the Firebase key is.
 #
-#  Each computer that runs the experiment needs its OWN local_config.py.
-#  This template shows you exactly what to put in it.
+#  Steps to set up:
+#    1. Copy THIS file and rename the copy to:  local_config.py
+#       (keep it in the same grid_sailing folder as main.py)
+#    2. Change DEVICE_NAME below to something like "ASUS-Juliet"
+#    3. Set FIREBASE_CREDENTIALS to the path of the JSON key file
+#       (Jai will give you this file separately — don't share it)
+#    4. Save and run python main.py — you're good to go.
 #
-#  Steps:
-#    1. Copy this file and rename the copy to:   local_config.py
-#       (keep it in the same folder as main.py)
-#    2. Set DEVICE_NAME to a short label for this machine (see below).
-#    3. Set FIREBASE_CREDENTIALS to the full path of the Firebase key file.
-#    4. Save and restart the app.
-#
-#  The local_config.py file is NEVER uploaded to GitHub — it is private
-#  to each machine and keeps the Firebase credentials secure.
+#  local_config.py is never uploaded to GitHub. It stays private
+#  on each machine, which is how the Firebase key stays secure.
 # ============================================================
 
-# Short label for this computer. Appears in Firebase under "devices/"
-# so you can tell which machine collected which data.
-# Use something clear like "ASUS-Juliet" or "MacBook-Jai".
+# What this computer is called in the Firebase dashboard.
+# Use something recognisable like "ASUS-Juliet" so you know
+# which machine collected which participant's data.
 DEVICE_NAME = "ASUS-Juliet"
 
-# Full path to the Firebase credentials file (the .json key file).
+# Full path to the Firebase key file (the .json file Jai gave you).
 #
-# On the ASUS (Windows), if you put the key file in the grid_sailing folder:
+# On the ASUS, if you put the key in the grid_sailing folder:
 #   FIREBASE_CREDENTIALS = "gridsailing-firebase-adminsdk-fbsvc-557bd2a360.json"
 #
-# On Mac, if you stored it in a hidden config folder:
+# On Mac (Jai's setup), stored in a config folder:
 #   FIREBASE_CREDENTIALS = "/Users/jai/.config/grid_sailing/serviceAccountKey.json"
 FIREBASE_CREDENTIALS = "/path/to/serviceAccountKey.json"
 
-# (Optional) Override where the database file is stored on this machine.
-# Only set this if you want the database somewhere other than database/experiment.db
+# (Optional) Only uncomment this if you want the database file stored
+# somewhere other than the default database/experiment.db location.
 # DB_PATH = "/path/to/experiment.db"

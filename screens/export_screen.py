@@ -1,23 +1,19 @@
 # ============================================================
 #  GRID-SAILING TASK — Export Screen
 #
-#  *** Juliet does NOT need to edit this file. ***
+#  You don't need to touch this file.
 #
-#  This screen lets Juliet export data to CSV files for analysis.
-#  It is reached via the "Export Data" button in Researcher Setup.
+#  This is the screen you get when you click "Export Data" in the
+#  Data Viewer. The three buttons do slightly different things:
+#    Export All           → every key press from every participant (big file)
+#    Trial Summary        → one row per trial — usually what you want first
+#    Export Participant   → same as Export All but for just one person
 #
-#  What each button does:
-#    Export All           → one huge CSV with every participant, every key press
-#    Export Summary       → one row per trial (easier for most analyses)
-#    Export Participant   → same as Export All but for one participant only
-#
-#  All files are saved to the exports/ folder (set in config.py as EXPORT_DIR).
-#  The folder is created automatically if it does not exist.
+#  Everything goes into the exports/ folder next to main.py.
+#  The folder gets created automatically if it doesn't exist yet.
 #
 #  File names include a timestamp (e.g. all_participants_20260708_143022.csv)
-#  so exports never overwrite each other.
-#
-#  For the full column list and field descriptions, see export/exporter.py.
+#  so you can't accidentally overwrite an older export.
 # ============================================================
 
 import pygame

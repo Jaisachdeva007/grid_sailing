@@ -1,26 +1,25 @@
 # ============================================================
 #  GRID-SAILING TASK — Key Mapping Tutorial
 #
-#  *** Juliet does NOT need to edit this file. ***
+#  You don't need to touch this file.
 #
-#  This tutorial screen is shown ONCE, automatically, before the
-#  very first familiarisation block of Session 1.
-#  It is not shown again in Sessions 2 or 3 (participant already knows).
+#  This tutorial appears automatically at the very start of Session 1
+#  before the first familiarisation block. It's skipped in Sessions 2
+#  and 3 because the participant already knows the keys by then.
 #
-#  What it teaches:
-#    - Which physical key (1, 2, or 3) maps to which direction
-#    - Key 1 (index finger)  → UP
-#    - Key 2 (middle finger) → DOWN-RIGHT
-#    - Key 3 (ring finger)   → DOWN-LEFT
+#  What it shows the participant:
+#    - Key 1 (index finger)  → moves the cursor UP
+#    - Key 2 (middle finger) → moves DOWN-RIGHT
+#    - Key 3 (ring finger)   → moves DOWN-LEFT
 #
 #  How it works:
-#    - Three animated pages cycle through keys 1 → 2 → 3, each showing
-#      the cursor moving on a small 3×3 demo grid
-#    - The participant presses SPACE to advance through each page
-#    - At the end, they must press each key (1, 2, 3) once to confirm
-#      they understand before the real trials begin
+#    - Three animated pages show each key on a small demo grid
+#    - Participant presses SPACE to go to the next page
+#    - At the end, they must physically press keys 1, 2, and 3 once
+#      each to confirm they got it before the real trials start
 #
-#  The key directions are defined in KEY_MAPPINGS in config.py.
+#  (Key directions are set in KEY_MAPPINGS in config.py if you
+#  ever need to change which finger maps to which direction.)
 # ============================================================
 
 import pygame

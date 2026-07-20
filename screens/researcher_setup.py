@@ -1,33 +1,34 @@
 # ============================================================
 #  GRID-SAILING TASK — Researcher Setup Screen
 #
-#  *** Juliet does NOT need to edit this file. ***
+#  You don't need to touch this file.
 #
-#  This is the main control screen Juliet uses before every session.
-#  After logging in, she lands on the Researcher Home (three cards),
-#  then taps "New Participant" or "Returning Participant" to reach this form.
+#  This is the main form you fill in before every session. You reach
+#  it by clicking "New Participant" or "Returning Participant" on
+#  the home screen after logging in.
 #
 #  The form has six sections:
 #
-#    §1 Participant   — Enter participant ID (and age/gender/hand for new ones).
-#                       Returning: just type the existing ID and pills of known
-#                       participants appear for reference.
+#    §1 Participant   — Enter the participant ID (plus age/gender/hand for
+#                       new ones). For returning participants, just type
+#                       their ID — you'll see their existing info appear.
 #
-#    §2 Group         — Choose the experimental group (MI-High, PP-Low, etc.)
-#                       Group list comes from GROUPS in config.py.
+#    §2 Group         — Pick their experimental group (MI-High, PP-Low, etc.)
+#                       The list of groups comes from GROUPS in config.py,
+#                       so add or remove groups there if needed.
 #
-#    §3 Session       — Choose session number (1, 2, or 3).
-#                       The block sequence for that session is shown as pills.
+#    §3 Session       — Choose session 1, 2, or 3.
+#                       The block order for that session is shown as pills.
 #
-#    §4 Timing        — Override the default timing for this session only.
-#                       Defaults come from config.py but can be adjusted here
-#                       without permanently changing the config file.
+#    §4 Timing        — Adjust timing for THIS session only.
+#                       Defaults come from config.py, but you can tweak
+#                       them here without permanently changing the file.
 #
-#    §5 Grid Condition — Choose the repeated:random ratio for this session.
-#                        Defaults come from PRACTICE_REPEATED_RATIO in config.py.
+#    §5 Grid Condition — Set the repeated:random puzzle ratio for this session.
+#                        Defaults come from config.py.
 #
-#    §6 Repeated Puzzle — Click two cells on the mini grid to set the shared
-#                         repeated puzzle (mouse start + cheese goal).
+#    §6 Repeated Puzzle — Click two cells on the mini grid to set the
+#                         shared repeated puzzle (start + goal positions).
 #                         Once set, it locks for ALL participants. Reset button
 #                         clears it and lets you choose a new one.
 #
@@ -496,14 +497,16 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
     f_sec   = pygame.font.SysFont("Helvetica Neue", int(16 * _fs), bold=True)
     f_med   = pygame.font.SysFont("Helvetica Neue", int(21 * _fs), bold=True)
     f_sm    = pygame.font.SysFont("Helvetica Neue", int(19 * _fs))
-    f_xs    = pygame.font.SysFont("Helvetica Neue", int(16 * _fs))
+    f_xs      = pygame.font.SysFont("Helvetica Neue", int(16 * _fs))
+    f_cell_lbl = pygame.font.SysFont("Helvetica Neue", max(8, int(10 * _fs)))
     # Fallback
     if not f_title.get_height():
-        f_title = pygame.font.SysFont("Arial", int(38 * _fs), bold=True)
-        f_sec   = pygame.font.SysFont("Arial", int(16 * _fs), bold=True)
-        f_med   = pygame.font.SysFont("Arial", int(21 * _fs), bold=True)
-        f_sm    = pygame.font.SysFont("Arial", int(19 * _fs))
-        f_xs    = pygame.font.SysFont("Arial", int(16 * _fs))
+        f_title    = pygame.font.SysFont("Arial", int(38 * _fs), bold=True)
+        f_sec      = pygame.font.SysFont("Arial", int(16 * _fs), bold=True)
+        f_med      = pygame.font.SysFont("Arial", int(21 * _fs), bold=True)
+        f_sm       = pygame.font.SysFont("Arial", int(19 * _fs))
+        f_xs       = pygame.font.SysFont("Arial", int(16 * _fs))
+        f_cell_lbl = pygame.font.SysFont("Arial", max(8, int(10 * _fs)))
 
     fonts = (f_med, f_med, f_sm, f_xs)
 
@@ -523,6 +526,7 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
     action_input     = NumericInput(INP_X1, 0, ACTION_TIME_SEC,    3, 20)
     feedback_input   = NumericInput(INP_X2, 0, FEEDBACK_TIME_SEC,  1,  5)
     intertrial_input = NumericInput(INP_X2, 0, INTERTRIAL_SEC,     2, 10)
+    start_block_input = NumericInput(INP_X1, 0, 1, 1, 5)  # start from block N (1 = normal start)
 
     practice_cond = ToggleGroup(INP_X1, 0, PRACTICE_REPEATED_RATIO)
     test_cond     = ToggleGroup(INP_X1, 0, TEST_REPEATED_RATIO)
@@ -548,7 +552,7 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
 
     all_dropdowns = [gender_dd, hand_dd, group_dd, session_dd]
     all_inputs    = [pid_box, age_box, ret_pid_box]
-    all_steppers  = [planning_input, action_input, feedback_input, intertrial_input]
+    all_steppers  = [planning_input, action_input, feedback_input, intertrial_input, start_block_input]
 
     # Top-bar icon buttons — x updated each frame in case window size changes
     _back_btn    = pygame.Rect(0, 14, 100, 32)
@@ -625,6 +629,7 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
                     mode, pid_box, age_box, gender_dd, hand_dd,
                     ret_pid_box, group_dd, session_dd,
                     planning_input, action_input, feedback_input, intertrial_input,
+                    start_block_input,
                     practice_cond, test_cond, repeated_start[0], repeated_goal[0]
                 )
                 if isinstance(result, str):
@@ -736,6 +741,100 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
                        bx, oy(y, ROW_H // 2 - 12))
             bx += bw + 8
         y += ROW_H + 20
+
+        # Clamp start_block_input to actual number of blocks in this session
+        start_block_input.max_val = max(1, len(blocks))
+        start_block_input.value   = max(1, min(start_block_input.value, len(blocks)))
+
+        _label(screen, f_sm, "Skip to block", COL1, oy(y))
+        _t(screen, f_xs, "1 = normal start; raise to jump straight to that block (researcher testing only)",
+           DIM, COL2, oy(y, ROW_H // 2 - 7))
+        start_block_input.reposition(INP_X1, oy(y, 5)); start_block_input.draw(screen, f_sm)
+        y += ROW_H + 20
+
+        # ── Trial Mechanics preview ───────────────────────────
+        _grp     = group_dd.value
+        _is_mi   = _grp.startswith("MI")
+        _is_ctrl = _grp.startswith("CTRL")
+
+        # Flow steps for practice blocks (fam/pre/post always run PP mechanics)
+        if _is_mi:
+            _flow = [
+                ("Planning",  ACCENT,       "6 s"),
+                ("Input",     ORANGE,       "Confirm"),
+                ("Action",    (180, 80, 80), "hold SPACE → release"),
+                ("Feedback",  GREEN,        ""),
+            ]
+        elif _is_ctrl:
+            _flow = [
+                ("Planning",  ACCENT,  "6 s"),
+                ("Input",     ORANGE,  "Confirm"),
+                ("Feedback",  GREEN,   ""),
+            ]
+        else:  # PP
+            _flow = [
+                ("Planning",  ACCENT,       "6 s"),
+                ("Input",     ORANGE,       "Confirm"),
+                ("Action",    (180, 80, 80), "press keys → SPACE"),
+                ("Feedback",  GREEN,        ""),
+            ]
+
+        # Flow panel row
+        _fp_h    = 54
+        _fp_rect = pygame.Rect(COL1, oy(y), WINDOW_WIDTH - COL1 - PAD, _fp_h)
+        pygame.draw.rect(screen, PANEL,  _fp_rect, border_radius=8)
+        pygame.draw.rect(screen, BORDER, _fp_rect, width=1, border_radius=8)
+
+        _ml     = f_xs.render(f"Practice flow · {_grp}:", True, DIM)
+        _mx     = COL1 + 12
+        _my_mid = oy(y) + _fp_h // 2
+        screen.blit(_ml, (_mx, _my_mid - _ml.get_height() // 2))
+        _mx += _ml.get_width() + 16
+
+        for _si, (_sn, _sc, _ss) in enumerate(_flow):
+            _st      = f"{_sn}  {_ss}".strip() if _ss else _sn
+            _ss_surf = f_xs.render(_st, True, _sc)
+            _bw      = _ss_surf.get_width() + 14
+            _bh      = f_xs.get_height() + 10
+            _by      = _my_mid - _bh // 2
+            _dc      = tuple(max(0, c - 185) for c in _sc)
+            pygame.draw.rect(screen, _dc, (_mx, _by, _bw, _bh), border_radius=5)
+            pygame.draw.rect(screen, _sc, (_mx, _by, _bw, _bh), width=1, border_radius=5)
+            screen.blit(_ss_surf, (_mx + 7, _my_mid - _ss_surf.get_height() // 2))
+            _mx += _bw + 4
+            if _si < len(_flow) - 1:
+                _ar = f_xs.render("->", True, DIM)
+                screen.blit(_ar, (_mx + 2, _my_mid - _ar.get_height() // 2))
+                _mx += _ar.get_width() + 8
+
+        y += _fp_h + 6
+
+        # Timer pills: one per block in this session
+        _tl = f_xs.render("Timers:", True, DIM)
+        screen.blit(_tl, (COL1, oy(y, 8)))
+        _tx = COL1 + _tl.get_width() + 12
+        _fc = 0
+        for _b in blocks:
+            if _b == "familiarization":
+                _fc += 1
+                _ht = _fc > 1
+            else:
+                _ht = True
+            _pill_txt = f"{_b.replace('_', ' ')}  {'6 s' if _ht else 'no timer'}"
+            _pill_fg  = BG  if _ht else DIM
+            _pill_bg  = ACCENT if _ht else (38, 38, 62)
+            _tw = _pill(screen, f_xs, _pill_txt, _pill_fg, _pill_bg, _tx, oy(y, 4))
+            _tx += _tw + 8
+        y += ROW_H + 4
+
+        # Note
+        _note_s = f_xs.render(
+            "Fam block 1 = free exploration (no planning). "
+            "Fam block 2 / Pre-test / Post-test = PP mechanics for all groups. "
+            "Groups differ only in practice blocks.",
+            True, (68, 68, 102))
+        screen.blit(_note_s, (COL1, oy(y)))
+        y += _note_s.get_height() + 20
 
         # ── §4: Timing ────────────────────────────────────────
         y += _section(screen, f_sec, "4  Timing Overrides (seconds)", oy(y))
@@ -864,7 +963,8 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
 
                 pygame.draw.rect(screen, bg,     cr, border_radius=6)
                 pygame.draw.rect(screen, BORDER, cr, width=1, border_radius=6)
-                lbl = f_xs.render(cell_label, True, tc2)
+                _lf  = f_cell_lbl if cell_label in ("MOUSE", "CHEESE") else f_xs
+                lbl  = _lf.render(cell_label, True, tc2)
                 screen.blit(lbl, (cr.x + cr.w // 2 - lbl.get_width() // 2,
                                   cr.y + cr.h // 2 - lbl.get_height() // 2))
 
@@ -951,6 +1051,7 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
 def _validate_and_launch(mode, pid_box, age_box, gender_dd, hand_dd,
                          ret_pid_box, group_dd, session_dd,
                          planning_input, action_input, feedback_input, intertrial_input,
+                         start_block_input,
                          practice_cond, test_cond, repeated_start, repeated_goal=None):
     if mode == "new":
         pid     = pid_box.text.strip().upper()
@@ -969,15 +1070,16 @@ def _validate_and_launch(mode, pid_box, age_box, gender_dd, hand_dd,
         participant_id = pid
 
     return {
-        "participant_id":  participant_id,
-        "group":           group_dd.value,
-        "session_number":  session_dd.value,
-        "planning_time":   planning_input.value,
-        "action_time":     action_input.value,
-        "feedback_time":   feedback_input.value,
-        "intertrial_time": intertrial_input.value,
-        "practice_ratio":  practice_cond.value,
-        "test_ratio":      test_cond.value,
-        "repeated_start":  repeated_start,   # (row, col) or None
-        "repeated_goal":   repeated_goal,    # (row, col) or None
+        "participant_id":   participant_id,
+        "group":            group_dd.value,
+        "session_number":   session_dd.value,
+        "planning_time":    planning_input.value,
+        "action_time":      action_input.value,
+        "feedback_time":    feedback_input.value,
+        "intertrial_time":  intertrial_input.value,
+        "start_from_block": start_block_input.value,
+        "practice_ratio":   practice_cond.value,
+        "test_ratio":       test_cond.value,
+        "repeated_start":   repeated_start,  # (row, col) or None
+        "repeated_goal":    repeated_goal,   # (row, col) or None
     }

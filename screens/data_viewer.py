@@ -1,32 +1,31 @@
 # ============================================================
 #  GRID-SAILING TASK — Data Viewer
 #
-#  *** Juliet does NOT need to edit this file. ***
+#  You don't need to touch this file.
 #
-#  This is the participant progress dashboard, reached via
-#  "View Data" from the Researcher Home or Setup screens.
+#  This is the dashboard you get when you click "View Data."
+#  It has two views:
 #
-#  View A — Overview table (one row per participant):
-#    Shows participant ID, group, age, sessions completed,
-#    total trials, average score, and accuracy percentage.
-#    Click any row to see that participant's session breakdown
-#    in the side panel on the right.
-#    Click again (or press Enter) to drill into View B.
+#  View A — participant overview (the main table):
+#    One row per participant. Shows their ID, group, age, how many
+#    sessions they've done, total trials, average score, and accuracy.
+#    Click a row to see their session breakdown in the right panel.
+#    Click again (or press Enter) to zoom in to View B.
 #
-#  View B — Trial-by-trial breakdown (one row per trial):
-#    Shows every trial for one participant: session, block type,
-#    trial number, grid type, result, moves vs optimal, score,
-#    reaction time, and duration.
+#  View B — trial-by-trial breakdown for one participant:
+#    Shows every single trial they've done: which session, block type,
+#    trial number, grid type, whether they got it right, how many moves
+#    vs the optimal, their score, reaction time, and how long it took.
 #
-#  Bottom bar buttons (View A):
-#    < Back             — return to Researcher Home
-#    Export All         — save all participants to a CSV (per key press)
-#    Export Summary     — save all participants to a CSV (per trial)
-#    Export Reflections — save MI group 3E report cards to a CSV
-#    Sync All           — push all existing data to Firebase cloud backup
+#  Buttons across the bottom (in View A):
+#    < Back             — go back to the home screen
+#    Export All         — CSV with every key press from everyone
+#    Export Summary     — CSV with one row per trial (easier to use)
+#    Export Reflections — CSV with all the 3E reflection forms
+#    Sync All           — push everything to Firebase right now
 #
-#  The table refreshes automatically every 3 seconds so data
-#  collected in another session appears without restarting.
+#  The table auto-refreshes every 3 seconds, so if a session is
+#  running on another window, the numbers update without restarting.
 # ============================================================
 
 import pygame
@@ -38,7 +37,7 @@ from database.db import (
 )
 from export.exporter import export_participant, export_all, export_summary, export_reflections
 from sync.firebase_sync import sync_all_in_background
-from config import WINDOW_WIDTH, WINDOW_HEIGHT, FPS
+from config import WINDOW_WIDTH, WINDOW_HEIGHT, FPS, SESSION_STRUCTURE
 
 # ── Palette ───────────────────────────────────────────────────
 BG      = (8,    8,   16)
@@ -131,12 +130,13 @@ def _stat_card(screen, fonts, x, y, w, h, label, value, sub, col):
     _panel(screen, x, y, w, h, border_col=BORDER, r=14, fill=PANEL)
     pygame.draw.rect(screen, col, (x + 1, y + 1, w - 2, 4), border_radius=14)   # top bar
     lbl_s = f_xs.render(label.upper(), True, DIM)
-    screen.blit(lbl_s, (x + 18, y + 14))
+    screen.blit(lbl_s, (x + 18, y + 12))
+    val_y = y + 12 + f_xs.get_height() + 6
     val_s = f_big.render(value, True, col)
-    screen.blit(val_s, (x + 18, y + 34))
+    screen.blit(val_s, (x + 18, val_y))
     if sub:
         sub_s = f_xs.render(sub, True, DIM2)
-        screen.blit(sub_s, (x + 18, y + h - 20))
+        screen.blit(sub_s, (x + 18, val_y + f_big.get_height() + 6))
 
 
 def _ghost_btn(screen, fonts, label, rect):
@@ -158,14 +158,14 @@ def _action_btn(screen, fonts, label, sub, rect, color):
     pygame.draw.rect(screen, (4, 4, 10),
                      (rect.x + 2, rect.y + 3, rect.w, rect.h), border_radius=10)
     pygame.draw.rect(screen, col, rect, border_radius=10)
-    offset = -8 if sub else 0
+    f_sm_h  = f_sm.get_height()
+    total_h = f_sm_h + (6 + f_xs.get_height() if sub else 0)
+    ty = rect.centery - total_h // 2
     ls = f_sm.render(label, True, (8, 8, 16))
-    screen.blit(ls, (rect.centerx - ls.get_width() // 2,
-                     rect.centery + offset - ls.get_height() // 2))
+    screen.blit(ls, (rect.centerx - ls.get_width() // 2, ty))
     if sub:
         ss = f_xs.render(sub, True, (30, 30, 50))
-        screen.blit(ss, (rect.centerx - ss.get_width() // 2,
-                         rect.centery + 8 - ss.get_height() // 2))
+        screen.blit(ss, (rect.centerx - ss.get_width() // 2, ty + f_sm_h + 6))
 
 
 SB_W = 10   # scrollbar width
@@ -199,23 +199,25 @@ def _scrollbar_click(ev_pos, thumb_r, clip_top, clip_bot, total, visible):
     return max(0, min(int(frac * total), total - visible))
 
 
-def _bottom_bar(screen):
+def _bottom_bar(screen, bbar_h=96):
     """Draw the bottom bar background + divider — call before drawing buttons."""
-    pygame.draw.rect(screen, SURFACE, (0, H - 96, W, 96))
-    pygame.draw.line(screen, BORDER, (0, H - 96), (W, H - 96))
+    pygame.draw.rect(screen, SURFACE, (0, H - bbar_h, W, bbar_h))
+    pygame.draw.line(screen, BORDER, (0, H - bbar_h), (W, H - bbar_h))
 
 
 # ── Column builders ───────────────────────────────────────────
 
-def _cols_a(table_w):
+def _cols_a(table_w, f_xs=None):
     """View A column definitions. Last column fills the remainder."""
+    def _w(lbl, base):
+        return max(base, f_xs.size(lbl)[0] + 28) if f_xs else base
     fixed = [
-        (164, "PARTICIPANT"),
-        (148, "GROUP"),
-        (68,  "AGE"),
-        (96,  "SESSIONS"),
-        (88,  "TRIALS"),
-        (106, "AVG SCORE"),
+        (_w("PARTICIPANT", 164), "PARTICIPANT"),
+        (_w("GROUP",       148), "GROUP"),
+        (_w("AGE",          68), "AGE"),
+        (_w("SESSIONS",     96), "SESSIONS"),
+        (_w("TRIALS",       88), "TRIALS"),
+        (_w("AVG SCORE",   106), "AVG SCORE"),
     ]
     used = sum(w for w, _ in fixed)
     cols, x = [], 0
@@ -251,38 +253,79 @@ def _cols_b(tw):
 #  VIEW A — Participant summary list
 # ──────────────────────────────────────────────────────────────
 
+def _build_roadmap(actual_sessions):
+    """Merge the study plan (SESSION_STRUCTURE) with actual DB sessions.
+    Returns an ordered list of dicts; each has a 'status' key:
+      'done'     — block completed
+      'active'   — block started but not finished
+      'upcoming' — block not yet started
+    """
+    actual_map = {}
+    for s in actual_sessions:
+        key = (s["session_number"], s["block_number"])
+        actual_map[key] = s
+
+    roadmap = []
+    for sn in sorted(SESSION_STRUCTURE.keys()):
+        for bn, bt in enumerate(SESSION_STRUCTURE[sn], start=1):
+            key = (sn, bn)
+            if key in actual_map:
+                row = dict(actual_map[key])
+                row["status"] = "done" if row["completed"] else "active"
+            else:
+                row = {
+                    "session_number": sn,
+                    "block_number":   bn,
+                    "block_type":     bt,
+                    "status":         "upcoming",
+                    "trials":         0,
+                    "accuracy_pct":   0,
+                    "completed":      False,
+                }
+            roadmap.append(row)
+    return roadmap
+
+
 def _view_a(screen, clock, fonts, on_select):
     f_big, f_med, f_sm, f_xs = fonts
 
-    CARD_H   = 104
+    CARD_H   = max(104, 12 + f_xs.get_height() + 6 + f_big.get_height() + 6 + f_xs.get_height() + 10)
     CARDS_Y  = 80
-    TABLE_Y  = CARDS_Y + CARD_H + 16          # 200
+    TABLE_Y  = CARDS_Y + CARD_H + 16
     SIDE_W   = 304
     GAP      = 24
     TABLE_W  = W - PAD * 2 - SIDE_W - GAP
     SIDE_X   = PAD + TABLE_W + GAP
     HDR_H    = 40
-    CLIP_TOP = TABLE_Y + HDR_H                 # 240
-    CLIP_BOT = H - 96
-    VIS      = max(1, (CLIP_BOT - CLIP_TOP) // ROW_H)
+    CLIP_TOP = TABLE_Y + HDR_H
+    btn_h    = max(52, f_sm.get_height() + f_xs.get_height() + 16)
+    BBAR_H   = max(96, btn_h + 20)
+    card_h_sess  = max(60, f_sm.get_height() + f_xs.get_height() + 34)
+    CLIP_BOT     = H - BBAR_H - f_xs.get_height() - 12   # reserve hint row above bar
+    VIS          = max(1, (CLIP_BOT - CLIP_TOP) // ROW_H)
 
-    COLS = _cols_a(TABLE_W)
+    COLS = _cols_a(TABLE_W, f_xs)
 
-    stats        = []
-    sessions     = []
-    sel          = 0
-    scroll       = 0
-    refresh_t    = 0
+    stats          = []
+    full_sessions  = []
+    sel            = 0
+    scroll         = 0
+    sess_scroll    = 0
+    sess_max_scroll = 0
+    refresh_t      = 0
     msg = ""; msg_col = GREEN
-    sb_dragging  = False
-    sb_drag_orig = (0, 0, 0)   # (mouse_y_start, scroll_start, total)
+    sb_dragging    = False
+    sb_drag_orig   = (0, 0, 0)   # (mouse_y_start, scroll_start, total)
 
-    BBAR_Y    = H - 76
-    back_r    = pygame.Rect(PAD,            BBAR_Y, 110, 42)
-    exp_all_r = pygame.Rect(PAD + 122,      BBAR_Y, 200, 42)
-    exp_sum_r = pygame.Rect(PAD + 334,      BBAR_Y, 210, 42)
-    exp_ref_r  = pygame.Rect(PAD + 556,      BBAR_Y, 230, 42)
-    sync_all_r = pygame.Rect(PAD + 798,      BBAR_Y, 190, 42)
+    def _abw(lbl, sub):
+        return max(f_sm.size(lbl)[0], f_xs.size(sub)[0]) + 32
+
+    BBAR_Y     = H - BBAR_H + (BBAR_H - btn_h) // 2
+    back_r     = pygame.Rect(PAD,                  BBAR_Y, max(110, f_xs.size("< Back")[0] + 24), btn_h)
+    exp_all_r  = pygame.Rect(back_r.right    + 12, BBAR_Y, _abw("Export All",         "all participants CSV"),  btn_h)
+    exp_sum_r  = pygame.Rect(exp_all_r.right + 12, BBAR_Y, _abw("Export Summary",     "one row per trial"),     btn_h)
+    exp_ref_r  = pygame.Rect(exp_sum_r.right + 12, BBAR_Y, _abw("Export Reflections", "MI group 3E logs"),      btn_h)
+    sync_all_r = pygame.Rect(exp_ref_r.right + 12, BBAR_Y, _abw("Sync All",           "push all to Firebase"),  btn_h)
     thumb_r   = None
 
     SB_X = PAD + TABLE_W + SB_W + 2   # scrollbar x in view A
@@ -298,8 +341,11 @@ def _view_a(screen, clock, fonts, on_select):
             stats = get_participant_stats()
             if stats:
                 sel = min(sel, len(stats) - 1)
-                sessions = get_session_breakdown(stats[sel]["participant_id"])
+                full_sessions = _build_roadmap(
+                    get_session_breakdown(stats[sel]["participant_id"]))
             refresh_t = now
+
+        mx_ev, my_ev = pygame.mouse.get_pos()
 
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
@@ -309,15 +355,23 @@ def _view_a(screen, clock, fonts, on_select):
                 if ev.key == pygame.K_ESCAPE:
                     return
                 if ev.key == pygame.K_DOWN and stats:
+                    prev = sel
                     sel = min(sel + 1, len(stats) - 1)
                     if sel >= scroll + VIS:
                         scroll += 1
-                    sessions = get_session_breakdown(stats[sel]["participant_id"])
+                    if sel != prev:
+                        sess_scroll = 0
+                        full_sessions = _build_roadmap(
+                            get_session_breakdown(stats[sel]["participant_id"]))
                 if ev.key == pygame.K_UP and stats:
+                    prev = sel
                     sel = max(sel - 1, 0)
                     if sel < scroll:
                         scroll -= 1
-                    sessions = get_session_breakdown(stats[sel]["participant_id"])
+                    if sel != prev:
+                        sess_scroll = 0
+                        full_sessions = _build_roadmap(
+                            get_session_breakdown(stats[sel]["participant_id"]))
 
             if ev.type == pygame.MOUSEBUTTONUP:
                 sb_dragging = False
@@ -351,8 +405,7 @@ def _view_a(screen, clock, fonts, on_select):
                     ri  = (my - CLIP_TOP) // ROW_H
                     idx = ri + scroll
                     if 0 <= idx < len(stats):
-                        sel      = idx
-                        sessions = get_session_breakdown(stats[sel]["participant_id"])
+                        sel = idx
                         on_select(stats[sel]["participant_id"])
                         return
                 if back_r.collidepoint(ev.pos):
@@ -371,7 +424,15 @@ def _view_a(screen, clock, fonts, on_select):
                     msg = "Syncing all data to Firebase..."; msg_col = ACCENT
 
             if ev.type == pygame.MOUSEWHEEL:
-                scroll = max(0, min(scroll - ev.y * 3, max(0, len(stats) - VIS)))
+                dy = getattr(ev, 'precise_y', None)
+                if dy is None or (dy == 0 and ev.y != 0):
+                    dy = float(ev.y)
+                if SIDE_X <= mx_ev <= SIDE_X + SIDE_W:
+                    sess_scroll = max(0, min(sess_max_scroll,
+                                             sess_scroll - int(dy * card_h_sess // 2)))
+                else:
+                    scroll = max(0, min(scroll - int(dy) * 3,
+                                        max(0, len(stats) - VIS)))
 
         # ── Draw ─────────────────────────────────────────────
         screen.fill(BG)
@@ -485,66 +546,90 @@ def _view_a(screen, clock, fonts, on_select):
                          border_radius=12)
 
         if stats:
-            pid  = stats[sel]["participant_id"]
-            grp  = stats[sel]["group_name"]
-            gcol = GROUP_COLORS.get(grp, DIM)
-            _t(screen, f_sm, pid, WHITE, SIDE_X + 16, TABLE_Y + 14)
-            _pill(screen, f_xs, grp, (8, 8, 16), gcol, SIDE_X + 16, TABLE_Y + 44)
-            pygame.draw.line(screen, BORDER,
-                             (SIDE_X + 12, TABLE_Y + 74),
-                             (SIDE_X + SIDE_W - 12, TABLE_Y + 74))
-            hdr_s = f_xs.render("SESSIONS", True, DIM)
-            screen.blit(hdr_s, (SIDE_X + 16, TABLE_Y + 82))
+            pid    = stats[sel]["participant_id"]
+            grp    = stats[sel]["group_name"]
+            gcol   = GROUP_COLORS.get(grp, DIM)
+            f_sm_h = f_sm.get_height()
+            f_xs_h = f_xs.get_height()
+            pill_h = f_xs_h + 6
 
-            ry2 = TABLE_Y + 108
-            for s in sessions:
-                if ry2 + 66 > TABLE_Y + ph - 10:
-                    break
-                done = bool(s["completed"])
-                bc   = GREEN if done else BORDER
-                _shadow(screen, SIDE_X + 10, ry2, SIDE_W - 20, 60, r=10)
+            sy = TABLE_Y + 14
+            _t(screen, f_sm, pid, WHITE, SIDE_X + 16, sy)
+            sy += f_sm_h + 8
+            _pill(screen, f_xs, grp, (8, 8, 16), gcol, SIDE_X + 16, sy)
+            sy += pill_h + 10
+            pygame.draw.line(screen, BORDER,
+                             (SIDE_X + 12, sy), (SIDE_X + SIDE_W - 12, sy))
+            sy += 8
+            screen.blit(f_xs.render("SESSIONS", True, DIM), (SIDE_X + 16, sy))
+
+            SESS_LIST_TOP = sy + f_xs_h + 8
+            SESS_LIST_BOT = TABLE_Y + ph - 10
+            total_sess_h  = len(full_sessions) * (card_h_sess + 8)
+            sess_max_scroll = max(0, total_sess_h - (SESS_LIST_BOT - SESS_LIST_TOP))
+
+            screen.set_clip(pygame.Rect(SIDE_X + 8, SESS_LIST_TOP,
+                                        SIDE_W - 16, SESS_LIST_BOT - SESS_LIST_TOP))
+            ry2 = SESS_LIST_TOP - sess_scroll
+            for s in full_sessions:
+                if ry2 + card_h_sess < SESS_LIST_TOP or ry2 > SESS_LIST_BOT:
+                    ry2 += card_h_sess + 8
+                    continue
+                status = s["status"]
+                done   = (status == "done")
+                bc = (GREEN  if done else
+                      ACCENT if status == "active" else (30, 30, 50))
+                title_col = WHITE if status in ("done", "active") else (55, 55, 85)
+                _shadow(screen, SIDE_X + 10, ry2, SIDE_W - 20, card_h_sess, r=10)
                 pygame.draw.rect(screen, PANEL2,
-                                 (SIDE_X + 10, ry2, SIDE_W - 20, 60), border_radius=10)
+                                 (SIDE_X + 10, ry2, SIDE_W - 20, card_h_sess), border_radius=10)
                 pygame.draw.rect(screen, bc,
-                                 (SIDE_X + 10, ry2, SIDE_W - 20, 60), width=1,
+                                 (SIDE_X + 10, ry2, SIDE_W - 20, card_h_sess), width=1,
                                  border_radius=10)
                 if done:
                     pygame.draw.rect(screen, GREEN,
-                                     (SIDE_X + 10, ry2, 3, 60), border_radius=3)
+                                     (SIDE_X + 10, ry2, 3, card_h_sess), border_radius=3)
+                elif status == "active":
+                    pygame.draw.rect(screen, ACCENT,
+                                     (SIDE_X + 10, ry2, 3, card_h_sess), border_radius=3)
                 lbl2 = (f"S{s['session_number']}  "
                         f"{s['block_type'].replace('_', ' ').title()}")
-                _t(screen, f_sm, lbl2,
-                   WHITE if done else DIM, SIDE_X + 20, ry2 + 8)
-                _t(screen, f_xs,
-                   f"Trials: {int(s['trials'])}    Acc: {s['accuracy_pct']:.0f}%",
-                   DIM, SIDE_X + 20, ry2 + 32)
-                _bar(screen, SIDE_X + 20, ry2 + 50, SIDE_W - 40, 4,
-                     s["accuracy_pct"] / 100.0,
-                     GREEN if s["accuracy_pct"] >= 70 else ORANGE)
-                ry2 += 68
-
-            if not sessions:
-                _t(screen, f_xs, "No sessions yet.", DIM, SIDE_X + 16, TABLE_Y + 110)
+                ty = ry2 + 10
+                _t(screen, f_sm, lbl2, title_col, SIDE_X + 20, ty)
+                stats_y = ty + f_sm_h + 6
+                if status == "upcoming":
+                    _t(screen, f_xs, "Upcoming", (55, 55, 85), SIDE_X + 20, stats_y)
+                else:
+                    _t(screen, f_xs,
+                       f"Trials: {int(s['trials'])}    Acc: {s['accuracy_pct']:.0f}%",
+                       DIM, SIDE_X + 20, stats_y)
+                    bar_y = stats_y + f_xs_h + 4
+                    _bar(screen, SIDE_X + 20, bar_y, SIDE_W - 40, 4,
+                         s["accuracy_pct"] / 100.0,
+                         GREEN if s["accuracy_pct"] >= 70 else ORANGE)
+                ry2 += card_h_sess + 8
+            screen.set_clip(None)
         else:
             _t(screen, f_xs, "Select a participant to preview.",
                DIM, SIDE_X + 16, TABLE_Y + 24)
 
         # Bottom bar
-        _bottom_bar(screen)
+        _bottom_bar(screen, BBAR_H)
         _ghost_btn(screen,  fonts, "< Back",             back_r)
         _action_btn(screen, fonts, "Export All",        "all participants CSV",  exp_all_r, ORANGE)
         _action_btn(screen, fonts, "Export Summary",    "one row per trial",     exp_sum_r, PURPLE)
         _action_btn(screen, fonts, "Export Reflections","MI group 3E logs",      exp_ref_r, GREEN)
         _action_btn(screen, fonts, "Sync All",          "push all to Firebase",  sync_all_r, ACCENT)
 
+        hint_y = H - BBAR_H - 6 - f_xs.get_height()
         if msg:
             ms = f_xs.render(msg, True, msg_col)
-            screen.blit(ms, (W - PAD - ms.get_width(), H - 54))
-
-        hint = (f"Auto-refreshes every 3 s  "
-                f"·  {n_parts} participant(s)  ·  {n_trials} total trial(s)")
-        hs = f_xs.render(hint, True, DIM2)
-        screen.blit(hs, (W // 2 - hs.get_width() // 2, H - 20))
+            screen.blit(ms, (W // 2 - ms.get_width() // 2, hint_y))
+        else:
+            hint = (f"Auto-refreshes every 3 s  "
+                    f"·  {n_parts} participant(s)  ·  {n_trials} total trial(s)")
+            hs = f_xs.render(hint, True, DIM2)
+            screen.blit(hs, (W // 2 - hs.get_width() // 2, hint_y))
 
         pygame.display.flip()
 
@@ -560,21 +645,25 @@ def _view_b(screen, clock, fonts, pid):
     scroll   = 0
     msg = ""; msg_col = GREEN
 
-    STATS_H  = 104
+    STATS_H  = max(104, 12 + f_xs.get_height() + 6 + f_big.get_height() + 10)
     STATS_Y  = 80
-    HDR_Y    = STATS_Y + STATS_H + 14          # 198
+    HDR_Y    = STATS_Y + STATS_H + 14
     HDR_H    = 40
     CLIP_TOP = HDR_Y + HDR_H                   # 238
-    CLIP_BOT = H - 96
+    btn_h    = max(52, f_sm.get_height() + f_xs.get_height() + 16)
+    BBAR_H   = max(96, btn_h + 20)
+    CLIP_BOT = H - BBAR_H
     TW       = W - PAD * 2
     VIS      = max(1, (CLIP_BOT - CLIP_TOP) // ROW_H)
 
     COLS = _cols_b(TW)
 
-    BBAR_Y      = H - 76
-    back_r      = pygame.Rect(PAD,       BBAR_Y, 110, 42)
-    exp_r       = pygame.Rect(PAD + 122, BBAR_Y, 250, 42)
-    graphs_r    = pygame.Rect(PAD + 386, BBAR_Y, 150, 42)
+    BBAR_Y   = H - BBAR_H + (BBAR_H - btn_h) // 2
+    back_r   = pygame.Rect(PAD,                BBAR_Y, max(110, f_xs.size("< Back")[0] + 24), btn_h)
+    exp_w    = max(f_sm.size(f"Export  {pid}")[0], f_xs.size("full keypress CSV")[0]) + 32
+    exp_r    = pygame.Rect(back_r.right + 12,  BBAR_Y, exp_w, btn_h)
+    graphs_w = max(f_sm.size("Graphs")[0], f_xs.size("pre/post test charts")[0]) + 32
+    graphs_r = pygame.Rect(exp_r.right  + 12,  BBAR_Y, graphs_w, btn_h)
     thumb_r     = None
     sb_dragging = False
     sb_drag_orig = (0, 0, 0)
@@ -738,7 +827,7 @@ def _view_b(screen, clock, fonts, pid):
                              CLIP_TOP, CLIP_BOT, len(trials), VIS, scroll)
 
         # Bottom bar
-        _bottom_bar(screen)
+        _bottom_bar(screen, BBAR_H)
         _ghost_btn(screen,  fonts, "< Back",             back_r)
         _action_btn(screen, fonts, f"Export  {pid}",
                     "full keypress CSV",                  exp_r,    ACCENT)
