@@ -64,6 +64,7 @@ def main():
     )
 
     # ── Step 1: Welcome screen ────────────────────────────────
+
     # You type the admin password here. If you close without logging in,
     # the app exits cleanly.
     role = run_welcome(screen, clock)

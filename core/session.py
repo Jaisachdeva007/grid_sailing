@@ -32,12 +32,12 @@ from config import (
 )
 from sync.firebase_sync import sync_in_background
 from core.grid import find_valid_paths, apply_key
-from core.trial import TrialData, run_trial
+from core.trial import TrialData, run_trial, run_explore_trial
 from screens.reflection import run_reflection
 from screens.tutorial import run_tutorial
 from database.db import (
     create_session, complete_session,
-    get_resume_point, initialise_database,
+    get_resume_point, get_completed_blocks, initialise_database,
     get_global_repeated_puzzle, set_global_repeated_puzzle,
 )
 
@@ -210,11 +210,12 @@ def run_block(screen, clock, fonts, block_type, block_number,
     last_sync_time  = _time.time()
     last_sync_trial = resume_from_trial
 
-    # Fam block 1 has no planning timer (still recorded, just not shown).
-    # Fam block 2 and pre/post-test have a normal 6s timer.
-    # Score is hidden for fam, pre-test, and post-test — only shown in practice.
-    show_timer = not (block_type == "familiarization" and block_number == 1)
-    show_score = block_type not in ("familiarization", "pre_test", "post_test")
+    # Fam block 1 → free exploration mode (no timer, no planning, no sequence input).
+    # Fam block 2 and all other blocks → 6-second planning timer.
+    # Score shown only during practice blocks.
+    is_explore = (block_type == "familiarization" and block_number == 1)
+    show_timer = not is_explore
+    show_score = (block_type == "practice")
 
     # Session state passed to the researcher panel so it can show trial status live.
     session_state = {
@@ -259,16 +260,25 @@ def run_block(screen, clock, fonts, block_type, block_number,
             group                 = group,
         )
 
-        result = run_trial(
-            screen, clock, fonts, trial, config,
-            cumulative_score, session_id,
-            total_trials=n_trials,
-            block_type=block_type,
-            streak=streak,
-            show_timer=show_timer,
-            show_score=show_score,
-            session_state=session_state,
-        )
+        if is_explore:
+            result = run_explore_trial(
+                screen, clock, fonts, trial, config,
+                cumulative_score, session_id,
+                total_trials=n_trials,
+                block_type=block_type,
+                session_state=session_state,
+            )
+        else:
+            result = run_trial(
+                screen, clock, fonts, trial, config,
+                cumulative_score, session_id,
+                total_trials=n_trials,
+                block_type=block_type,
+                streak=streak,
+                show_timer=show_timer,
+                show_score=show_score,
+                session_state=session_state,
+            )
 
         if result.get("paused_exit"):
             sync_in_background(session_id, trial_number - 1)
@@ -389,14 +399,27 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
     _show_loading(screen, fonts)
     pool = build_puzzle_pool()
 
-    block_sequence  = SESSION_STRUCTURE.get(session_number, [])
+    block_sequence   = SESSION_STRUCTURE.get(session_number, [])
     cumulative_score = 0
     repeated_puzzle  = None   # fixed across the whole session
+    start_from_block = config.get("start_from_block", 1)
 
-    # Instructions shown once before the very first block
-    _show_instructions(screen, clock, fonts, group)
+    # Auto-advance past already-completed blocks so a restart never re-runs them.
+    completed_blocks = get_completed_blocks(participant_id, session_number)
+    if completed_blocks:
+        auto_start = max(completed_blocks) + 1
+        if auto_start > start_from_block:
+            start_from_block = auto_start
+            print(f"[SESSION] Auto-resuming from block {start_from_block} "
+                  f"(blocks {sorted(completed_blocks)} already done)")
+
+    # Skip instructions when jumping into the middle of a session
+    if start_from_block <= 1:
+        _show_instructions(screen, clock, fonts, group)
 
     for block_idx, block_type in enumerate(block_sequence):
+        if block_idx + 1 < start_from_block:
+            continue   # already completed or researcher chose to skip
         result = run_block(
             screen         = screen,
             clock          = clock,
@@ -568,14 +591,21 @@ def _card_screen(screen, clock, fonts, title, title_col, badge, lines,
 def _show_block_intro(screen, clock, fonts, block_type, block_number,
                       session_number, group, config):
     if block_type == "familiarization" and block_number == 1:
-        desc = "Take as long as you need to look at each grid — no timer and no score. Just explore!"
+        desc = ("Explore the grid freely! Press 1, 2, or 3 on the keypad to move the mouse. "
+                "When you reach the cheese the next trial starts automatically. "
+                "No timer, no score — just learn how the keys move the cursor.")
     elif block_type == "familiarization":
-        desc = "Same as before but now there's a 6-second planning timer. Still no score shown."
+        desc = ("Now you will plan first, then act. Study the grid for 6 seconds, enter your "
+                "sequence, then physically press the keys on the keypad. "
+                "Press SPACE when you are done. No score shown.")
     else:
         desc = {
-            "pre_test":  "A baseline test. Plan your route and execute it. No score shown.",
-            "practice":  "Practice block. Your score will appear after each trial.",
-            "post_test": "Final performance test. Plan and execute. No score shown.",
+            "pre_test":  ("Baseline test. 6-second planning timer. Enter your sequence, "
+                          "then execute it on the keypad. No score shown."),
+            "practice":  ("Practice block. 6-second planning timer. Enter your sequence, "
+                          "execute it on the keypad, then see your score and replay."),
+            "post_test": ("Final test. 6-second planning timer. Enter your sequence, "
+                          "then execute it on the keypad. No score shown."),
         }.get(block_type, "")
 
     badge = f"Session {session_number}  ·  Block {block_number}  ·  {group}"
@@ -608,6 +638,16 @@ def _show_break(screen, clock, fonts,
                  hint_text="Press  SPACE  when you are ready to continue")
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# JULIET — INSTRUCTION TEXT IS HERE
+#
+# _show_instructions()  →  the 5 slides shown once before Session 1 begins.
+# _show_block_intro()   →  the short screen shown before every block.
+# _show_break()         →  the "Take a short break" screen between blocks.
+#
+# To change what participants see, edit the string literals inside the
+# _slide() / _card_screen() calls below.  Each line is a (text, colour) tuple.
+# ════════════════════════════════════════════════════════════════════════════
 def _show_instructions(screen, clock, fonts, group):
     """Multi-slide instruction sequence shown once before the first block."""
 
@@ -653,14 +693,18 @@ def _show_instructions(screen, clock, fonts, group):
     )
 
     # Slide 4 — How to enter a sequence
+    # ── EDIT INSTRUCTIONS HERE ──────────────────────────────────────────
+    # This is the slide that explains how to enter a movement sequence.
+    # Change the text strings in the list below to update what participants see.
+    # ────────────────────────────────────────────────────────────────────
     _slide(
         "Entering Your Plan",
         ACCENT, None,
         [
-            ("During planning, decide the shortest route.", DIM),
-            ("Then click the  1 / 2 / 3  buttons to enter your sequence.", DIM),
-            ("Click  Undo  to remove the last step,  Confirm  when done.", DIM),
-            ("You will then execute the plan in the next stage.", DIM),
+            ("You have 6 seconds to study the grid and plan your route.", DIM),
+            ("Then the grid hides — click  1 / 2 / 3  or press the keypad", DIM),
+            ("to enter your sequence.", DIM),
+            ("Press  Confirm  when done. You will then execute the plan.", DIM),
         ],
     )
 

@@ -287,6 +287,10 @@ def get_participant_trials(participant_id):
             s.block_number,
             t.trial_number,
             t.grid_type,
+            t.start_row,
+            t.start_col,
+            t.goal_row,
+            t.goal_col,
             t.planned_sequence,
             t.optimal_sequence,
             t.optimal_length,
@@ -381,6 +385,18 @@ def complete_session(session_id):
     )
     conn.commit()
     conn.close()
+
+
+def get_completed_blocks(participant_id, session_number):
+    """Return set of block_numbers already fully completed for this session."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT DISTINCT block_number FROM sessions
+        WHERE participant_id = ? AND session_number = ?
+          AND completed_at IS NOT NULL
+    """, (participant_id, session_number)).fetchall()
+    conn.close()
+    return {r["block_number"] for r in rows}
 
 
 def get_resume_point(participant_id, session_number, block_type, block_number):

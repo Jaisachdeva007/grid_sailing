@@ -414,6 +414,132 @@ def _stats_modal(screen, clock, fonts, trial_info, bg_snap):
         pygame.display.flip()
 
 
+# ── Session item list builder ──────────────────────────────────
+
+HEADER_H = 38   # block-header row height in the scroll list
+
+def _build_items(session_state):
+    """
+    Build a flat list of renderable items (block headers + trial rows)
+    covering the FULL session: past blocks from DB, current block from
+    live session_state, future blocks as placeholders.
+    """
+    import ast
+    from config import SESSION_STRUCTURE
+    from database.db import get_participant_trials
+
+    sn        = session_state["session_number"]
+    pid       = session_state["participant_id"]
+    cur_block = session_state["block_number"]
+    structure = SESSION_STRUCTURE.get(sn, [])
+
+    # Past block data from DB, grouped by block_number
+    all_rows = get_participant_trials(pid)
+    this_sn  = [r for r in all_rows if r["session_number"] == sn]
+    by_block = {}
+    for r in this_sn:
+        by_block.setdefault(r["block_number"], []).append(r)
+
+    items = []
+    for block_idx, btype in enumerate(structure):
+        bnum    = block_idx + 1
+        is_cur  = bnum == cur_block
+        is_past = bnum < cur_block
+
+        items.append({
+            "kind":       "header",
+            "block_num":  bnum,
+            "block_type": btype,
+            "is_cur":     is_cur,
+            "is_past":    is_past,
+            "h":          HEADER_H,
+        })
+
+        if is_cur:
+            # For trials already done in a prior run (resume), result is None
+            # in memory. Back-fill from DB so the panel shows real data.
+            db_cur = {r["trial_number"]: r for r in by_block.get(bnum, [])}
+            for t in session_state["trials"]:
+                item = {"kind": "trial", "h": ROW_H, "from_db": False, **t}
+                if t["status"] == "done" and t.get("result") is None:
+                    r = db_cur.get(t["trial_number"])
+                    if r:
+                        try:    seq = ast.literal_eval(r["planned_sequence"] or "[]")
+                        except: seq = []
+                        try:    opt = ast.literal_eval(r["optimal_sequence"] or "[]")
+                        except: opt = []
+                        item["result"] = {
+                            "reward_score":     r["reward_score"] or 0,
+                            "is_correct":       bool(r["is_correct"]),
+                            "reaction_time_ms": r["reaction_time_ms"],
+                            "movement_time_ms": r["movement_time_ms"],
+                            "start":            (r["start_row"], r["start_col"]),
+                            "goal":             (r["goal_row"],  r["goal_col"]),
+                            "planned_sequence": seq,
+                            "optimal_sequence": opt,
+                        }
+                items.append(item)
+
+        elif is_past:
+            past = sorted(by_block.get(bnum, []), key=lambda x: x["trial_number"])
+            for r in past:
+                try:    seq = ast.literal_eval(r["planned_sequence"] or "[]")
+                except: seq = []
+                try:    opt = ast.literal_eval(r["optimal_sequence"] or "[]")
+                except: opt = []
+                items.append({
+                    "kind":         "trial",
+                    "h":            ROW_H,
+                    "from_db":      True,
+                    "trial_number": r["trial_number"],
+                    "grid_type":    r["grid_type"],
+                    "status":       "done",
+                    "result": {
+                        "reward_score":       r["reward_score"] or 0,
+                        "is_correct":         bool(r["is_correct"]),
+                        "reaction_time_ms":   r["reaction_time_ms"],
+                        "movement_time_ms":   r["movement_time_ms"],
+                        "start":              (r["start_row"], r["start_col"]),
+                        "goal":               (r["goal_row"],  r["goal_col"]),
+                        "planned_sequence":   seq,
+                        "optimal_sequence":   opt,
+                    },
+                })
+            if not past:
+                items.append({"kind": "note", "h": 28, "msg": "No data saved yet"})
+
+        else:  # future block — show DB data if it exists from a previous run
+            prior = sorted(by_block.get(bnum, []), key=lambda x: x["trial_number"])
+            if prior:
+                for r in prior:
+                    try:    seq = ast.literal_eval(r["planned_sequence"] or "[]")
+                    except: seq = []
+                    try:    opt = ast.literal_eval(r["optimal_sequence"] or "[]")
+                    except: opt = []
+                    items.append({
+                        "kind":         "trial",
+                        "h":            ROW_H,
+                        "from_db":      True,
+                        "trial_number": r["trial_number"],
+                        "grid_type":    r["grid_type"],
+                        "status":       "done",
+                        "result": {
+                            "reward_score":     r["reward_score"] or 0,
+                            "is_correct":       bool(r["is_correct"]),
+                            "reaction_time_ms": r["reaction_time_ms"],
+                            "movement_time_ms": r["movement_time_ms"],
+                            "start":            (r["start_row"], r["start_col"]),
+                            "goal":             (r["goal_row"],  r["goal_col"]),
+                            "planned_sequence": seq,
+                            "optimal_sequence": opt,
+                        },
+                    })
+            else:
+                items.append({"kind": "note", "h": 28, "msg": "Not started"})
+
+    return items
+
+
 # ── Side panel ─────────────────────────────────────────────────
 
 def _side_panel(screen, clock, fonts, session_state, bg_snap):
@@ -428,52 +554,51 @@ def _side_panel(screen, clock, fonts, session_state, bg_snap):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
 
-    HDR_H = max(116, 14 + f_med.get_height() + 8 + f_xs.get_height() + 12 + f_xs.get_height() + 10)
+    PANEL_HDR_H = max(116, 14 + f_med.get_height() + 8 + f_xs.get_height() + 12 + f_xs.get_height() + 10)
 
-    trials     = session_state["trials"]
-    block_type = session_state["block_type"]
-    block_num  = session_state["block_number"]
-    sn         = session_state["session_number"]
-    pid        = session_state["participant_id"]
-    group      = session_state["group"]
+    sn    = session_state["session_number"]
+    pid   = session_state["participant_id"]
+    group = session_state["group"]
 
-    panel_w = max(520, int(W * PANEL_FRAC))
-    panel_x = W - panel_w
+    panel_w  = max(520, int(W * PANEL_FRAC))
+    panel_x  = W - panel_w
     panel_cx = panel_x + panel_w // 2
 
-    LIST_Y   = HDR_H
+    LIST_Y   = PANEL_HDR_H
     LIST_BOT = H - FTR_H
     LIST_H   = LIST_BOT - LIST_Y
 
-    n = len(trials)
-    total_list_h = n * ROW_H + PAD * 2
+    # Build full session item list (all blocks)
+    items        = _build_items(session_state)
+    total_list_h = sum(item["h"] for item in items) + PAD * 2
     max_scroll   = max(0, total_list_h - LIST_H)
 
-    # Find current trial index
-    cur_idx = next((i for i, t in enumerate(trials) if t["status"] == "current"), -1)
-    cur_num = trials[cur_idx]["trial_number"] if cur_idx >= 0 else 0
+    # Live current-block info for jump logic
+    live_trials  = session_state["trials"]
+    cur_num      = next((t["trial_number"] for t in live_trials if t["status"] == "current"), 0)
+    # Count skipped across ALL blocks in the session
+    n_skipped    = sum(1 for it in items if it["kind"] == "trial" and it.get("status") == "skipped")
+    skipped_nums = [it["trial_number"] for it in items
+                    if it["kind"] == "trial" and it.get("status") == "skipped"]
 
-    # Auto-scroll so current trial is visible
+    # Auto-scroll so the current trial is visible
     scroll_y = 0
-    if cur_idx >= 0:
-        row_top = PAD + cur_idx * ROW_H
-        if row_top < scroll_y:
-            scroll_y = row_top
-        elif row_top + ROW_H > LIST_H:
-            scroll_y = min(max_scroll, row_top + ROW_H - LIST_H)
+    _offset  = PAD
+    for item in items:
+        if item["kind"] == "trial" and item.get("status") == "current":
+            if _offset + item["h"] > LIST_H:
+                scroll_y = min(max_scroll, _offset + item["h"] - LIST_H)
+            break
+        _offset += item["h"]
 
     # Footer buttons
-    btn_y     = H - FTR_H + 36
-    btn_w     = (panel_w - PAD * 3) // 2
-    resume_r  = pygame.Rect(panel_x + PAD,          btn_y, btn_w, 46)
-    exit_r    = pygame.Rect(resume_r.right + PAD,    btn_y, btn_w, 46)
-
-    n_skipped = sum(1 for t in trials if t["status"] == "skipped")
-    skipped_nums = [t["trial_number"] for t in trials if t["status"] == "skipped"]
+    btn_y    = H - FTR_H + 36
+    btn_w    = (panel_w - PAD * 3) // 2
+    resume_r = pygame.Rect(panel_x + PAD,       btn_y, btn_w, 46)
+    exit_r   = pygame.Rect(resume_r.right + PAD, btn_y, btn_w, 46)
 
     while True:
         clock.tick(FPS)
-
         events = pygame.event.get()
         for ev in events:
             if ev.type == pygame.QUIT:
@@ -488,217 +613,219 @@ def _side_panel(screen, clock, fonts, session_state, bg_snap):
                     scroll_y = max(0, scroll_y - ROW_H)
 
             if ev.type == pygame.MOUSEWHEEL:
-                # precise_y handles macOS trackpad smooth scroll (fractional values);
-                # ev.y is an integer and rounds to 0 for small trackpad gestures.
                 dy = getattr(ev, 'precise_y', None)
                 if dy is None or (dy == 0 and ev.y != 0):
                     dy = float(ev.y)
                 scroll_y = max(0, min(max_scroll, scroll_y - int(dy * ROW_H // 2)))
 
             if ev.type == pygame.MOUSEBUTTONDOWN:
-                # Button 4/5 = legacy scroll-wheel events (trackpad fallback)
                 if ev.button == 4:
-                    scroll_y = max(0, scroll_y - ROW_H)
-                    continue
+                    scroll_y = max(0, scroll_y - ROW_H); continue
                 if ev.button == 5:
-                    scroll_y = min(max_scroll, scroll_y + ROW_H)
-                    continue
+                    scroll_y = min(max_scroll, scroll_y + ROW_H); continue
 
                 mx, my = ev.pos
 
-                # Footer buttons
                 if resume_r.collidepoint(mx, my):
                     return ("resume", None)
                 if exit_r.collidepoint(mx, my):
                     return ("exit", None)
 
-                # Trial row clicks (only within panel and list area)
+                # Click on a trial row
                 if panel_x <= mx <= W and LIST_Y <= my <= LIST_BOT:
-                    content_y = my - LIST_Y + scroll_y - PAD
-                    row_idx   = int(content_y // ROW_H)
-                    if 0 <= row_idx < n:
-                        t       = trials[row_idx]
-                        row_y   = LIST_Y + PAD + row_idx * ROW_H - scroll_y
-                        row_r   = pygame.Rect(panel_x + PAD, row_y, panel_w - PAD*2, ROW_H - 6)
-                        if row_r.collidepoint(mx, my):
-                            status = t["status"]
-                            if status == "done":
-                                _stats_modal(screen, clock, fonts, t, screen.copy())
-                            elif status == "pending" and t["trial_number"] > cur_num:
-                                confirmed = _jump_confirm(
-                                    screen, clock, fonts,
-                                    cur_num, t["trial_number"], screen.copy()
-                                )
-                                if confirmed:
-                                    return ("jump", t["trial_number"])
+                    hit_y = LIST_Y + PAD - scroll_y
+                    for item in items:
+                        item_bot = hit_y + item["h"]
+                        if hit_y <= my < item_bot:
+                            if item["kind"] == "trial":
+                                row_r = pygame.Rect(panel_x + PAD, hit_y,
+                                                    panel_w - PAD * 2, item["h"] - 6)
+                                if row_r.collidepoint(mx, my):
+                                    status = item.get("status", "")
+                                    if status == "done":
+                                        _stats_modal(screen, clock, fonts, item, screen.copy())
+                                    elif status in ("pending", "skipped") and not item.get("from_db"):
+                                        confirmed = _jump_confirm(
+                                            screen, clock, fonts,
+                                            cur_num, item["trial_number"], screen.copy()
+                                        )
+                                        if confirmed:
+                                            return ("jump", item["trial_number"])
+                            break
+                        hit_y = item_bot
 
         # ── Draw ──────────────────────────────────────────────
-
-        # Frozen trial background with dim on the left
         screen.blit(bg_snap, (0, 0))
         left_dim = pygame.Surface((panel_x, H), pygame.SRCALPHA)
         left_dim.fill((0, 0, 0, 155))
         screen.blit(left_dim, (0, 0))
 
-        # Panel background
-        pygame.draw.rect(screen, BG,    (panel_x, 0, panel_w, H))
+        pygame.draw.rect(screen, BG, (panel_x, 0, panel_w, H))
         pygame.draw.line(screen, (72, 72, 116), (panel_x, 0), (panel_x, H), 2)
 
-        # ── Header ────────────────────────────────────────────
-        pygame.draw.rect(screen, (14, 14, 28), (panel_x, 0, panel_w, HDR_H))
-        pygame.draw.line(screen, BORDER, (panel_x, HDR_H), (W, HDR_H))
+        # ── Panel header ──────────────────────────────────────
+        pygame.draw.rect(screen, (14, 14, 28), (panel_x, 0, panel_w, PANEL_HDR_H))
+        pygame.draw.line(screen, BORDER, (panel_x, PANEL_HDR_H), (W, PANEL_HDR_H))
 
-        ts = f_med.render("RESEARCHER VIEW", True, ACCENT)
+        ts = f_med.render("RESEARCHER VIEW  —  Full Session", True, ACCENT)
         screen.blit(ts, (panel_x + PAD, 14))
 
-        info_str = f"{pid}  ·  Session {sn}  ·  {block_type.replace('_',' ').title()} {block_num}  ·  {group}"
+        info_str = f"{pid}  ·  Session {sn}  ·  {group}"
         info_s   = f_xs.render(info_str, True, DIM)
         screen.blit(info_s, (panel_x + PAD, 14 + ts.get_height() + 8))
 
-        n_done    = sum(1 for t in trials if t["status"] == "done")
-        n_pending = sum(1 for t in trials if t["status"] == "pending")
-        n_cur     = sum(1 for t in trials if t["status"] == "current")
-        summ_str  = (f"Done: {n_done}  ·  Current: {n_cur}  ·  "
-                     f"Pending: {n_pending}  ·  Skipped: {n_skipped}  ·  Total: {n}")
-        summ_s    = f_xs.render(summ_str, True, DIM2)
-        screen.blit(summ_s, (panel_x + PAD, HDR_H - summ_s.get_height() - 10))
+        n_total = sum(1 for it in items if it["kind"] == "trial")
+        n_done  = sum(1 for it in items if it["kind"] == "trial" and it.get("status") == "done")
+        summ_s  = f_xs.render(f"Trials done: {n_done} / {n_total}", True, DIM2)
+        screen.blit(summ_s, (panel_x + PAD, PANEL_HDR_H - summ_s.get_height() - 10))
 
-        # ── Scrollable trial list ──────────────────────────────
+        # ── Scrollable item list ───────────────────────────────
         screen.set_clip(pygame.Rect(panel_x, LIST_Y, panel_w, LIST_H))
+        mouse    = pygame.mouse.get_pos()
+        item_y   = LIST_Y + PAD - scroll_y
 
-        for i, t in enumerate(trials):
-            row_y = LIST_Y + PAD + i * ROW_H - scroll_y
-            if row_y + ROW_H < LIST_Y or row_y > LIST_BOT:
+        for item in items:
+            ih = item["h"]
+
+            if item_y + ih < LIST_Y or item_y > LIST_BOT:
+                item_y += ih
                 continue
 
-            status  = t["status"]
-            trial_n = t["trial_number"]
-            gtype   = t["grid_type"]
-            res     = t.get("result") or {}
-            is_done = (status == "done")
+            kind = item["kind"]
 
-            # Row background colour
-            if   status == "current":  row_bg = (30, 44, 90);  row_bc = ACCENT
-            elif status == "done":     row_bg = (16, 28, 44);  row_bc = (36, 60, 100)
-            elif status == "skipped":  row_bg = (36, 18,  8);  row_bc = SKIP_C
-            else:                      row_bg = (18, 18, 34);  row_bc = BORDER
+            if kind == "header":
+                bnum   = item["block_num"]
+                btype  = item["block_type"].replace("_", " ").title()
+                is_cur = item["is_cur"]
+                is_past= item["is_past"]
+                hdr_col= ACCENT if is_cur else (CORRECT if is_past else DIM2)
+                lbl    = f"Block {bnum}  ·  {btype}"
+                if is_cur:   lbl += "  ◀ CURRENT"
+                elif is_past: lbl += "  ✓"
+                pygame.draw.rect(screen, (14, 14, 28),
+                                 (panel_x, item_y, panel_w, ih))
+                pygame.draw.line(screen, hdr_col,
+                                 (panel_x + PAD, item_y + ih - 1),
+                                 (W - PAD, item_y + ih - 1))
+                hs = f_xs.render(lbl, True, hdr_col)
+                screen.blit(hs, (panel_x + PAD, item_y + (ih - hs.get_height()) // 2))
 
-            mouse   = pygame.mouse.get_pos()
-            row_r   = pygame.Rect(panel_x + PAD, row_y, panel_w - PAD*2, ROW_H - 6)
-            is_hover = row_r.collidepoint(mouse) and status in ("done", "pending")
-            if is_hover:
-                row_bg = tuple(min(255, c + 14) for c in row_bg)
+            elif kind == "note":
+                ns = f_xs.render(item["msg"], True, DIM2)
+                screen.blit(ns, (panel_x + PAD + 16,
+                                 item_y + (ih - ns.get_height()) // 2))
 
-            pygame.draw.rect(screen, row_bg, row_r, border_radius=8)
-            pygame.draw.rect(screen, row_bc, row_r, width=1, border_radius=8)
+            else:  # trial row
+                status  = item.get("status", "pending")
+                trial_n = item["trial_number"]
+                gtype   = item.get("grid_type", "random")
+                res     = item.get("result") or {}
 
-            ry_mid = row_y + (ROW_H - 6) // 2
-            rx     = panel_x + PAD + 10
+                if   status == "current":  row_bg=(30,44,90);  row_bc=ACCENT
+                elif status == "done":     row_bg=(16,28,44);  row_bc=(36,60,100)
+                elif status == "skipped":  row_bg=(36,18, 8);  row_bc=SKIP_C
+                else:                      row_bg=(18,18,34);  row_bc=BORDER
 
-            # Status icon
-            if   status == "done":    icon = "✓" if res.get("is_correct") else "✗"
-            elif status == "current": icon = "▶"
-            elif status == "skipped": icon = "✗"
-            else:                     icon = "○"
-            ic = (CORRECT if (status=="done" and res.get("is_correct"))
-                  else WRONG if (status in ("done","skipped") and not res.get("is_correct",True))
-                  else WRONG if status=="skipped"
-                  else ACCENT if status=="current"
-                  else DIM)
-            if status == "skipped": ic = SKIP_C
-            if status == "pending": ic = DIM
-            is_s = f_sm.render(icon, True, ic)
-            screen.blit(is_s, (rx, ry_mid - is_s.get_height()//2))
-            rx += is_s.get_width() + 10
+                row_r = pygame.Rect(panel_x + PAD, item_y, panel_w - PAD*2, ih - 6)
+                is_hover = row_r.collidepoint(mouse) and status in ("done", "pending", "skipped")
+                if is_hover:
+                    row_bg = tuple(min(255, c + 14) for c in row_bg)
 
-            # Trial number
-            tn_s = f_sm.render(f"Trial {trial_n:2d}", True, WHITE)
-            screen.blit(tn_s, (rx, ry_mid - tn_s.get_height()//2))
-            rx += tn_s.get_width() + 12
+                pygame.draw.rect(screen, row_bg, row_r, border_radius=8)
+                pygame.draw.rect(screen, row_bc, row_r, width=1, border_radius=8)
 
-            # Grid-type pill (researcher-only view)
-            if gtype == "repeated":
-                gt_fg = ACCENT; gt_bg = (20, 36, 80)
-                gt_lbl = "REP"
-            else:
-                gt_fg = AMBER;  gt_bg = (44, 36,  8)
-                gt_lbl = "RAN"
-            gt_s  = f_xs.render(gt_lbl, True, gt_fg)
-            gt_pw = gt_s.get_width() + 12
-            gt_ph = gt_s.get_height() + 6
-            gt_py = ry_mid - gt_ph // 2
-            pygame.draw.rect(screen, gt_bg, (rx, gt_py, gt_pw, gt_ph), border_radius=gt_ph//2)
-            screen.blit(gt_s, (rx + 6, gt_py + 3))
-            rx += gt_pw + 14
+                ry_mid = item_y + (ih - 6) // 2
+                rx     = panel_x + PAD + 10
 
-            # Status / score info (middle)
-            if status == "done" and res:
-                sc     = res.get("reward_score", 0)
-                ok     = res.get("is_correct", False)
-                sc_col = CORRECT if ok else WRONG
-                sc_s   = f_sm.render(f"{sc} pts", True, sc_col)
-                screen.blit(sc_s, (rx, ry_mid - sc_s.get_height()//2))
-                rt = res.get("reaction_time_ms")
-                if rt is not None:
-                    rt_s = f_xs.render(f"  {rt/1000:.1f}s RT", True, DIM)
-                    screen.blit(rt_s, (rx + sc_s.get_width(), ry_mid - rt_s.get_height()//2))
-            elif status == "done":
-                ds = f_xs.render("Done (prev. session)", True, DIM)
-                screen.blit(ds, (rx, ry_mid - ds.get_height()//2))
-            elif status == "current":
-                cs = f_sm.render("IN PROGRESS", True, ACCENT)
-                screen.blit(cs, (rx, ry_mid - cs.get_height()//2))
-            elif status == "skipped":
-                ss_s = f_xs.render("SKIPPED", True, SKIP_C)
-                screen.blit(ss_s, (rx, ry_mid - ss_s.get_height()//2))
-            else:
-                # Pending
-                if not is_hover:
-                    pd_s = f_xs.render("Pending", True, DIM2)
-                    screen.blit(pd_s, (rx, ry_mid - pd_s.get_height()//2))
+                # Status icon
+                if   status == "done":    icon = "✓" if res.get("is_correct") else "✗"
+                elif status == "current": icon = "▶"
+                elif status == "skipped": icon = "✗"
+                else:                     icon = "○"
+                ic = (CORRECT if (status=="done" and res.get("is_correct"))
+                      else WRONG if status in ("done","skipped") and not res.get("is_correct", True)
+                      else SKIP_C if status=="skipped"
+                      else ACCENT if status=="current"
+                      else DIM)
+                is_s = f_sm.render(icon, True, ic)
+                screen.blit(is_s, (rx, ry_mid - is_s.get_height()//2))
+                rx += is_s.get_width() + 10
 
-            # Right-side action hint
-            if is_hover:
-                if status == "done":
-                    hint = "View →"
-                    hc   = ACCENT
-                else:
-                    can_jump = t["trial_number"] > cur_num
-                    hint = "Jump here →" if can_jump else "—"
-                    hc   = ACCENT if can_jump else DIM2
-                hs = f_xs.render(hint, True, hc)
-                screen.blit(hs, (panel_x + panel_w - PAD - hs.get_width() - 6,
-                                 ry_mid - hs.get_height()//2))
+                tn_s = f_sm.render(f"Trial {trial_n:2d}", True, WHITE)
+                screen.blit(tn_s, (rx, ry_mid - tn_s.get_height()//2))
+                rx += tn_s.get_width() + 12
+
+                gt_fg, gt_bg_c, gt_lbl = ((ACCENT,(20,36,80),"REP")
+                                           if gtype=="repeated"
+                                           else (AMBER,(44,36,8),"RAN"))
+                gt_s  = f_xs.render(gt_lbl, True, gt_fg)
+                gt_pw = gt_s.get_width() + 12
+                gt_ph = gt_s.get_height() + 6
+                gt_py = ry_mid - gt_ph // 2
+                pygame.draw.rect(screen, gt_bg_c, (rx, gt_py, gt_pw, gt_ph), border_radius=gt_ph//2)
+                screen.blit(gt_s, (rx + 6, gt_py + 3))
+                rx += gt_pw + 14
+
+                if status == "done" and res:
+                    sc_s = f_sm.render(f"{res.get('reward_score',0)} pts", True,
+                                       CORRECT if res.get("is_correct") else WRONG)
+                    screen.blit(sc_s, (rx, ry_mid - sc_s.get_height()//2))
+                    rt = res.get("reaction_time_ms")
+                    if rt is not None:
+                        rt_s = f_xs.render(f"  {rt/1000:.1f}s RT", True, DIM)
+                        screen.blit(rt_s, (rx + sc_s.get_width(),
+                                           ry_mid - rt_s.get_height()//2))
+                elif status == "current":
+                    screen.blit(f_sm.render("IN PROGRESS", True, ACCENT),
+                                (rx, ry_mid - f_sm.get_height()//2))
+                elif status == "skipped":
+                    screen.blit(f_xs.render("SKIPPED", True, SKIP_C),
+                                (rx, ry_mid - f_xs.get_height()//2))
+                elif not is_hover:
+                    screen.blit(f_xs.render("Pending", True, DIM2),
+                                (rx, ry_mid - f_xs.get_height()//2))
+
+                if is_hover:
+                    if status == "done":
+                        hint, hc = "View →", ACCENT
+                    elif status == "skipped" and not item.get("from_db"):
+                        hint, hc = "Jump here →", AMBER
+                    else:
+                        can_jump = (trial_n > cur_num and not item.get("from_db"))
+                        hint, hc = ("Jump here →", ACCENT) if can_jump else ("—", DIM2)
+                    hs2 = f_xs.render(hint, True, hc)
+                    screen.blit(hs2, (panel_x + panel_w - PAD - hs2.get_width() - 6,
+                                      ry_mid - hs2.get_height()//2))
+
+            item_y += ih
 
         screen.set_clip(None)
 
-        # Scrollbar (only when content is taller than the list area)
+        # Scrollbar
         SB_W = 6
-        sb_x = W - SB_W - 2
+        sb_x  = W - SB_W - 2
         if total_list_h > LIST_H:
-            track_h  = LIST_H - 8
-            track_y  = LIST_Y + 4
-            thumb_h  = max(28, int(track_h * LIST_H / total_list_h))
-            thumb_y  = track_y + int((track_h - thumb_h) * scroll_y / max(1, max_scroll))
+            track_h = LIST_H - 8
+            track_y = LIST_Y + 4
+            thumb_h = max(28, int(track_h * LIST_H / total_list_h))
+            thumb_y = track_y + int((track_h - thumb_h) * scroll_y / max(1, max_scroll))
             pygame.draw.rect(screen, (32, 32, 56), (sb_x, track_y, SB_W, track_h), border_radius=3)
             pygame.draw.rect(screen, ACCENT,        (sb_x, thumb_y, SB_W, thumb_h), border_radius=3)
 
-        # List border lines
-        pygame.draw.line(screen, BORDER, (panel_x, LIST_Y),  (W, LIST_Y))
-        pygame.draw.line(screen, BORDER, (panel_x, LIST_BOT), (W, LIST_BOT))
+        pygame.draw.line(screen, BORDER, (panel_x, LIST_Y),   (W, LIST_Y))
+        pygame.draw.line(screen, BORDER, (panel_x, LIST_BOT),  (W, LIST_BOT))
 
         # ── Footer ────────────────────────────────────────────
         pygame.draw.rect(screen, (14, 14, 28), (panel_x, LIST_BOT, panel_w, FTR_H))
 
         if n_skipped > 0:
-            sk_nums_str = ", ".join(str(x) for x in skipped_nums)
-            warn = f_xs.render(
-                f"⚠  {n_skipped} trial{'s' if n_skipped > 1 else ''} skipped  (Trial{'s' if n_skipped > 1 else ''} {sk_nums_str})",
-                True, AMBER)
+            sk_str = ", ".join(str(x) for x in skipped_nums)
+            warn   = f_xs.render(
+                f"⚠  {n_skipped} trial{'s' if n_skipped>1 else ''} skipped "
+                f"(Trial{'s' if n_skipped>1 else ''} {sk_str})", True, AMBER)
             screen.blit(warn, (panel_x + PAD, LIST_BOT + 8))
 
         mouse = pygame.mouse.get_pos()
-
         for rect, label, col in [(resume_r, "Resume Trial", CORRECT),
                                   (exit_r,   "End Session",  WRONG)]:
             hv = rect.collidepoint(mouse)
@@ -708,7 +835,8 @@ def _side_panel(screen, clock, fonts, session_state, bg_snap):
             pygame.draw.rect(screen, bg, rect, border_radius=10)
             pygame.draw.rect(screen, col, rect, width=1, border_radius=10)
             ls = f_sm.render(label, True, tc)
-            screen.blit(ls, (rect.centerx - ls.get_width()//2, rect.centery - ls.get_height()//2))
+            screen.blit(ls, (rect.centerx - ls.get_width()//2,
+                              rect.centery - ls.get_height()//2))
 
         es = f_xs.render("ESC to resume", True, DIM2)
         screen.blit(es, (panel_cx - es.get_width()//2, H - 16))
