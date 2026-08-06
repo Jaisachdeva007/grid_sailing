@@ -33,7 +33,6 @@ from config import (
 from sync.firebase_sync import sync_in_background
 from core.grid import find_valid_paths, apply_key
 from core.trial import TrialData, run_trial, run_explore_trial
-from screens.reflection import run_reflection
 from screens.tutorial import run_tutorial
 from database.db import (
     create_session, complete_session,
@@ -326,13 +325,7 @@ def run_block(screen, clock, fonts, block_type, block_number,
     complete_session(session_id)
     sync_in_background(session_id, n_trials)   # final sync on block complete
 
-    # Show reflection after practice blocks for MI groups
-    is_mi       = group.startswith("MI")
-    is_practice = block_type == "practice"
-    if is_mi and is_practice:
-        is_last = (session_number == 3)
-        run_reflection(screen, clock, fonts, participant_id,
-                       session_number, is_last_session=is_last)
+    # Reflection (3E) is done as an in-person interview after the experiment — no in-app form needed.
 
     return cumulative_score, repeated_puzzle
 
