@@ -122,6 +122,10 @@ def _score(planned, optimal, end, goal):
     n, opt = len(planned), len(optimal)
     if end != goal:
         return ERROR_SCORE, n, False
+    # All 3 keys must appear in the executed sequence — reaching the goal via
+    # a path that skips one key type is treated as unsuccessful.
+    if not {1, 2, 3}.issubset(set(planned)):
+        return ERROR_SCORE, n, False
     extra = abs(n - opt)   # penalise both more AND fewer moves than optimal
     return max(0, OPTIMAL_SCORE - extra * EXTRA_MOVE_PENALTY), n, True
 
