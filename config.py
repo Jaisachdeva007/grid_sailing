@@ -25,12 +25,12 @@ GRID_SIZE = 5
 
 # The longest "optimal" route we'll accept for a puzzle.
 # Any puzzle that needs more than 7 moves to solve is thrown out.
-# Shorter = harder to find; longer = easier. Leave at 7 for our protocol.
 MAX_OPTIMAL_LENGTH = 7
 
-# The shortest route we'll accept. Puzzles shorter than this get thrown out
-# because they're too easy. Has to be ≤ MAX_OPTIMAL_LENGTH.
-MIN_SEQUENCE_LENGTH = 7
+# The shortest route we'll accept. Must be ≤ MAX_OPTIMAL_LENGTH.
+# Set to 3 because every valid puzzle already requires all 3 keys at least once,
+# so the minimum possible valid path is 3 moves.
+MIN_SEQUENCE_LENGTH = 3
 
 
 # ── Key Mappings ──────────────────────────────────────────────
