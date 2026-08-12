@@ -796,10 +796,12 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
 
     def enter_feedback():
         nonlocal state, feedback_start, rp_step, rp_timer, rp_cursor, rp_trail, rp_done, rp_done_time
-        state = FEEDBACK
+        state          = FEEDBACK
         feedback_start = time.time()
+        # Replay removed — mark done immediately so SPACE works right away
         rp_step = 0; rp_timer = pygame.time.get_ticks()
-        rp_cursor = trial.start; rp_trail = {}; rp_done = False; rp_done_time = None
+        rp_cursor = trial.start; rp_trail = {}
+        rp_done = True; rp_done_time = time.time()
 
     def enter_action():
         nonlocal state, action_start, phys_first_key_t, phys_last_key_t, pp_typed_seq
@@ -865,7 +867,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     if phys_first_key_t is not None and phys_last_key_t is not None:
                         trial.movement_time_ms = (
                             (phys_last_key_t - phys_first_key_t) * 1000)
-                    _finalise(trial, trial.planned_sequence, session_id)
+                    _finalise(trial, pp_typed_seq, session_id)
                     trial_id = _save(trial, session_id)
                     update_session_progress(session_id, trial.trial_number)
                     enter_feedback() if show_feedback else enter_iti()
@@ -939,6 +941,31 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
             if state == PAUSED:
                 continue
 
+            # Direction keys during PLANNING — recorded but cursor stays at start
+            if state == PLANNING and ev.type == pygame.KEYDOWN:
+                _pkmap_p = {
+                    pygame.K_1: 1, pygame.K_KP1: 1,
+                    pygame.K_2: 2, pygame.K_KP2: 2,
+                    pygame.K_3: 3, pygame.K_KP3: 3,
+                }
+                _dk_p = _pkmap_p.get(ev.key)
+                if _dk_p is not None:
+                    _now_p = time.time()
+                    if first_key_time is None:
+                        first_key_time = _now_p
+                    trial.keypresses_log.append({
+                        "key":    _dk_p,
+                        "before": list(trial.start),
+                        "after":  list(trial.start),   # cursor does not move
+                        "abs_ms": _now_p * 1000,
+                        "rel_ms": (_now_p - planning_start) * 1000,
+                        "iki_ms": ((_now_p - last_key_time) * 1000
+                                   if last_key_time else None),
+                        "phase":  "planning",
+                    })
+                    last_key_time = _now_p
+                    typed_seq.append(_dk_p)
+
             # Direction keys via keyboard (1/2/3 and numpad) for INPUT phase
             if state == INPUT and ev.type == pygame.KEYDOWN:
                 if ev.key == pygame.K_BACKSPACE and typed_seq:
@@ -975,7 +1002,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
 
         # Auto-transitions
         if state == PLANNING and show_timer and elapsed >= p_time:
-            state = INPUT; typed_seq = []; first_key_time = None
+            state = INPUT   # typed_seq and first_key_time carry over from planning
 
         if state == FEEDBACK and not rp_done:
             if now_ms - rp_timer >= REPLAY_MS:
@@ -1529,8 +1556,8 @@ def _draw_stage_feedback(screen, fonts, trial, cum_score,
 
     new_total = cum_score + trial.reward_score
 
-    # ── Animated replay grid (fills full left column) ─────────
-    _draw_grid(screen, fonts, trial, rp_trail, rp_cursor)
+    # ── Static grid — no replay shown to participant ──────────
+    _draw_grid(screen, fonts, trial, {}, None)
 
     # ── Right panel ───────────────────────────────────────────
     rx, ry = GR, GT
