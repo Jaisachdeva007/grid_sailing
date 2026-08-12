@@ -23,6 +23,8 @@ import pygame
 def main():
     # Start up pygame — the library that runs the window and reads keypresses.
     pygame.init()
+    from core.sounds import load as load_sounds
+    load_sounds()
 
     # Open in fullscreen using whatever the screen's actual resolution is.
     # On the ASUS this'll be 1920×1080; on a MacBook it picks it up automatically.

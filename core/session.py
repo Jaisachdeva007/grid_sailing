@@ -212,7 +212,10 @@ def run_block(screen, clock, fonts, block_type, block_number,
     # Fam block 1 → free exploration mode (no timer, no planning, no sequence input).
     # Fam block 2 and all other blocks → 6-second planning timer.
     # Score shown only during practice blocks.
-    is_explore = (block_type == "familiarization" and block_number == 1)
+    is_explore = (
+        (block_type == "familiarization" and block_number == 1)
+        or block_type in ("pre_test", "post_test")
+    )
     show_timer = not is_explore
     show_score = (block_type == "practice")
 

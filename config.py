@@ -30,7 +30,8 @@ MAX_OPTIMAL_LENGTH = 7
 # The shortest route we'll accept. Must be ≤ MAX_OPTIMAL_LENGTH.
 # Set to 3 because every valid puzzle already requires all 3 keys at least once,
 # so the minimum possible valid path is 3 moves.
-MIN_SEQUENCE_LENGTH = 3
+MIN_SEQUENCE_LENGTH = 5
+MAX_SEQUENCE_LENGTH = 7
 
 
 # ── Key Mappings ──────────────────────────────────────────────
