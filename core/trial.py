@@ -863,7 +863,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     pp_typed_seq.append(_pkmap[ev.key])
                 elif ev.key == pygame.K_BACKSPACE and pp_typed_seq:
                     pp_typed_seq.pop()
-                elif ev.key == pygame.K_SPACE:
+                elif ev.key == pygame.K_SPACE and pp_typed_seq == trial.planned_sequence:
                     if phys_first_key_t is not None and phys_last_key_t is not None:
                         trial.movement_time_ms = (
                             (phys_last_key_t - phys_first_key_t) * 1000)
@@ -1506,8 +1506,11 @@ def _draw_stage_action(screen, fonts, trial,
         screen.blit(cnt, (rx + 14, ry + cnt_y2))
         ry += card_h2 + 10
 
-        # ── Static SPACE hint (no pulse) ─────────────────────────
-        sp_surf = f_xs.render("Press  SPACE  when done", True, DIM)
+        # ── SPACE hint — only active when sequences match ─────────
+        if typed and typed == list(trial.planned_sequence):
+            sp_surf = f_sm.render("Press  SPACE  to continue", True, CORRECT)
+        else:
+            sp_surf = f_xs.render("Sequence must match before continuing", True, DIM)
         screen.blit(sp_surf, (rx + GRW // 2 - sp_surf.get_width() // 2, ry + 8))
 
     return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
