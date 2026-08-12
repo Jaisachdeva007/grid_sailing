@@ -861,8 +861,6 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                         phys_first_key_t = _now_t
                     phys_last_key_t = _now_t
                     pp_typed_seq.append(_pkmap[ev.key])
-                elif ev.key == pygame.K_BACKSPACE and pp_typed_seq:
-                    pp_typed_seq.pop()
                 elif ev.key == pygame.K_SPACE and len(pp_typed_seq) >= 2:
                     if phys_first_key_t is not None and phys_last_key_t is not None:
                         trial.movement_time_ms = (
@@ -1479,45 +1477,25 @@ def _draw_stage_action(screen, fonts, trial,
                       "Execute your sequence",
                       "Press your keys on the keypad then SPACE when done")
 
-        typed    = pp_typed_seq or []
-        pw       = min(700, W - 80)          # panel width — centred on screen
-        px       = W // 2 - pw // 2          # panel left edge
-
-        lbl_h    = f_sm.get_height()
-        val_h    = f_big.get_height()
-        card1_h  = 16 + lbl_h + 10 + val_h + 16
-        card2_h  = 16 + lbl_h + 10 + val_h + 10 + f_sm.get_height() + 16
-        gap      = 20
-        hint_h   = f_med.get_height()
-        total_h  = card1_h + gap + card2_h + gap + hint_h
-        py       = GT + max(0, (H - GT - PROG_H - total_h) // 2)
+        pw    = min(700, W - 80)
+        px    = W // 2 - pw // 2
+        lbl_h = f_sm.get_height()
+        val_h = f_big.get_height()
+        card_h = 16 + lbl_h + 10 + val_h + 16
+        total_h = card_h + 32 + f_sm.get_height()
+        py    = GT + max(0, (H - GT - PROG_H - total_h) // 2)
 
         # ── Planned sequence panel ────────────────────────────────
         plan_str = ", ".join(str(k) for k in trial.planned_sequence)
-        _panel(screen, px, py, pw, card1_h, ACCENT)
+        _panel(screen, px, py, pw, card_h, ACCENT)
         lbl = f_sm.render("Your planned sequence", True, DIM)
         screen.blit(lbl, (px + 20, py + 16))
         ps  = f_big.render(plan_str, True, WHITE)
         screen.blit(ps,  (px + 20, py + 16 + lbl_h + 10))
-        py += card1_h + gap
+        py += card_h + 32
 
-        # ── Hidden input panel — dots only, no values shown ──────
-        dots_str  = "  ●  " * len(typed) if typed else "—"
-        dots_col  = WHITE if typed else DIM
-        _panel(screen, px, py, pw, card2_h, CORRECT)
-        lbl2 = f_sm.render("Enter your sequence", True, DIM)
-        screen.blit(lbl2, (px + 20, py + 16))
-        ts   = f_big.render(dots_str, True, dots_col)
-        screen.blit(ts,   (px + 20, py + 16 + lbl_h + 10))
-        cnt  = f_sm.render(f"{len(typed)} key(s) entered", True, DIM)
-        screen.blit(cnt,  (px + 20, py + 16 + lbl_h + 10 + val_h + 10))
-        py += card2_h + gap
-
-        # ── SPACE hint — unlocks after 2 key presses ─────────────
-        if len(typed) >= 2:
-            sp_surf = f_med.render("Press  SPACE  to continue", True, CORRECT)
-        else:
-            sp_surf = f_med.render("Press at least 2 keys before continuing", True, DIM)
+        # ── Static SPACE hint (always dim — no feedback on key count) ──
+        sp_surf = f_sm.render("Press  SPACE  when done", True, DIM)
         screen.blit(sp_surf, (W // 2 - sp_surf.get_width() // 2, py))
 
     return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
