@@ -8,12 +8,14 @@
 #    - Works out where the cursor goes when a key is pressed
 #    - Generates all valid puzzles at session startup
 #
-#  The puzzle generator searches every possible path through the grid
-#  and keeps only the ones that: hit the right length, use all 3 keys
-#  at least once, and never step on the same cell twice.
+#  The puzzle generator uses BFS so the stored sequence is always
+#  the TRUE shortest path from start to goal — no shortcut exists.
+#  A puzzle is only valid if the minimum reachable distance to the
+#  cheese is between MIN_SEQUENCE_LENGTH and MAX_SEQUENCE_LENGTH.
 #  It runs once when the session starts — not during trials.
 # ============================================================
 
+from collections import deque
 from config import GRID_SIZE, KEY_MAPPINGS, MIN_SEQUENCE_LENGTH, MAX_SEQUENCE_LENGTH
 
 
@@ -23,17 +25,6 @@ def is_valid_position(row, col):
 
 
 def apply_key(row, col, key):
-    """
-    Apply a key press to the current cursor position.
-
-    Args:
-        row (int): Current row.
-        col (int): Current column.
-        key (int): Key pressed (1, 2, or 3).
-
-    Returns:
-        (int, int): New (row, col) after the move, or None if the move is out of bounds.
-    """
     dr, dc = KEY_MAPPINGS[key]
     new_row, new_col = row + dr, col + dc
     if is_valid_position(new_row, new_col):
@@ -43,48 +34,55 @@ def apply_key(row, col, key):
 
 def find_valid_paths(start_row, start_col):
     """
-    Use depth-first search to find all valid paths from a given start position.
+    BFS from start_row, start_col.
 
-    A valid path must:
-      - Be at least MIN_SEQUENCE_LENGTH key presses long
-      - Use all three keys (1, 2, 3) at least once
-      - Never revisit a grid square
+    Because BFS explores cells in order of increasing distance, the first
+    time any cell is reached that distance IS the minimum — no shorter route
+    exists.  We only emit a puzzle when that minimum distance falls in
+    [MIN_SEQUENCE_LENGTH, MAX_SEQUENCE_LENGTH].
 
-    Args:
-        start_row (int): Starting row index.
-        start_col (int): Starting column index.
-
-    Returns:
-        list of dicts: Each dict has keys 'start', 'goal', 'sequence', 'length'.
+    Returns a list of dicts with keys: start, goal, sequence, length.
     """
-    results = []
+    # dist  : cell → minimum steps from start
+    # parent: cell → (previous_cell, key_that_was_pressed)
+    dist   = {(start_row, start_col): 0}
+    parent = {(start_row, start_col): (None, None)}
+    queue  = deque([(start_row, start_col)])
 
-    def dfs(row, col, sequence, visited):
-        # Record puzzle if it meets the length and key-variety constraints
-        if (MIN_SEQUENCE_LENGTH <= len(sequence) <= MAX_SEQUENCE_LENGTH
-                and set(sequence) == {1, 2, 3}):
-            results.append({
-                "start":    [start_row, start_col],
-                "goal":     [row, col],
-                "sequence": list(sequence),
-                "length":   len(sequence),
-            })
-
-        # Prune — no path longer than MAX_SEQUENCE_LENGTH is valid
-        if len(sequence) >= MAX_SEQUENCE_LENGTH:
-            return
-
-        # Try each key press and continue exploring
+    while queue:
+        row, col = queue.popleft()
+        d = dist[(row, col)]
+        if d >= MAX_SEQUENCE_LENGTH:
+            continue
         for key in [1, 2, 3]:
-            next_pos = apply_key(row, col, key)
-            if next_pos and next_pos not in visited:
-                visited.add(next_pos)
-                sequence.append(key)
-                dfs(next_pos[0], next_pos[1], sequence, visited)
-                sequence.pop()
-                visited.remove(next_pos)
+            nxt = apply_key(row, col, key)
+            if nxt and nxt not in dist:
+                dist[nxt]   = d + 1
+                parent[nxt] = ((row, col), key)
+                queue.append(nxt)
 
-    dfs(start_row, start_col, [], {(start_row, start_col)})
+    results = []
+    for (gr, gc), d in dist.items():
+        if (gr, gc) == (start_row, start_col):
+            continue
+        if not (MIN_SEQUENCE_LENGTH <= d <= MAX_SEQUENCE_LENGTH):
+            continue
+
+        # Reconstruct the unique BFS-shortest path
+        seq  = []
+        cell = (gr, gc)
+        while parent[cell][0] is not None:
+            seq.append(parent[cell][1])
+            cell = parent[cell][0]
+        seq.reverse()
+
+        results.append({
+            "start":    [start_row, start_col],
+            "goal":     [gr, gc],
+            "sequence": seq,
+            "length":   d,
+        })
+
     return results
 
 
@@ -98,6 +96,5 @@ def find_all_valid_puzzles():
     all_puzzles = []
     for row in range(GRID_SIZE):
         for col in range(GRID_SIZE):
-            puzzles = find_valid_paths(row, col)
-            all_puzzles.extend(puzzles)
+            all_puzzles.extend(find_valid_paths(row, col))
     return all_puzzles
