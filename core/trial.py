@@ -1481,16 +1481,21 @@ def _draw_stage_action(screen, fonts, trial,
     else:  # PP — physical key press stage
         _stage_header(screen, fonts,
                       "ACTION", CORRECT,
-                      "Execute your sequence",
-                      "Press your keys on the keypad then SPACE when done")
+                      "Execute your sequence", "")
 
-        pw    = min(700, W - 80)
-        px    = W // 2 - pw // 2
-        lbl_h = f_sm.get_height()
-        val_h = f_big.get_height()
+        pw     = min(700, W - 80)
+        px     = W // 2 - pw // 2
+        lbl_h  = f_sm.get_height()
+        val_h  = f_big.get_height()
+        inst_h = f_med.get_height()
         card_h = 16 + lbl_h + 10 + val_h + 16
-        total_h = card_h + 32 + f_sm.get_height()
-        py    = GT + max(0, (H - GT - PROG_H - total_h) // 2)
+        total_h = inst_h + 20 + card_h + 24 + f_med.get_height()
+        py     = GT + max(0, (H - GT - PROG_H - total_h) // 2)
+
+        # ── Big centred instruction above the panel ───────────────
+        inst = f_med.render("Press your keys on the keypad, then press  SPACE  when done", True, WHITE)
+        screen.blit(inst, (W // 2 - inst.get_width() // 2, py))
+        py += inst_h + 20
 
         # ── Planned sequence panel ────────────────────────────────
         plan_str = ", ".join(str(k) for k in trial.planned_sequence)
@@ -1499,10 +1504,10 @@ def _draw_stage_action(screen, fonts, trial,
         screen.blit(lbl, (px + 20, py + 16))
         ps  = f_big.render(plan_str, True, WHITE)
         screen.blit(ps,  (px + 20, py + 16 + lbl_h + 10))
-        py += card_h + 32
+        py += card_h + 24
 
-        # ── Static SPACE hint (always dim — no feedback on key count) ──
-        sp_surf = f_sm.render("Press  SPACE  when done", True, DIM)
+        # ── Static dim SPACE reminder below panel ─────────────────
+        sp_surf = f_med.render("Press  SPACE  when done", True, DIM)
         screen.blit(sp_surf, (W // 2 - sp_surf.get_width() // 2, py))
 
     return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
