@@ -762,9 +762,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
     mi_space_start    = None
     phys_first_key_t  = None   # first 1/2/3 press time during PP action stage
     phys_last_key_t   = None   # most recent 1/2/3 press time during PP action stage
-    phys_key_count    = 0      # total 1/2/3 presses in the current PP action phase
-    phys_keys_pressed = set()  # which distinct keys have been physically pressed
-    pp_space_blocked  = False  # True briefly after participant hits SPACE too early
+    pp_typed_seq      = []     # sequence the participant physically types in ACTION
 
     # Replay
     rp_step      = 0
@@ -804,14 +802,12 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
         rp_cursor = trial.start; rp_trail = {}; rp_done = False; rp_done_time = None
 
     def enter_action():
-        nonlocal state, action_start, phys_first_key_t, phys_last_key_t, phys_key_count, phys_keys_pressed, pp_space_blocked
+        nonlocal state, action_start, phys_first_key_t, phys_last_key_t, pp_typed_seq
         state             = ACTION
         action_start      = time.time()
         phys_first_key_t  = None
         phys_last_key_t   = None
-        phys_key_count    = 0
-        phys_keys_pressed = set()
-        pp_space_blocked  = False
+        pp_typed_seq      = []
 
     def enter_iti():
         nonlocal state, iti_start
@@ -852,8 +848,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                         update_session_progress(session_id, trial.trial_number)
                         enter_feedback() if show_feedback else enter_iti()
 
-            # PP ACTION: 1/2/3 keys track physical presses; SPACE ends trial
-            # Minimum 3 key presses required before SPACE is accepted.
+            # PP ACTION: participant physically re-types their sequence; SPACE ends trial
             if state == ACTION and is_pp and ev.type == pygame.KEYDOWN:
                 _pkmap = {
                     pygame.K_1: 1, pygame.K_KP1: 1,
@@ -861,15 +856,14 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     pygame.K_3: 3, pygame.K_KP3: 3,
                 }
                 if ev.key in _pkmap:
-                    phys_key_count += 1
-                    phys_keys_pressed.add(_pkmap[ev.key])
                     _now_t = time.time()
                     if phys_first_key_t is None:
                         phys_first_key_t = _now_t
                     phys_last_key_t = _now_t
-                elif ev.key == pygame.K_SPACE and not {1, 2, 3}.issubset(phys_keys_pressed):
-                    pp_space_blocked = True
-                elif ev.key == pygame.K_SPACE and {1, 2, 3}.issubset(phys_keys_pressed):
+                    pp_typed_seq.append(_pkmap[ev.key])
+                elif ev.key == pygame.K_BACKSPACE and pp_typed_seq:
+                    pp_typed_seq.pop()
+                elif ev.key == pygame.K_SPACE:
                     if phys_first_key_t is not None and phys_last_key_t is not None:
                         trial.movement_time_ms = (
                             (phys_last_key_t - phys_first_key_t) * 1000)
@@ -1042,9 +1036,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                 mi_space_start=mi_space_start,
                 cum_score=cumulative_score,
                 show_score=show_score,
-                phys_key_count=phys_key_count,
-                phys_keys_pressed=phys_keys_pressed,
-                pp_space_blocked=pp_space_blocked)
+                pp_typed_seq=pp_typed_seq)
         elif draw_state == FEEDBACK:
             if not particles_spawned:
                 _GL, _GT, _GR, _GRW, _CELL = _layout(W, H)
@@ -1452,9 +1444,7 @@ def _draw_stage_action(screen, fonts, trial,
                        action_start=None, btns=None,
                        mi_space_held=False, mi_space_start=None,
                        cum_score: int = 0, show_score: bool = True,
-                       phys_key_count: int = 0,
-                       phys_keys_pressed: set = None,
-                       pp_space_blocked: bool = False):
+                       pp_typed_seq: list = None):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     GL, GT, GR, GRW, CELL = _layout(W, H)
@@ -1487,36 +1477,38 @@ def _draw_stage_action(screen, fonts, trial,
         _stage_header(screen, fonts,
                       "ACTION", CORRECT,
                       "Execute your sequence",
-                      "Press your keys on the keypad below")
+                      "Press your keys on the keypad then SPACE when done")
 
-        seq_str = ", ".join(str(k) for k in trial.planned_sequence)
+        rx, ry = GR, GT
+        typed = pp_typed_seq or []
 
-        # ── Centred sequence display (left-column area, like the MI screen) ──
-        mid_y = (GT + H - 36) // 2   # vertical centre of the content area
+        # ── Planned sequence panel ────────────────────────────────
+        plan_str = ", ".join(str(k) for k in trial.planned_sequence)
+        seq_y    = 10 + f_xs.get_height() + 8
+        card_h   = seq_y + f_sm.get_height() + 10
+        _panel(screen, rx, ry, GRW, card_h, ACCENT)
+        _t(screen, f_xs, "Your planned sequence", DIM, rx + 14, ry + 10)
+        ps = f_sm.render(plan_str, True, WHITE)
+        screen.blit(ps, (rx + 14, ry + seq_y))
+        ry += card_h + 10
 
-        seq_label = f_xs.render("Your planned sequence", True, DIM)
-        screen.blit(seq_label, (cx - seq_label.get_width() // 2, mid_y - 80))
+        # ── Typed sequence panel (live as participant presses keys) ──
+        typed_str = ", ".join(str(k) for k in typed) if typed else "—"
+        typed_col = WHITE if typed else DIM
+        seq_y2    = 10 + f_xs.get_height() + 8
+        cnt_y2    = seq_y2 + f_sm.get_height() + 8
+        card_h2   = cnt_y2 + f_xs.get_height() + 10
+        _panel(screen, rx, ry, GRW, card_h2, CORRECT)
+        _t(screen, f_xs, "Enter your sequence", DIM, rx + 14, ry + 10)
+        ts = f_sm.render(typed_str, True, typed_col)
+        screen.blit(ts, (rx + 14, ry + seq_y2))
+        cnt = f_xs.render(f"{len(typed)} key(s) entered", True, DIM)
+        screen.blit(cnt, (rx + 14, ry + cnt_y2))
+        ry += card_h2 + 10
 
-        seq_surf = f_med.render(seq_str, True, WHITE)
-        screen.blit(seq_surf, (cx - seq_surf.get_width() // 2, mid_y - 52))
-
-        pressed  = phys_keys_pressed or set()
-        all_done = {1, 2, 3}.issubset(pressed)
-        pulse    = 0.55 + 0.45 * math.sin(time.time() * math.pi * 1.6)
-
-        hint = f_xs.render("Keys:  1  /  2  /  3  on keypad", True, DIM)
-        screen.blit(hint, (cx - hint.get_width() // 2, mid_y + 46))
-
-        if pp_space_blocked and not all_done:
-            # Warning flashes only after participant tries SPACE too early
-            warn_col = tuple(int(c * pulse) for c in AMBER)
-            warn     = f_sm.render("All 3 keys must be pressed before continuing", True, warn_col)
-            screen.blit(warn, (cx - warn.get_width() // 2, mid_y + 10))
-        else:
-            # Normal state: just tell them to press SPACE when done
-            sp_col  = tuple(int(c * pulse) for c in ACCENT)
-            sp_surf = f_med.render("Press  SPACE  when done", True, sp_col)
-            screen.blit(sp_surf, (cx - sp_surf.get_width() // 2, mid_y + 10))
+        # ── Static SPACE hint (no pulse) ─────────────────────────
+        sp_surf = f_xs.render("Press  SPACE  when done", True, DIM)
+        screen.blit(sp_surf, (rx + GRW // 2 - sp_surf.get_width() // 2, ry + 8))
 
     return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
                           cum_score=cum_score)
