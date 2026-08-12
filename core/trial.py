@@ -942,7 +942,12 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                 continue
 
             # Direction keys during PLANNING — recorded but cursor stays at start
-            if state == PLANNING and ev.type == pygame.KEYDOWN:
+            if state == PLANNING and show_timer and ev.type == pygame.KEYDOWN:
+                if ev.key == pygame.K_SPACE and typed_seq:
+                    # Skip remaining timer and advance to INPUT immediately
+                    state = INPUT
+                elif ev.key == pygame.K_BACKSPACE and typed_seq:
+                    typed_seq.pop()
                 _pkmap_p = {
                     pygame.K_1: 1, pygame.K_KP1: 1,
                     pygame.K_2: 2, pygame.K_KP2: 2,
