@@ -1636,12 +1636,6 @@ def _draw_stage_feedback(screen, fonts, trial, cum_score,
         screen.blit(tot_s, (rx + GRW - tot_s.get_width() - 16, ry + 12))
         ry += 68
 
-    # ── Your sequence ─────────────────────────────────────────
-    p_str = ", ".join(str(k) for k in trial.planned_sequence) or "—"
-    _t(screen, f_xs, "Your sequence", DIM,   rx + 14, ry)
-    _t(screen, f_sm, p_str,           WHITE, rx + 14, ry + 18)
-    ry += 44
-
     # ── Press SPACE ───────────────────────────────────────────
     ry += 6
     if rp_done:
