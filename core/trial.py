@@ -863,7 +863,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     pp_typed_seq.append(_pkmap[ev.key])
                 elif ev.key == pygame.K_BACKSPACE and pp_typed_seq:
                     pp_typed_seq.pop()
-                elif ev.key == pygame.K_SPACE and pp_typed_seq == trial.planned_sequence:
+                elif ev.key == pygame.K_SPACE and len(pp_typed_seq) >= 2:
                     if phys_first_key_t is not None and phys_last_key_t is not None:
                         trial.movement_time_ms = (
                             (phys_last_key_t - phys_first_key_t) * 1000)
@@ -1501,23 +1501,23 @@ def _draw_stage_action(screen, fonts, trial,
         screen.blit(ps,  (px + 20, py + 16 + lbl_h + 10))
         py += card1_h + gap
 
-        # ── Typed sequence panel (live input) ────────────────────
-        typed_str = ", ".join(str(k) for k in typed) if typed else "—"
-        typed_col = WHITE if typed else DIM
+        # ── Hidden input panel — dots only, no values shown ──────
+        dots_str  = "  ●  " * len(typed) if typed else "—"
+        dots_col  = WHITE if typed else DIM
         _panel(screen, px, py, pw, card2_h, CORRECT)
         lbl2 = f_sm.render("Enter your sequence", True, DIM)
         screen.blit(lbl2, (px + 20, py + 16))
-        ts   = f_big.render(typed_str, True, typed_col)
+        ts   = f_big.render(dots_str, True, dots_col)
         screen.blit(ts,   (px + 20, py + 16 + lbl_h + 10))
         cnt  = f_sm.render(f"{len(typed)} key(s) entered", True, DIM)
         screen.blit(cnt,  (px + 20, py + 16 + lbl_h + 10 + val_h + 10))
         py += card2_h + gap
 
-        # ── SPACE hint ────────────────────────────────────────────
-        if typed and typed == list(trial.planned_sequence):
+        # ── SPACE hint — unlocks after 2 key presses ─────────────
+        if len(typed) >= 2:
             sp_surf = f_med.render("Press  SPACE  to continue", True, CORRECT)
         else:
-            sp_surf = f_med.render("Sequence must match before continuing", True, DIM)
+            sp_surf = f_med.render("Press at least 2 keys before continuing", True, DIM)
         screen.blit(sp_surf, (W // 2 - sp_surf.get_width() // 2, py))
 
     return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
