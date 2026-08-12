@@ -875,10 +875,29 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
             if ev.type == pygame.MOUSEBUTTONDOWN and state != PAUSED:
                 if state == PLANNING and ev.button == 1 and show_timer:
                     p = ev.pos
-                    if btns.get("plan_backspace") and btns["plan_backspace"].collidepoint(p) and typed_seq:
-                        typed_seq.pop()
-                    elif btns.get("plan_submit") and btns["plan_submit"].collidepoint(p) and typed_seq:
-                        state = INPUT
+                    for k in (1, 2, 3):
+                        if btns.get(f"plan_key{k}") and btns[f"plan_key{k}"].collidepoint(p):
+                            _now_p = time.time()
+                            if first_key_time is None:
+                                first_key_time = _now_p
+                            trial.keypresses_log.append({
+                                "key":    k,
+                                "before": list(trial.start),
+                                "after":  list(trial.start),
+                                "abs_ms": _now_p * 1000,
+                                "rel_ms": (_now_p - planning_start) * 1000,
+                                "iki_ms": ((_now_p - last_key_time) * 1000
+                                           if last_key_time else None),
+                                "phase":  "planning",
+                            })
+                            last_key_time = _now_p
+                            typed_seq.append(k)
+                            break
+                    else:
+                        if btns.get("plan_backspace") and btns["plan_backspace"].collidepoint(p) and typed_seq:
+                            typed_seq.pop()
+                        elif btns.get("plan_submit") and btns["plan_submit"].collidepoint(p) and typed_seq:
+                            state = INPUT
 
                 if pause_rect and pause_rect.collidepoint(ev.pos):
                     pre_pause_state = state; state = PAUSED
@@ -947,36 +966,6 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
 
             if state == PAUSED:
                 continue
-
-            # Direction keys during PLANNING — recorded but cursor stays at start
-            if state == PLANNING and show_timer and ev.type == pygame.KEYDOWN:
-                if ev.key == pygame.K_SPACE and typed_seq:
-                    # Skip remaining timer and advance to INPUT immediately
-                    state = INPUT
-                elif ev.key == pygame.K_BACKSPACE and typed_seq:
-                    typed_seq.pop()
-                _pkmap_p = {
-                    pygame.K_1: 1, pygame.K_KP1: 1,
-                    pygame.K_2: 2, pygame.K_KP2: 2,
-                    pygame.K_3: 3, pygame.K_KP3: 3,
-                }
-                _dk_p = _pkmap_p.get(ev.key)
-                if _dk_p is not None:
-                    _now_p = time.time()
-                    if first_key_time is None:
-                        first_key_time = _now_p
-                    trial.keypresses_log.append({
-                        "key":    _dk_p,
-                        "before": list(trial.start),
-                        "after":  list(trial.start),   # cursor does not move
-                        "abs_ms": _now_p * 1000,
-                        "rel_ms": (_now_p - planning_start) * 1000,
-                        "iki_ms": ((_now_p - last_key_time) * 1000
-                                   if last_key_time else None),
-                        "phase":  "planning",
-                    })
-                    last_key_time = _now_p
-                    typed_seq.append(_dk_p)
 
             # Direction keys via keyboard (1/2/3 and numpad) for INPUT phase
             if state == INPUT and ev.type == pygame.KEYDOWN:
@@ -1384,20 +1373,24 @@ def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
         screen.blit(seq_s, (rx + 14, ry + 10 + lbl_h + 6))
         ry += s_card_h + 10
 
+        _b = btns if btns is not None else {}
+        btn_w = (GRW - 24) // 4   # 4 slots: 1, 2, 3, ⌫
+        btn_h = 56
+        for i, k in enumerate((1, 2, 3)):
+            _draw_key_button(screen, fonts,
+                             pygame.Rect(rx + i * (btn_w + 12), ry, btn_w, btn_h),
+                             k, _b, f"plan_key{k}")
+        _draw_cmd_button(screen, fonts,
+                         pygame.Rect(rx + 3 * (btn_w + 12), ry, btn_w, btn_h),
+                         "⌫", AMBER, bool(typed_seq), _b, "plan_backspace")
+        ry += btn_h + 8
+
         if typed_seq:
-            btn_h = 44
             _draw_cmd_button(screen, fonts,
-                             pygame.Rect(rx, ry, GRW, btn_h),
-                             "⌫  Remove last key", AMBER, True,
-                             btns if btns is not None else {}, "plan_backspace")
-            ry += btn_h + 8
-            _draw_cmd_button(screen, fonts,
-                             pygame.Rect(rx, ry, GRW, btn_h),
+                             pygame.Rect(rx, ry, GRW, 44),
                              "Submit — continue early", CORRECT, True,
-                             btns if btns is not None else {}, "plan_submit")
-            ry += btn_h + 8
-        else:
-            ry += 2
+                             _b, "plan_submit")
+            ry += 52
 
     return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
                           cum_score=cum_score)
