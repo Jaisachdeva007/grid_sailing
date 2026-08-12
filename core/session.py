@@ -669,39 +669,39 @@ def _show_instructions(screen, clock, fonts, group):
             ("You will see a 5x5 grid.", DIM),
             ("The blue cell is the MOUSE (start).", DIM),
             ("The yellow cell is the CHEESE (goal).", DIM),
-            ("Plan the shortest path, then enter it using the keypad.", DIM),
+            ("Move the MOUSE to the CHEESE in as few steps as possible using each key at least once", DIM),
         ],
     )
 
-    # Slide 3 — Repeated vs Random
-    _slide(
-        "Two Types of Grid",
-        AMBER, "Grid types",
-        [
-            ("REPEATED  —  the same puzzle appears many times.", WHITE),
-            ("RANDOM    —  a new puzzle each time.", DIM),
-            ("", DIM),
-            ("Learning the repeated puzzle is part of the experiment.", DIM),
-        ],
-    )
+    # Slide 3 — Repeated vs Random - Juliet: I would like this to be removed.
+    #_slide(
+    #    "Two Types of Grid",
+    #    AMBER, "Grid types",
+    #    [
+    #        ("REPEATED  —  the same puzzle appears many times.", WHITE),
+    #        ("RANDOM    —  a new puzzle each time.", DIM),
+    #        ("", DIM),
+    #        ("Learning the repeated puzzle is part of the experiment.", DIM),
+    #    ],
+    #)
 
-    # Slide 4 — How to enter a sequence
+    # Slide 4 — How to enter a sequence JULIET: I would like to move this slide to between Fam 1 and 2 blocks
     # ── EDIT INSTRUCTIONS HERE ──────────────────────────────────────────
     # This is the slide that explains how to enter a movement sequence.
     # Change the text strings in the list below to update what participants see.
     # ────────────────────────────────────────────────────────────────────
-    _slide(
-        "Entering Your Plan",
-        ACCENT, None,
-        [
-            ("You have 6 seconds to study the grid and plan your route.", DIM),
-            ("Then the grid hides — click  1 / 2 / 3  or press the keypad", DIM),
-            ("to enter your sequence.", DIM),
-            ("Press  Confirm  when done. You will then execute the plan.", DIM),
-        ],
-    )
+    #_slide(
+    #    "Entering Your Plan",
+    #    ACCENT, None,
+    #    [
+    #        ("You have 6 seconds to study the grid and plan your route.", DIM),
+    #        ("Then the grid hides — click  1 / 2 / 3  or press the keypad", DIM),
+    #        ("to enter your sequence.", DIM),
+    #        ("Press  Confirm  when done. You will then execute the plan.", DIM),
+    #    ],
+    #)
 
-    # Slide 5 — Scoring (only relevant for practice)
+    # Slide 5 — Scoring (only relevant for practice) JULIET: I think this slide should be put just before Practice block 1
     _slide(
         "Scoring",
         GREEN, None,
@@ -710,7 +710,7 @@ def _show_instructions(screen, clock, fonts, group):
             ("Extra moves beyond the shortest path reduce your score.", DIM),
             ("Scores are shown during practice blocks only.", DIM),
             ("", DIM),
-            (f"Your assigned condition:  {group}", WHITE),
+            #(f"Your assigned condition:  {group}", WHITE), JULIET: would like this removed.
         ],
         hint="Press  SPACE  to start",
     )
