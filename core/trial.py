@@ -200,9 +200,6 @@ def _draw_progress(screen, fonts, trial, total, block_type, session_num,
     pygame.draw.rect(screen, PROG_FG, (0, y, int(W * pct), PROG_H))
     pygame.draw.line(screen, BORDER, (0, y), (W, y))
 
-    _t(screen, f_xs, f"Trial  {trial.trial_number}  /  {total}", WHITE,
-       14, y + PROG_H // 2 - f_xs.get_height() // 2)
-
     bname = block_type.replace("_", " ").title()
     bs = f_xs.render(bname, True, ACCENT)
     screen.blit(bs, (W // 2 - bs.get_width() // 2,
@@ -237,7 +234,7 @@ def _draw_progress(screen, fonts, trial, total, block_type, session_num,
     return pause_rect, res_r
 
 
-def _draw_mouse_icon(surf, cx, cy):
+def _draw_mouse_icon(surf, cx, cy, eyes_open=True):
     """Cartoon mouse face drawn procedurally — replaces 'MOUSE' text label."""
     body = (195, 200, 220)   # blue-gray
     pink = (220, 145, 158)   # inner ear / nose
@@ -255,10 +252,13 @@ def _draw_mouse_icon(surf, cx, cy):
     # Body (ellipse below head)
     pygame.draw.ellipse(surf, body, pygame.Rect(cx - 24, cy + 20, 48, 26))
 
-    # Eyes
+    # Eyes — closed = thin horizontal line (eyelid), open = circle
     for ex in (cx - 10, cx + 10):
-        pygame.draw.circle(surf, dark, (ex, cy - 8), 4)
-        pygame.draw.circle(surf, wht,  (ex - 1, cy - 10), 1)
+        if eyes_open:
+            pygame.draw.circle(surf, dark, (ex, cy - 8), 4)
+            pygame.draw.circle(surf, wht,  (ex - 1, cy - 10), 1)
+        else:
+            pygame.draw.line(surf, dark, (ex - 4, cy - 8), (ex + 4, cy - 8), 2)
 
     # Nose
     pygame.draw.circle(surf, pink, (cx, cy + 4), 4)
@@ -317,18 +317,25 @@ def _draw_flame(surf, cx, cy, h=22):
 
 
 def _spawn_particles(cx, cy, is_perfect):
-    """Create a burst of particles originating from the cheese cell."""
-    n = 48 if is_perfect else 28
+    """Cheese fragment burst — yellow/amber wedge-shaped pieces scatter outward."""
+    n = 18 if is_perfect else 12
+    # Cheese colours: bright yellow, golden, amber, pale yellow
+    cheese_cols = [
+        (255, 216,  42),
+        (255, 190,  30),
+        (220, 162,  18),
+        (255, 240, 120),
+        (190, 130,  10),
+    ]
     particles = []
-    for _ in range(n):
-        angle = random.uniform(0, 2 * math.pi)
-        speed = random.uniform(90, 270)
-        life  = random.uniform(0.55, 1.1)
-        size  = random.randint(3, 8)
-        if is_perfect:
-            color = random.choice([(255, 215, 0), (255, 180, 50), (255, 240, 110)])
-        else:
-            color = random.choice([(88, 148, 255), (52, 200, 100), (220, 162, 28)])
+    for i in range(n):
+        # Spread evenly + slight jitter so pieces fan out cleanly
+        base  = (2 * math.pi * i / n)
+        angle = base + random.uniform(-0.25, 0.25)
+        speed = random.uniform(120, 300)
+        life  = random.uniform(0.35, 0.55)
+        size  = random.randint(5, 11)
+        color = random.choice(cheese_cols)
         particles.append({
             "x": float(cx), "y": float(cy),
             "vx": math.cos(angle) * speed,
@@ -337,6 +344,18 @@ def _spawn_particles(cx, cy, is_perfect):
             "r": color[0], "g": color[1], "b": color[2],
             "size": size,
         })
+    # Add a few bright sparkle dots on perfect
+    if is_perfect:
+        for _ in range(8):
+            angle = random.uniform(0, 2 * math.pi)
+            particles.append({
+                "x": float(cx), "y": float(cy),
+                "vx": math.cos(angle) * random.uniform(200, 380),
+                "vy": math.sin(angle) * random.uniform(200, 380),
+                "life": 0.4, "max_life": 0.4,
+                "r": 255, "g": 255, "b": 200,
+                "size": 3,
+            })
     return particles
 
 
@@ -359,7 +378,7 @@ def _update_draw_particles(screen, particles, dt):
     particles[:] = alive
 
 
-def _draw_grid(screen, fonts, trial, trail, cursor, show_arrows=False):
+def _draw_grid(screen, fonts, trial, trail, cursor, show_arrows=False, eyes_open=True):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     GL, GT, GR, GRW, CELL = _layout(W, H)
@@ -398,7 +417,7 @@ def _draw_grid(screen, fonts, trial, trail, cursor, show_arrows=False):
     if cursor:
         icx = GL + cursor[1] * CELL + CELL // 2
         icy = GT + cursor[0] * CELL + CELL // 2
-        _draw_mouse_icon(screen, icx, icy)
+        _draw_mouse_icon(screen, icx, icy, eyes_open=eyes_open)
 
 
 def _stage_header(screen, fonts, tag, tag_col, title, subtitle):
@@ -467,8 +486,7 @@ def _draw_pause_overlay(screen, fonts, trial, total, block_type, sn):
     dim.fill((0, 0, 0, 160))
     screen.blit(dim, (0, 0))
 
-    info_text = (f"Trial {trial.trial_number} of {total}  ·  "
-                 f"{block_type.replace('_',' ').title()}  ·  Session {sn}")
+    info_text = (f"{block_type.replace('_',' ').title()}  ·  Session {sn}")
     info_s  = f_xs.render(info_text, True, DIM)
     warn_s  = f_xs.render("Progress up to this trial is already saved.", True, DIM)
     hint_s  = f_xs.render("P or ESC to resume", True, DIM)
@@ -560,6 +578,7 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
     first_key_t = None
     last_key_t  = None
     move_count  = 0
+    keys_used   = set()   # which of 1/2/3 have been pressed at least once
 
     trial.trial_start_time = time.time()
 
@@ -624,10 +643,6 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     now_t = time.time()
                     if first_key_t is None:
                         first_key_t = now_t
-                    last_key_t = now_t
-                    now_t = time.time()
-                    if first_key_t is None:
-                        first_key_t = now_t
                         trial.reaction_time_ms = (now_t - trial.trial_start_time) * 1000
                     iki = (now_t - last_key_t) * 1000 if last_key_t else None
                     last_key_t = now_t
@@ -637,6 +652,7 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     if nxt:
                         trail[cursor] = now_t
                         cursor = nxt
+                        keys_used.add(dk)   # only counts if the cursor actually moved
                     trial.keypresses_log.append({
                         "key":    dk,
                         "before": before,
@@ -645,7 +661,8 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                         "rel_ms": (now_t - trial.trial_start_time) * 1000,
                         "iki_ms": iki,
                     })
-                    if cursor == trial.goal:
+                    # Only complete the trial when cursor is on cheese AND all 3 keys used
+                    if cursor == trial.goal and {1, 2, 3}.issubset(keys_used):
                         trial.movement_time_ms = (last_key_t - first_key_t) * 1000
                         trial.planned_sequence = []
                         trial.is_correct       = True
@@ -667,10 +684,14 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
         draw_state = pre_pause_state if state == PAUSED else state
 
         if draw_state == "explore":
+            if cursor == trial.goal and not {1, 2, 3}.issubset(keys_used):
+                subtitle = "You found the cheese!  All 3 keys must be used to complete the trial"
+            else:
+                subtitle = "Press  1 / 2 / 3  on the keypad to move the mouse — use all 3 keys"
             _stage_header(screen, fonts,
                           "EXPLORE", ACCENT,
                           "Find the cheese!",
-                          "Press  1 / 2 / 3  on the keypad to move the mouse")
+                          subtitle)
             _draw_grid(screen, fonts, trial, trail, cursor)
         elif draw_state == ITI:
             pause_rect, researcher_rect = _draw_stage_iti(
@@ -727,11 +748,21 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
 
     particles         = []
     particles_spawned = False
+    burst_start       = None   # time.time() when cheese burst was spawned
+
+    # Ambient particles that drift toward the cheese during planning
+    amb_particles = [
+        {"x": 0.0, "y": 0.0, "vx": random.uniform(-0.8, 0.8),
+         "vy": random.uniform(-0.8, 0.8)}
+        for _ in range(22)
+    ]
+    # Positions initialised lazily on first draw (need screen layout)
     last_frame_t      = time.time()
     mi_space_held     = False
     mi_space_start    = None
     phys_first_key_t  = None   # first 1/2/3 press time during PP action stage
     phys_last_key_t   = None   # most recent 1/2/3 press time during PP action stage
+    pp_typed_seq      = []     # sequence the participant physically types in ACTION
 
     # Replay
     rp_step      = 0
@@ -765,17 +796,18 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
 
     def enter_feedback():
         nonlocal state, feedback_start, rp_step, rp_timer, rp_cursor, rp_trail, rp_done, rp_done_time
-        state = FEEDBACK
+        state          = FEEDBACK
         feedback_start = time.time()
         rp_step = 0; rp_timer = pygame.time.get_ticks()
         rp_cursor = trial.start; rp_trail = {}; rp_done = False; rp_done_time = None
 
     def enter_action():
-        nonlocal state, action_start, phys_first_key_t, phys_last_key_t
-        state            = ACTION
-        action_start     = time.time()
-        phys_first_key_t = None
-        phys_last_key_t  = None
+        nonlocal state, action_start, phys_first_key_t, phys_last_key_t, pp_typed_seq
+        state             = ACTION
+        action_start      = time.time()
+        phys_first_key_t  = None
+        phys_last_key_t   = None
+        pp_typed_seq      = []
 
     def enter_iti():
         nonlocal state, iti_start
@@ -816,7 +848,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                         update_session_progress(session_id, trial.trial_number)
                         enter_feedback() if show_feedback else enter_iti()
 
-            # PP ACTION: 1/2/3 keys track physical presses; SPACE ends trial
+            # PP ACTION: participant physically re-types their sequence; SPACE ends trial
             if state == ACTION and is_pp and ev.type == pygame.KEYDOWN:
                 _pkmap = {
                     pygame.K_1: 1, pygame.K_KP1: 1,
@@ -828,16 +860,45 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     if phys_first_key_t is None:
                         phys_first_key_t = _now_t
                     phys_last_key_t = _now_t
-                elif ev.key == pygame.K_SPACE:
+                    pp_typed_seq.append(_pkmap[ev.key])
+                elif ev.key == pygame.K_SPACE and len(pp_typed_seq) >= 2:
                     if phys_first_key_t is not None and phys_last_key_t is not None:
                         trial.movement_time_ms = (
                             (phys_last_key_t - phys_first_key_t) * 1000)
-                    _finalise(trial, trial.planned_sequence, session_id)
+                    _finalise(trial, pp_typed_seq, session_id)
                     trial_id = _save(trial, session_id)
                     update_session_progress(session_id, trial.trial_number)
+                    # Replay animates actual physical sequence, not planned
+                    action_path = _build_path(trial.start, pp_typed_seq)
                     enter_feedback() if show_feedback else enter_iti()
 
             if ev.type == pygame.MOUSEBUTTONDOWN and state != PAUSED:
+                if state == PLANNING and ev.button == 1 and show_timer:
+                    p = ev.pos
+                    for k in (1, 2, 3):
+                        if btns.get(f"plan_key{k}") and btns[f"plan_key{k}"].collidepoint(p):
+                            _now_p = time.time()
+                            if first_key_time is None:
+                                first_key_time = _now_p
+                            trial.keypresses_log.append({
+                                "key":    k,
+                                "before": list(trial.start),
+                                "after":  list(trial.start),
+                                "abs_ms": _now_p * 1000,
+                                "rel_ms": (_now_p - planning_start) * 1000,
+                                "iki_ms": ((_now_p - last_key_time) * 1000
+                                           if last_key_time else None),
+                                "phase":  "planning",
+                            })
+                            last_key_time = _now_p
+                            typed_seq.append(k)
+                            break
+                    else:
+                        if btns.get("plan_backspace") and btns["plan_backspace"].collidepoint(p) and typed_seq:
+                            typed_seq.pop()
+                        elif btns.get("plan_submit") and btns["plan_submit"].collidepoint(p) and typed_seq:
+                            state = INPUT
+
                 if pause_rect and pause_rect.collidepoint(ev.pos):
                     pre_pause_state = state; state = PAUSED
 
@@ -878,7 +939,9 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                             typed_seq.append(k)
                             break
                     else:
-                        if btns.get("confirm") and btns["confirm"].collidepoint(p) and typed_seq:
+                        if btns.get("backspace") and btns["backspace"].collidepoint(p) and typed_seq:
+                            typed_seq.pop()
+                        elif btns.get("confirm") and btns["confirm"].collidepoint(p) and typed_seq:
                             if first_key_time:
                                 trial.reaction_time_ms = (first_key_time - planning_start) * 1000
                             trial.planned_sequence = list(typed_seq)
@@ -906,6 +969,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
 
             # Direction keys via keyboard (1/2/3 and numpad) for INPUT phase
             if state == INPUT and ev.type == pygame.KEYDOWN:
+                if ev.key == pygame.K_BACKSPACE and typed_seq:
+                    typed_seq.pop()
                 _kmap = {
                     pygame.K_1: 1, pygame.K_KP1: 1,
                     pygame.K_2: 2, pygame.K_KP2: 2,
@@ -938,7 +1003,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
 
         # Auto-transitions
         if state == PLANNING and show_timer and elapsed >= p_time:
-            state = INPUT; typed_seq = []; first_key_time = None
+            state = INPUT   # typed_seq and first_key_time carry over from planning
 
         if state == FEEDBACK and not rp_done:
             if now_ms - rp_timer >= REPLAY_MS:
@@ -962,8 +1027,12 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
         if state == DONE:
             break
 
-        if now_ms - blink_t > 520:
-            blink_on = not blink_on; blink_t = now_ms
+        # Blink: eyes open ~3.5 s, closed ~120 ms
+        blink_elapsed = now_ms - blink_t
+        if blink_on and blink_elapsed > 3500:
+            blink_on = False; blink_t = now_ms
+        elif not blink_on and blink_elapsed > 120:
+            blink_on = True;  blink_t = now_ms
 
         # ── Draw ─────────────────────────────────────────────
         btns.clear()
@@ -971,10 +1040,18 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
         draw_state = pre_pause_state if state == PAUSED else state
 
         if draw_state == PLANNING:
+            # Lazy-init ambient particle positions inside the grid
+            if amb_particles and amb_particles[0]["x"] == 0.0:
+                _GL, _GT, _GR, _GRW, _CELL = _layout(W, H)
+                for ap in amb_particles:
+                    ap["x"] = float(_GL + random.randint(0, _CELL * 5))
+                    ap["y"] = float(_GT + random.randint(0, _CELL * 5))
             pause_rect, researcher_rect = _draw_stage_planning(
                 screen, fonts, trial, elapsed, p_time,
                 total_trials, block_type, sn,
-                cum_score=cumulative_score, show_timer=show_timer)
+                cum_score=cumulative_score, show_timer=show_timer,
+                eyes_open=blink_on, amb_particles=amb_particles,
+                typed_seq=typed_seq, btns=btns)
         elif draw_state == INPUT:
             pause_rect, researcher_rect = _draw_stage_input(
                 screen, fonts, trial, typed_seq, blink_on,
@@ -989,7 +1066,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                 mi_space_held=mi_space_held,
                 mi_space_start=mi_space_start,
                 cum_score=cumulative_score,
-                show_score=show_score)
+                show_score=show_score,
+                pp_typed_seq=pp_typed_seq)
         elif draw_state == FEEDBACK:
             if not particles_spawned:
                 _GL, _GT, _GR, _GRW, _CELL = _layout(W, H)
@@ -997,14 +1075,20 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                 _pcx = _GL + goal_c * _CELL + _CELL // 2
                 _pcy = _GT + goal_r * _CELL + _CELL // 2
                 if trial.is_correct:
-                    particles = _spawn_particles(
+                    particles  = _spawn_particles(
                         _pcx, _pcy, trial.reward_score == OPTIMAL_SCORE)
+                    burst_start = time.time()
                 particles_spawned = True
-            pause_rect, researcher_rect = _draw_stage_feedback(
-                screen, fonts, trial, cumulative_score,
-                rp_cursor, rp_trail, rp_done,
-                total_trials, block_type, sn,
-                streak=streak, show_score=show_score)
+
+            # On correct trials: show burst for 0.4 s before the feedback card.
+            burst_done = (burst_start is None or
+                          (time.time() - burst_start) >= 0.4)
+            if burst_done:
+                pause_rect, researcher_rect = _draw_stage_feedback(
+                    screen, fonts, trial, cumulative_score,
+                    rp_cursor, rp_trail, rp_done,
+                    total_trials, block_type, sn,
+                    streak=streak, show_score=show_score)
             if particles:
                 _update_draw_particles(screen, particles, dt)
         elif draw_state == ITI:
@@ -1045,6 +1129,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
 # ── Finalise & save ───────────────────────────────────────────
 
 def _finalise(trial, used_seq, session_id):
+    from core.sounds import play as play_sound
     pos = trial.start
     oob = 0
     for k in used_seq:
@@ -1056,6 +1141,7 @@ def _finalise(trial, used_seq, session_id):
     trial.oob_count = oob
     score, n, ok = _score(used_seq, trial.optimal_sequence, pos, trial.goal)
     trial.reward_score = score; trial.number_of_moves = n; trial.is_correct = ok
+    play_sound("correct" if ok else "incorrect")
     if trial.movement_time_ms is None and len(trial.keypresses_log) >= 2:
         trial.movement_time_ms = (trial.keypresses_log[-1]["abs_ms"]
                                   - trial.keypresses_log[0]["abs_ms"])
@@ -1204,7 +1290,9 @@ def _draw_score_card(screen, fonts, trial, rx, ry, GRW):
 
 def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
                          total_trials, block_type, sn, cum_score: int = 0,
-                         show_timer: bool = True):
+                         show_timer: bool = True, eyes_open: bool = True,
+                         amb_particles: list = None, typed_seq: list = None,
+                         btns: dict = None):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     GL, GT, GR, GRW, CELL = _layout(W, H)
@@ -1220,7 +1308,34 @@ def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
                   "PLANNING", ACCENT,
                   "Study the grid",
                   subtitle)
-    _draw_grid(screen, fonts, trial, {}, trial.start)
+
+    # Ambient magnetic particles drawn under the grid
+    if amb_particles is not None:
+        goal_c = trial.goal[1]; goal_r = trial.goal[0]
+        gcx = GL + goal_c * CELL + CELL // 2
+        gcy = GT + goal_r * CELL + CELL // 2
+        for p in amb_particles:
+            # Magnetic pull toward cheese cell
+            dx, dy   = gcx - p["x"], gcy - p["y"]
+            dist     = max(1, math.hypot(dx, dy))
+            strength = 28.0 / dist
+            p["vx"]  = p["vx"] * 0.97 + (dx / dist) * strength
+            p["vy"]  = p["vy"] * 0.97 + (dy / dist) * strength
+            p["x"]  += p["vx"]
+            p["y"]  += p["vy"]
+            # Reset particle that drifts too close to cheese or off grid
+            if dist < 18 or not (GL < p["x"] < GR and GT < p["y"] < GT + CELL * 5):
+                p["x"] = float(GL + random.randint(0, CELL * 5))
+                p["y"] = float(GT + random.randint(0, CELL * 5))
+                p["vx"] = random.uniform(-0.8, 0.8)
+                p["vy"] = random.uniform(-0.8, 0.8)
+            alpha = max(30, min(140, int(140 * (dist / (CELL * 3)))))
+            col   = (220, 162, 28, alpha)
+            s = pygame.Surface((4, 4), pygame.SRCALPHA)
+            pygame.draw.circle(s, col, (2, 2), 2)
+            screen.blit(s, (int(p["x"]) - 2, int(p["y"]) - 2))
+
+    _draw_grid(screen, fonts, trial, {}, trial.start, eyes_open=eyes_open)
 
     rx, ry = GR, GT
 
@@ -1243,6 +1358,39 @@ def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
         hs = f_xs.render("Press  SPACE  when ready", True, DIM)
         screen.blit(hs, (rx + GRW // 2 - hs.get_width() // 2, ry + 12 + f_sm_h + 8))
     ry += card_h + 16
+
+    # ── Live sequence entered so far (during planning) ────────
+    if typed_seq is not None:
+        seq_str  = ", ".join(str(k) for k in typed_seq) if typed_seq else "—"
+        seq_col  = WHITE if typed_seq else DIM
+        lbl_h    = f_xs.get_height()
+        val_h    = f_sm.get_height()
+        s_card_h = 10 + lbl_h + 6 + val_h + 10
+        _panel(screen, rx, ry, GRW, s_card_h, ACCENT)
+        lbl_s = f_xs.render("Keys entered so far", True, DIM)
+        screen.blit(lbl_s, (rx + 14, ry + 10))
+        seq_s = f_sm.render(seq_str, True, seq_col)
+        screen.blit(seq_s, (rx + 14, ry + 10 + lbl_h + 6))
+        ry += s_card_h + 10
+
+        _b = btns if btns is not None else {}
+        btn_w = (GRW - 24) // 4   # 4 slots: 1, 2, 3, ⌫
+        btn_h = 56
+        for i, k in enumerate((1, 2, 3)):
+            _draw_key_button(screen, fonts,
+                             pygame.Rect(rx + i * (btn_w + 12), ry, btn_w, btn_h),
+                             k, _b, f"plan_key{k}")
+        _draw_cmd_button(screen, fonts,
+                         pygame.Rect(rx + 3 * (btn_w + 12), ry, btn_w, btn_h),
+                         "⌫", AMBER, bool(typed_seq), _b, "plan_backspace")
+        ry += btn_h + 8
+
+        if typed_seq:
+            _draw_cmd_button(screen, fonts,
+                             pygame.Rect(rx, ry, GRW, 44),
+                             "Confirm", CORRECT, True,
+                             _b, "plan_submit")
+            ry += 52
 
     return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
                           cum_score=cum_score)
@@ -1301,13 +1449,16 @@ def _draw_stage_input(screen, fonts, trial, typed_seq, blink_on,
     screen.blit(cnt, (rx + 14, ry + cnt_y))
     ry += card_h + 10
 
-    # ── Direction buttons (1 / 2 / 3) ────────────────────────
-    btn_w = (GRW - 24) // 3   # 3 buttons, 12px gaps
+    # ── Direction buttons (1 / 2 / 3) + backspace ────────────
+    btn_w = (GRW - 36) // 4   # 4 slots: 1, 2, 3, ⌫
     btn_h = 68
     for i, k in enumerate((1, 2, 3)):
         _draw_key_button(screen, fonts,
                          pygame.Rect(rx + i * (btn_w + 12), ry, btn_w, btn_h),
                          k, btns, f"key{k}")
+    # Backspace button
+    bk_rect = pygame.Rect(rx + 3 * (btn_w + 12), ry, btn_w, btn_h)
+    _draw_cmd_button(screen, fonts, bk_rect, "⌫", AMBER, bool(typed_seq), btns, "backspace")
     ry += btn_h + 10
 
     # ── Confirm button (all groups) ───────────────────────────
@@ -1360,7 +1511,8 @@ def _draw_stage_action(screen, fonts, trial,
                        total_trials, block_type, sn,
                        action_start=None, btns=None,
                        mi_space_held=False, mi_space_start=None,
-                       cum_score: int = 0, show_score: bool = True):
+                       cum_score: int = 0, show_score: bool = True,
+                       pp_typed_seq: list = None):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     GL, GT, GR, GRW, CELL = _layout(W, H)
@@ -1392,21 +1544,34 @@ def _draw_stage_action(screen, fonts, trial,
     else:  # PP — physical key press stage
         _stage_header(screen, fonts,
                       "ACTION", CORRECT,
-                      "Execute your sequence",
-                      "Press your keys on the keypad, then press  SPACE  when done")
+                      "Execute your sequence", "")
 
-        rx, ry = GR, GT
-        seq_str = ", ".join(str(k) for k in trial.planned_sequence)
-        seq_y   = 10 + f_xs.get_height() + 8
-        card_h  = seq_y + f_sm.get_height() + 10
-        _panel(screen, rx, ry, GRW, card_h, CORRECT)
-        _t(screen, f_xs, "Your planned sequence", DIM, rx + 14, ry + 10)
-        ss = f_sm.render(seq_str, True, WHITE)
-        screen.blit(ss, (rx + 14, ry + seq_y))
-        ry += card_h + 16
+        pw     = min(700, W - 80)
+        px     = W // 2 - pw // 2
+        lbl_h  = f_sm.get_height()
+        val_h  = f_big.get_height()
+        inst_h = f_med.get_height()
+        card_h = 16 + lbl_h + 10 + val_h + 16
+        total_h = inst_h + 20 + card_h + 24 + f_med.get_height()
+        py     = GT + max(0, (H - GT - PROG_H - total_h) // 2)
 
-        ins_s = f_xs.render("Press keys on keypad  ·  SPACE to end", True, DIM)
-        screen.blit(ins_s, (rx + GRW // 2 - ins_s.get_width() // 2, ry + 8))
+        # ── Big centred instruction above the panel ───────────────
+        inst = f_med.render("Press your keys on the keypad, then press  SPACE  when done", True, WHITE)
+        screen.blit(inst, (W // 2 - inst.get_width() // 2, py))
+        py += inst_h + 20
+
+        # ── Planned sequence panel ────────────────────────────────
+        plan_str = ", ".join(str(k) for k in trial.planned_sequence)
+        _panel(screen, px, py, pw, card_h, ACCENT)
+        lbl = f_sm.render("Your planned sequence", True, DIM)
+        screen.blit(lbl, (px + 20, py + 16))
+        ps  = f_big.render(plan_str, True, WHITE)
+        screen.blit(ps,  (px + 20, py + 16 + lbl_h + 10))
+        py += card_h + 24
+
+        # ── Static dim SPACE reminder below panel ─────────────────
+        sp_surf = f_med.render("Press  SPACE  when done", True, DIM)
+        screen.blit(sp_surf, (W // 2 - sp_surf.get_width() // 2, py))
 
     return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
                           cum_score=cum_score)
@@ -1427,7 +1592,7 @@ def _draw_stage_feedback(screen, fonts, trial, cum_score,
 
     new_total = cum_score + trial.reward_score
 
-    # ── Animated replay grid (fills full left column) ─────────
+    # ── Animated replay of actual sequence ───────────────────
     _draw_grid(screen, fonts, trial, rp_trail, rp_cursor)
 
     # ── Right panel ───────────────────────────────────────────
@@ -1463,12 +1628,6 @@ def _draw_stage_feedback(screen, fonts, trial, cum_score,
         tot_s = f_med.render(f"{new_total} pts", True, CORRECT)
         screen.blit(tot_s, (rx + GRW - tot_s.get_width() - 16, ry + 12))
         ry += 68
-
-    # ── Your sequence ─────────────────────────────────────────
-    p_str = ", ".join(str(k) for k in trial.planned_sequence) or "—"
-    _t(screen, f_xs, "Your sequence", DIM,   rx + 14, ry)
-    _t(screen, f_sm, p_str,           WHITE, rx + 14, ry + 18)
-    ry += 44
 
     # ── Press SPACE ───────────────────────────────────────────
     ry += 6
@@ -1507,8 +1666,7 @@ def _draw_stage_iti(screen, fonts, trial, iti_start, iti_dur,
     gr_y = cy + r_outer + 16
     screen.blit(gr, (cx - gr.get_width() // 2, gr_y))
 
-    next_lbl = f_xs.render(
-        f"Trial  {trial.trial_number}  of  {total_trials}  starting…", True, DIM)
+    next_lbl = f_xs.render("Next trial starting…", True, DIM)
     screen.blit(next_lbl, (cx - next_lbl.get_width() // 2,
                             gr_y + gr.get_height() + 8))
 
