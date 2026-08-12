@@ -14,7 +14,7 @@
 #  It runs once when the session starts — not during trials.
 # ============================================================
 
-from config import GRID_SIZE, KEY_MAPPINGS, MIN_SEQUENCE_LENGTH
+from config import GRID_SIZE, KEY_MAPPINGS, MIN_SEQUENCE_LENGTH, MAX_SEQUENCE_LENGTH
 
 
 def is_valid_position(row, col):
@@ -60,14 +60,19 @@ def find_valid_paths(start_row, start_col):
     results = []
 
     def dfs(row, col, sequence, visited):
-        # If we've met all constraints, record this as a valid puzzle
-        if len(sequence) >= MIN_SEQUENCE_LENGTH and set(sequence) == {1, 2, 3}:
+        # Record puzzle if it meets the length and key-variety constraints
+        if (MIN_SEQUENCE_LENGTH <= len(sequence) <= MAX_SEQUENCE_LENGTH
+                and set(sequence) == {1, 2, 3}):
             results.append({
                 "start":    [start_row, start_col],
                 "goal":     [row, col],
                 "sequence": list(sequence),
                 "length":   len(sequence),
             })
+
+        # Prune — no path longer than MAX_SEQUENCE_LENGTH is valid
+        if len(sequence) >= MAX_SEQUENCE_LENGTH:
+            return
 
         # Try each key press and continue exploring
         for key in [1, 2, 3]:
