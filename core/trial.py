@@ -784,8 +784,6 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
         is_ctrl = False
         is_pp   = True
     show_feedback = block_type not in ("familiarization", "pre_test", "post_test")
-    if is_pp:
-        show_feedback = True   # PP always sees where their keys moved the cursor
 
     p_time  = config.get("planning_time",   6)
     a_time  = config.get("action_time",     10)
