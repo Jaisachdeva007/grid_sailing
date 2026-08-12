@@ -873,6 +873,13 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     enter_feedback() if show_feedback else enter_iti()
 
             if ev.type == pygame.MOUSEBUTTONDOWN and state != PAUSED:
+                if state == PLANNING and ev.button == 1 and show_timer:
+                    p = ev.pos
+                    if btns.get("plan_backspace") and btns["plan_backspace"].collidepoint(p) and typed_seq:
+                        typed_seq.pop()
+                    elif btns.get("plan_submit") and btns["plan_submit"].collidepoint(p) and typed_seq:
+                        state = INPUT
+
                 if pause_rect and pause_rect.collidepoint(ev.pos):
                     pre_pause_state = state; state = PAUSED
 
@@ -1055,7 +1062,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                 total_trials, block_type, sn,
                 cum_score=cumulative_score, show_timer=show_timer,
                 eyes_open=blink_on, amb_particles=amb_particles,
-                typed_seq=typed_seq)
+                typed_seq=typed_seq, btns=btns)
         elif draw_state == INPUT:
             pause_rect, researcher_rect = _draw_stage_input(
                 screen, fonts, trial, typed_seq, blink_on,
@@ -1295,7 +1302,8 @@ def _draw_score_card(screen, fonts, trial, rx, ry, GRW):
 def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
                          total_trials, block_type, sn, cum_score: int = 0,
                          show_timer: bool = True, eyes_open: bool = True,
-                         amb_particles: list = None, typed_seq: list = None):
+                         amb_particles: list = None, typed_seq: list = None,
+                         btns: dict = None):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     GL, GT, GR, GRW, CELL = _layout(W, H)
@@ -1377,14 +1385,17 @@ def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
         ry += s_card_h + 10
 
         if typed_seq:
-            # Backspace hint
-            bk_s = f_xs.render("⌫  Backspace — remove last key", True, AMBER)
-            screen.blit(bk_s, (rx + 14, ry))
-            ry += bk_s.get_height() + 6
-            # Submit hint
-            sp_s = f_xs.render("SPACE — submit and continue early", True, CORRECT)
-            screen.blit(sp_s, (rx + 14, ry))
-            ry += sp_s.get_height() + 6
+            btn_h = 44
+            _draw_cmd_button(screen, fonts,
+                             pygame.Rect(rx, ry, GRW, btn_h),
+                             "⌫  Remove last key", AMBER, True,
+                             btns if btns is not None else {}, "plan_backspace")
+            ry += btn_h + 8
+            _draw_cmd_button(screen, fonts,
+                             pygame.Rect(rx, ry, GRW, btn_h),
+                             "Submit — continue early", CORRECT, True,
+                             btns if btns is not None else {}, "plan_submit")
+            ry += btn_h + 8
         else:
             ry += 2
 
