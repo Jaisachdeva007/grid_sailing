@@ -798,10 +798,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
         nonlocal state, feedback_start, rp_step, rp_timer, rp_cursor, rp_trail, rp_done, rp_done_time
         state          = FEEDBACK
         feedback_start = time.time()
-        # Replay removed — mark done immediately so SPACE works right away
         rp_step = 0; rp_timer = pygame.time.get_ticks()
-        rp_cursor = trial.start; rp_trail = {}
-        rp_done = True; rp_done_time = time.time()
+        rp_cursor = trial.start; rp_trail = {}; rp_done = False; rp_done_time = None
 
     def enter_action():
         nonlocal state, action_start, phys_first_key_t, phys_last_key_t, pp_typed_seq
@@ -870,6 +868,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     _finalise(trial, pp_typed_seq, session_id)
                     trial_id = _save(trial, session_id)
                     update_session_progress(session_id, trial.trial_number)
+                    # Replay animates actual physical sequence, not planned
+                    action_path = _build_path(trial.start, pp_typed_seq)
                     enter_feedback() if show_feedback else enter_iti()
 
             if ev.type == pygame.MOUSEBUTTONDOWN and state != PAUSED:
@@ -1571,8 +1571,8 @@ def _draw_stage_feedback(screen, fonts, trial, cum_score,
 
     new_total = cum_score + trial.reward_score
 
-    # ── Static grid — no replay shown to participant ──────────
-    _draw_grid(screen, fonts, trial, {}, None)
+    # ── Animated replay of actual sequence ───────────────────
+    _draw_grid(screen, fonts, trial, rp_trail, rp_cursor)
 
     # ── Right panel ───────────────────────────────────────────
     rx, ry = GR, GT
