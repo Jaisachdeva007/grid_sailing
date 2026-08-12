@@ -1479,39 +1479,46 @@ def _draw_stage_action(screen, fonts, trial,
                       "Execute your sequence",
                       "Press your keys on the keypad then SPACE when done")
 
-        rx, ry = GR, GT
-        typed = pp_typed_seq or []
+        typed    = pp_typed_seq or []
+        pw       = min(700, W - 80)          # panel width — centred on screen
+        px       = W // 2 - pw // 2          # panel left edge
+
+        lbl_h    = f_sm.get_height()
+        val_h    = f_big.get_height()
+        card1_h  = 16 + lbl_h + 10 + val_h + 16
+        card2_h  = 16 + lbl_h + 10 + val_h + 10 + f_sm.get_height() + 16
+        gap      = 20
+        hint_h   = f_med.get_height()
+        total_h  = card1_h + gap + card2_h + gap + hint_h
+        py       = GT + max(0, (H - GT - PROG_H - total_h) // 2)
 
         # ── Planned sequence panel ────────────────────────────────
         plan_str = ", ".join(str(k) for k in trial.planned_sequence)
-        seq_y    = 10 + f_xs.get_height() + 8
-        card_h   = seq_y + f_sm.get_height() + 10
-        _panel(screen, rx, ry, GRW, card_h, ACCENT)
-        _t(screen, f_xs, "Your planned sequence", DIM, rx + 14, ry + 10)
-        ps = f_sm.render(plan_str, True, WHITE)
-        screen.blit(ps, (rx + 14, ry + seq_y))
-        ry += card_h + 10
+        _panel(screen, px, py, pw, card1_h, ACCENT)
+        lbl = f_sm.render("Your planned sequence", True, DIM)
+        screen.blit(lbl, (px + 20, py + 16))
+        ps  = f_big.render(plan_str, True, WHITE)
+        screen.blit(ps,  (px + 20, py + 16 + lbl_h + 10))
+        py += card1_h + gap
 
-        # ── Typed sequence panel (live as participant presses keys) ──
+        # ── Typed sequence panel (live input) ────────────────────
         typed_str = ", ".join(str(k) for k in typed) if typed else "—"
         typed_col = WHITE if typed else DIM
-        seq_y2    = 10 + f_xs.get_height() + 8
-        cnt_y2    = seq_y2 + f_sm.get_height() + 8
-        card_h2   = cnt_y2 + f_xs.get_height() + 10
-        _panel(screen, rx, ry, GRW, card_h2, CORRECT)
-        _t(screen, f_xs, "Enter your sequence", DIM, rx + 14, ry + 10)
-        ts = f_sm.render(typed_str, True, typed_col)
-        screen.blit(ts, (rx + 14, ry + seq_y2))
-        cnt = f_xs.render(f"{len(typed)} key(s) entered", True, DIM)
-        screen.blit(cnt, (rx + 14, ry + cnt_y2))
-        ry += card_h2 + 10
+        _panel(screen, px, py, pw, card2_h, CORRECT)
+        lbl2 = f_sm.render("Enter your sequence", True, DIM)
+        screen.blit(lbl2, (px + 20, py + 16))
+        ts   = f_big.render(typed_str, True, typed_col)
+        screen.blit(ts,   (px + 20, py + 16 + lbl_h + 10))
+        cnt  = f_sm.render(f"{len(typed)} key(s) entered", True, DIM)
+        screen.blit(cnt,  (px + 20, py + 16 + lbl_h + 10 + val_h + 10))
+        py += card2_h + gap
 
-        # ── SPACE hint — only active when sequences match ─────────
+        # ── SPACE hint ────────────────────────────────────────────
         if typed and typed == list(trial.planned_sequence):
-            sp_surf = f_sm.render("Press  SPACE  to continue", True, CORRECT)
+            sp_surf = f_med.render("Press  SPACE  to continue", True, CORRECT)
         else:
-            sp_surf = f_xs.render("Sequence must match before continuing", True, DIM)
-        screen.blit(sp_surf, (rx + GRW // 2 - sp_surf.get_width() // 2, ry + 8))
+            sp_surf = f_med.render("Sequence must match before continuing", True, DIM)
+        screen.blit(sp_surf, (W // 2 - sp_surf.get_width() // 2, py))
 
     return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
                           cum_score=cum_score)
