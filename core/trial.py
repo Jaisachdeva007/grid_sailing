@@ -911,7 +911,9 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                             typed_seq.append(k)
                             break
                     else:
-                        if btns.get("confirm") and btns["confirm"].collidepoint(p) and typed_seq:
+                        if btns.get("backspace") and btns["backspace"].collidepoint(p) and typed_seq:
+                            typed_seq.pop()
+                        elif btns.get("confirm") and btns["confirm"].collidepoint(p) and typed_seq:
                             if first_key_time:
                                 trial.reaction_time_ms = (first_key_time - planning_start) * 1000
                             trial.planned_sequence = list(typed_seq)
@@ -939,6 +941,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
 
             # Direction keys via keyboard (1/2/3 and numpad) for INPUT phase
             if state == INPUT and ev.type == pygame.KEYDOWN:
+                if ev.key == pygame.K_BACKSPACE and typed_seq:
+                    typed_seq.pop()
                 _kmap = {
                     pygame.K_1: 1, pygame.K_KP1: 1,
                     pygame.K_2: 2, pygame.K_KP2: 2,
@@ -1382,13 +1386,16 @@ def _draw_stage_input(screen, fonts, trial, typed_seq, blink_on,
     screen.blit(cnt, (rx + 14, ry + cnt_y))
     ry += card_h + 10
 
-    # ── Direction buttons (1 / 2 / 3) ────────────────────────
-    btn_w = (GRW - 24) // 3   # 3 buttons, 12px gaps
+    # ── Direction buttons (1 / 2 / 3) + backspace ────────────
+    btn_w = (GRW - 36) // 4   # 4 slots: 1, 2, 3, ⌫
     btn_h = 68
     for i, k in enumerate((1, 2, 3)):
         _draw_key_button(screen, fonts,
                          pygame.Rect(rx + i * (btn_w + 12), ry, btn_w, btn_h),
                          k, btns, f"key{k}")
+    # Backspace button
+    bk_rect = pygame.Rect(rx + 3 * (btn_w + 12), ry, btn_w, btn_h)
+    _draw_cmd_button(screen, fonts, bk_rect, "⌫", AMBER, bool(typed_seq), btns, "backspace")
     ry += btn_h + 10
 
     # ── Confirm button (all groups) ───────────────────────────
