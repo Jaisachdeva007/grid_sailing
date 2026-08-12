@@ -1388,7 +1388,7 @@ def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
         if typed_seq:
             _draw_cmd_button(screen, fonts,
                              pygame.Rect(rx, ry, GRW, 44),
-                             "Submit — continue early", CORRECT, True,
+                             "Confirm", CORRECT, True,
                              _b, "plan_submit")
             ry += 52
 
