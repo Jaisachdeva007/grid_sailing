@@ -14,7 +14,7 @@
 #  One rule: only change the VALUE (the right side).
 #  Don't delete the variable name on the left or the # lines.
 # ============================================================
-
+import random
 
 # ── Grid ──────────────────────────────────────────────────────
 
@@ -70,9 +70,8 @@ ACTION_TIME_SEC = 4
 FEEDBACK_TIME_SEC = 2
 
 # The blank "Get Ready" gap between one trial finishing and the next starting.
-# Protocol says 3–5 seconds.
-INTERTRIAL_SEC = 4
-
+# Jitter trial start between 3–5 seconds.
+INTERTRIAL_SEC = random.randint(30, 50) / 10
 
 # ── Scoring ───────────────────────────────────────────────────
 
@@ -81,10 +80,10 @@ INTERTRIAL_SEC = 4
 OPTIMAL_SCORE = 100
 
 # Points taken off for every move that's MORE or FEWER than optimal.
-# e.g. optimal = 7, participant used 9 → 2 off → penalty = 2 × 5 = 10 pts
-#      optimal = 7, participant used 5 → 2 short → penalty = 2 × 5 = 10 pts
+# e.g. optimal = 7, participant used 9 → 2 off → penalty = 2 × 10 = 20 pts
+#      optimal = 7, participant used 5 → 2 short → penalty = 2 × 10 = 20 pts
 # Both directions are penalised equally.
-EXTRA_MOVE_PENALTY = 5
+EXTRA_MOVE_PENALTY = 10
 
 # Score when the participant doesn't reach the goal at all. Leave at 0.
 ERROR_SCORE = 0
