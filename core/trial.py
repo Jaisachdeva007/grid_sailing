@@ -1374,7 +1374,19 @@ def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
         screen.blit(lbl_s, (rx + 14, ry + 10))
         seq_s = f_sm.render(seq_str, True, seq_col)
         screen.blit(seq_s, (rx + 14, ry + 10 + lbl_h + 6))
-        ry += s_card_h + 8
+        ry += s_card_h + 10
+
+        if typed_seq:
+            # Backspace hint
+            bk_s = f_xs.render("⌫  Backspace — remove last key", True, AMBER)
+            screen.blit(bk_s, (rx + 14, ry))
+            ry += bk_s.get_height() + 6
+            # Submit hint
+            sp_s = f_xs.render("SPACE — submit and continue early", True, CORRECT)
+            screen.blit(sp_s, (rx + 14, ry))
+            ry += sp_s.get_height() + 6
+        else:
+            ry += 2
 
     return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
                           cum_score=cum_score)
