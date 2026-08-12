@@ -1049,7 +1049,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                 screen, fonts, trial, elapsed, p_time,
                 total_trials, block_type, sn,
                 cum_score=cumulative_score, show_timer=show_timer,
-                eyes_open=blink_on, amb_particles=amb_particles)
+                eyes_open=blink_on, amb_particles=amb_particles,
+                typed_seq=typed_seq)
         elif draw_state == INPUT:
             pause_rect, researcher_rect = _draw_stage_input(
                 screen, fonts, trial, typed_seq, blink_on,
@@ -1289,7 +1290,7 @@ def _draw_score_card(screen, fonts, trial, rx, ry, GRW):
 def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
                          total_trials, block_type, sn, cum_score: int = 0,
                          show_timer: bool = True, eyes_open: bool = True,
-                         amb_particles: list = None):
+                         amb_particles: list = None, typed_seq: list = None):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     GL, GT, GR, GRW, CELL = _layout(W, H)
@@ -1355,6 +1356,20 @@ def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
         hs = f_xs.render("Press  SPACE  when ready", True, DIM)
         screen.blit(hs, (rx + GRW // 2 - hs.get_width() // 2, ry + 12 + f_sm_h + 8))
     ry += card_h + 16
+
+    # ── Live sequence entered so far (during planning) ────────
+    if typed_seq is not None:
+        seq_str  = ", ".join(str(k) for k in typed_seq) if typed_seq else "—"
+        seq_col  = WHITE if typed_seq else DIM
+        lbl_h    = f_xs.get_height()
+        val_h    = f_sm.get_height()
+        s_card_h = 10 + lbl_h + 6 + val_h + 10
+        _panel(screen, rx, ry, GRW, s_card_h, ACCENT)
+        lbl_s = f_xs.render("Keys entered so far", True, DIM)
+        screen.blit(lbl_s, (rx + 14, ry + 10))
+        seq_s = f_sm.render(seq_str, True, seq_col)
+        screen.blit(seq_s, (rx + 14, ry + 10 + lbl_h + 6))
+        ry += s_card_h + 8
 
     return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
                           cum_score=cum_score)
