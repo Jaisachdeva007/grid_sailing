@@ -211,6 +211,31 @@ def run_block(screen, clock, fonts, block_type, block_number,
     _show_block_intro(screen, clock, fonts, block_type, block_number,
                       session_number, group, config)
 
+    is_mi = group.startswith("MI")
+
+    # Fam block 1: Pay Attention for MI groups before the exploration trials
+    if block_type == "familiarization" and block_number == 1 and is_mi:
+        _show_pay_attention(screen, clock, fonts)
+
+    # Fam block 2: guided check-in before the planning trials
+    if block_type == "familiarization" and block_number == 2:
+        _show_try_it_yourself_intro(screen, clock, fonts)
+        _run_try_it_yourself_trials(
+            screen, clock, fonts, pool, config,
+            participant_id, session_number, group
+        )
+        _show_researcher_gate(screen, clock, fonts,
+                              "Ready to move on?",
+                              ["Now that you have completed some practice trials,",
+                               "please let your researcher know if you have any questions.",
+                               "Otherwise, let the researcher know you are ready to proceed."])
+        if is_mi:
+            _show_pay_attention(screen, clock, fonts)
+
+    # Practice block 1 of Session 1: Try it yourself before the guided trials
+    if guided_gate_trial is not None:
+        _show_try_it_yourself_practice_intro(screen, clock, fonts)
+
     streak          = 0
     last_sync_time  = _time.time()
     last_sync_trial = resume_from_trial
@@ -457,10 +482,6 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
                                    "What did you notice? How did the keys feel to press?",
                                    "What sounds (if any) did the keys make?"])
 
-        # Try it yourself! intro slide (Session 1, first practice block, all groups)
-        if session_number == 1 and block_idx == first_practice_idx:
-            _show_try_it_yourself_practice_intro(screen, clock, fonts)
-
         result = run_block(
             screen            = screen,
             clock             = clock,
@@ -485,25 +506,6 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
         # ── Between-block extras ──────────────────────────────
         if block_idx < len(block_sequence) - 1:
             next_block = block_sequence[block_idx + 1]
-
-            # After each familiarization block: Pay Attention for MI groups
-            if block_type == "familiarization" and is_mi:
-                _show_pay_attention(screen, clock, fonts)
-
-            # After fam block 1: Try it yourself intro + 3 guided trials + gate
-            fam_blocks_seen = sum(1 for bt in block_sequence[:block_idx + 1]
-                                  if bt == "familiarization")
-            if block_type == "familiarization" and fam_blocks_seen == 1:
-                _show_try_it_yourself_intro(screen, clock, fonts)
-                _run_try_it_yourself_trials(
-                    screen, clock, fonts, pool, config,
-                    participant_id, session_number, group
-                )
-                _show_researcher_gate(screen, clock, fonts,
-                                      "Ready to move on?",
-                                      ["Now that you have completed some practice trials,",
-                                       "please let your researcher know if you have any questions.",
-                                       "Otherwise, let the researcher know you are ready to proceed."])
 
             _show_break(screen, clock, fonts,
                         completed_block=block_type,
@@ -652,10 +654,6 @@ def _card_screen(screen, clock, fonts, title, title_col, badge, lines,
 
 def _show_block_intro(screen, clock, fonts, block_type, block_number,
                       session_number, group, config):
-    # Score explanation shown before every practice block (all groups, all sessions)
-    if block_type == "practice":
-        _show_score_explanation(screen, clock, fonts)
-
     is_mi   = group.startswith("MI")
     is_pp   = group.startswith("PP")
     is_ctrl = group.startswith("CTRL")
@@ -714,6 +712,10 @@ def _show_block_intro(screen, clock, fonts, block_type, block_number,
                  title=title,
                  title_col=ACCENT, badge=badge, lines=lines,
                  hint_text="Press  SPACE  to begin")
+
+    # Score explanation follows the block intro card for every practice block
+    if block_type == "practice":
+        _show_score_explanation(screen, clock, fonts)
 
 
 def _show_break(screen, clock, fonts,
