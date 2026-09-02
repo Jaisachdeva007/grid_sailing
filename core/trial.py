@@ -554,7 +554,7 @@ def _draw_pause_overlay(screen, fonts, trial, total, block_type, sn):
 def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                       cumulative_score: int, session_id: int,
                       total_trials: int = 20, block_type: str = "familiarization",
-                      session_state: dict = None) -> dict:
+                      session_state: dict = None, time_limit: float = None) -> dict:
     """
     Familiarization block 1 only.
     Grid stays visible. 1/2/3 moves the cursor live. Reaching the goal ends the trial.
@@ -637,6 +637,17 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                                 "cumulative_score": cumulative_score,
                                 "trial_id": None, "streak": 0}
 
+            # Time limit auto-advance (pre_test / post_test)
+            if (state == "explore" and time_limit
+                    and (now_s - trial.trial_start_time) >= time_limit):
+                trial.is_correct = False
+                trial.reward_score = 0
+                trial.number_of_moves = move_count
+                trial_id = _save(trial, session_id)
+                update_session_progress(session_id, trial.trial_number)
+                state = ITI
+                iti_start = now_s
+
             if state == "explore" and ev.type == pygame.KEYDOWN:
                 dk = _kmap.get(ev.key)
                 if dk is not None:
@@ -686,6 +697,10 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
         if draw_state == "explore":
             if cursor == trial.goal and not {1, 2, 3}.issubset(keys_used):
                 subtitle = "You found the cheese!  All 3 keys must be used to complete the trial"
+            elif time_limit:
+                rem = max(0.0, time_limit - (now_s - trial.trial_start_time))
+                tc_hint = "red" if rem < 2 else ""
+                subtitle = f"Press  1 / 2 / 3  to navigate — use all 3 keys  |  {rem:.1f}s remaining"
             else:
                 subtitle = "Press  1 / 2 / 3  on the keypad to move the mouse — use all 3 keys"
             _stage_header(screen, fonts,
@@ -1619,8 +1634,18 @@ def _draw_stage_feedback(screen, fonts, trial, cum_score,
             screen.blit(sl, (rx + 52, ry + sh // 2 - sl.get_height() // 2))
             ry += sh + 8
 
-        # Score breakdown card
-        ry = _draw_score_card(screen, fonts, trial, rx, ry, GRW)
+        # Simple score card — just the result, no breakdown
+        PAD    = 16
+        card_h = PAD + f_xs.get_height() + 8 + f_big.get_height() + PAD
+        pygame.draw.rect(screen, (10, 14, 32), (rx, ry, GRW, card_h), border_radius=12)
+        pygame.draw.rect(screen, BORDER,       (rx, ry, GRW, card_h), width=1, border_radius=12)
+        pygame.draw.rect(screen, rc,           (rx, ry, GRW, 4),      border_radius=12)
+        lbl_s = f_xs.render("YOUR SCORE", True, DIM)
+        screen.blit(lbl_s, (rx + PAD, ry + PAD))
+        scr_s = f_big.render(f"{trial.reward_score} pts", True, rc)
+        screen.blit(scr_s, (rx + GRW // 2 - scr_s.get_width() // 2,
+                             ry + PAD + lbl_s.get_height() + 8))
+        ry += card_h + 10
 
         # Session total
         _panel(screen, rx, ry, GRW, 60, CORRECT)

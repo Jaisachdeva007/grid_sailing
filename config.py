@@ -82,10 +82,10 @@ INTERTRIAL_SEC = 4
 OPTIMAL_SCORE = 100
 
 # Points taken off for every move that's MORE or FEWER than optimal.
-# e.g. optimal = 7, participant used 9 → 2 off → penalty = 2 × 5 = 10 pts
-#      optimal = 7, participant used 5 → 2 short → penalty = 2 × 5 = 10 pts
+# e.g. optimal = 7, participant used 9 → 2 off → penalty = 2 × 10 = 20 pts
+#      optimal = 7, participant used 5 → 2 short → penalty = 2 × 10 = 20 pts
 # Both directions are penalised equally.
-EXTRA_MOVE_PENALTY = 5
+EXTRA_MOVE_PENALTY = 10
 
 # Score when the participant doesn't reach the goal at all. Leave at 0.
 ERROR_SCORE = 0

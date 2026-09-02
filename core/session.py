@@ -24,6 +24,7 @@
 import pygame
 import random
 import time as _time
+import math
 from config import (
     SESSION_STRUCTURE, TRIALS_PER_BLOCK, GRID_SIZE,
     PRACTICE_REPEATED_RATIO, TEST_REPEATED_RATIO,
@@ -69,6 +70,11 @@ def build_puzzle_pool():
         if min_len > MAX_OPTIMAL_LENGTH:
             continue
         optimal_seqs = [p["sequence"] for p in ps if p["length"] == min_len]
+        # Only keep puzzles where every optimal path uses all 3 keys, so
+        # participants are never penalised for following the "correct" route.
+        optimal_seqs = [s for s in optimal_seqs if {1, 2, 3}.issubset(set(s))]
+        if not optimal_seqs:
+            continue
         pool.append({
             "start":     list(start_t),
             "goal":      list(goal_t),
@@ -132,7 +138,7 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
 def run_block(screen, clock, fonts, block_type, block_number,
               participant_id, session_number, group, config,
               pool, repeated_puzzle, cumulative_score,
-              resume_from_trial=0):
+              resume_from_trial=0, guided_gate_trial=None):
     """
     Run one complete block of trials.
 
@@ -217,7 +223,7 @@ def run_block(screen, clock, fonts, block_type, block_number,
         or block_type in ("pre_test", "post_test")
     )
     show_timer = not is_explore
-    show_score = (block_type == "practice")
+    show_score = block_type not in ("familiarization", "pre_test", "post_test")
 
     # Session state passed to the researcher panel so it can show trial status live.
     session_state = {
@@ -263,12 +269,14 @@ def run_block(screen, clock, fonts, block_type, block_number,
         )
 
         if is_explore:
+            explore_time_limit = 6.0 if block_type in ("pre_test", "post_test") else None
             result = run_explore_trial(
                 screen, clock, fonts, trial, config,
                 cumulative_score, session_id,
                 total_trials=n_trials,
                 block_type=block_type,
                 session_state=session_state,
+                time_limit=explore_time_limit,
             )
         else:
             result = run_trial(
@@ -298,6 +306,15 @@ def run_block(screen, clock, fonts, block_type, block_number,
             continue
 
         completed_in_session.add(trial_number)
+
+        # Mid-block researcher gate after guided practice trials
+        if guided_gate_trial and trial_number == guided_gate_trial:
+            _show_researcher_gate(screen, clock, fonts,
+                                  "Ready to move on?",
+                                  ["Now that you have completed some practice trials,",
+                                   "please let your researcher know if you have any questions.",
+                                   "Otherwise, let the researcher know you are ready to proceed."])
+
         session_state["trials"][i]["status"] = "done"
         session_state["trials"][i]["result"] = {
             "reward_score":     trial.reward_score,
@@ -413,22 +430,51 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
     if start_from_block <= 1:
         _show_instructions(screen, clock, fonts, group)
 
+    is_mi = group.startswith("MI")
+
+    # First practice block index — used for guided gate + reflection gate
+    first_practice_idx = next(
+        (i for i, bt in enumerate(block_sequence) if bt == "practice"), None
+    )
+
     for block_idx, block_type in enumerate(block_sequence):
         if block_idx + 1 < start_from_block:
             continue   # already completed or researcher chose to skip
+
+        # Guided practice gate: first 3 trials of the very first practice block
+        # in Session 1 act as a confirmation run-through before the full block.
+        guided_gate = (3
+                       if session_number == 1 and block_idx == first_practice_idx
+                       else None)
+
+        # Reflection gate for MI groups (Session 1, before first practice block)
+        if (session_number == 1
+                and block_idx == first_practice_idx
+                and is_mi):
+            _show_researcher_gate(screen, clock, fonts,
+                                  "Reflection",
+                                  ["Discuss with the researcher how it felt to press the keys.",
+                                   "What did you notice? How did the keys feel to press?",
+                                   "What sounds (if any) did the keys make?"])
+
+        # Try it yourself! intro slide (Session 1, first practice block, all groups)
+        if session_number == 1 and block_idx == first_practice_idx:
+            _show_try_it_yourself_practice_intro(screen, clock, fonts)
+
         result = run_block(
-            screen         = screen,
-            clock          = clock,
-            fonts          = fonts,
-            block_type     = block_type,
-            block_number   = block_idx + 1,
-            participant_id = participant_id,
-            session_number = session_number,
-            group          = group,
-            config         = config,
-            pool           = pool,
-            repeated_puzzle= repeated_puzzle,
-            cumulative_score = cumulative_score,
+            screen            = screen,
+            clock             = clock,
+            fonts             = fonts,
+            block_type        = block_type,
+            block_number      = block_idx + 1,
+            participant_id    = participant_id,
+            session_number    = session_number,
+            group             = group,
+            config            = config,
+            pool              = pool,
+            repeated_puzzle   = repeated_puzzle,
+            cumulative_score  = cumulative_score,
+            guided_gate_trial = guided_gate,
         )
 
         if result == "exited":
@@ -436,16 +482,36 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
 
         cumulative_score, repeated_puzzle = result
 
-        # Show information slide between blocks (not after the last one)
+        # ── Between-block extras ──────────────────────────────
         if block_idx < len(block_sequence) - 1:
             next_block = block_sequence[block_idx + 1]
+
+            # After each familiarization block: Pay Attention for MI groups
+            if block_type == "familiarization" and is_mi:
+                _show_pay_attention(screen, clock, fonts)
+
+            # After fam block 1: Try it yourself intro + 3 guided trials + gate
+            fam_blocks_seen = sum(1 for bt in block_sequence[:block_idx + 1]
+                                  if bt == "familiarization")
+            if block_type == "familiarization" and fam_blocks_seen == 1:
+                _show_try_it_yourself_intro(screen, clock, fonts)
+                _run_try_it_yourself_trials(
+                    screen, clock, fonts, pool, config,
+                    participant_id, session_number, group
+                )
+                _show_researcher_gate(screen, clock, fonts,
+                                      "Ready to move on?",
+                                      ["Now that you have completed some practice trials,",
+                                       "please let your researcher know if you have any questions.",
+                                       "Otherwise, let the researcher know you are ready to proceed."])
+
             _show_break(screen, clock, fonts,
                         completed_block=block_type,
                         next_block=next_block,
                         block_num=block_idx + 1,
                         total_blocks=len(block_sequence))
 
-    _show_session_complete(screen, clock, fonts, session_number, cumulative_score)
+    _show_session_complete(screen, clock, fonts, session_number, cumulative_score, group)
 
 
 # ── Between-block screens ─────────────────────────────────────
@@ -586,28 +652,66 @@ def _card_screen(screen, clock, fonts, title, title_col, badge, lines,
 
 def _show_block_intro(screen, clock, fonts, block_type, block_number,
                       session_number, group, config):
-    if block_type == "familiarization" and block_number == 1:
-        desc = ("Explore the grid freely! Press 1, 2, or 3 on the keypad to move the mouse. "
-                "When you reach the cheese the next trial starts automatically. "
-                "No timer, no score — just learn how the keys move the cursor.")
-    elif block_type == "familiarization":
-        desc = ("Now you will plan first, then act. Study the grid for 6 seconds, enter your "
-                "sequence, then physically press the keys on the keypad. "
-                "Press SPACE when you are done. No score shown.")
-    else:
-        desc = {
-            "pre_test":  ("Baseline test. 6-second planning timer. Enter your sequence, "
-                          "then execute it on the keypad. No score shown."),
-            "practice":  ("Practice block. 6-second planning timer. Enter your sequence, "
-                          "execute it on the keypad, then see your score and replay."),
-            "post_test": ("Final test. 6-second planning timer. Enter your sequence, "
-                          "then execute it on the keypad. No score shown."),
-        }.get(block_type, "")
+    # Score explanation shown before every practice block (all groups, all sessions)
+    if block_type == "practice":
+        _show_score_explanation(screen, clock, fonts)
 
-    badge = f"Session {session_number}  ·  Block {block_number}  ·  {group}"
+    is_mi   = group.startswith("MI")
+    is_pp   = group.startswith("PP")
+    is_ctrl = group.startswith("CTRL")
+
+    if block_type == "familiarization" and block_number == 1:
+        title = "Familiarization Part One"
+        desc  = ("Explore the grid freely! Press 1, 2, or 3 on the keypad to move the MOUSE. "
+                 "When you reach the CHEESE, the next trial starts automatically. "
+                 "No timer, no score – just learn how the keys move the MOUSE.")
+    elif block_type == "familiarization":
+        title = "Familiarization Part Two"
+        desc  = ("In this block you will see the grid for 6 seconds. As you plan your sequence, "
+                 "enter it into the provided space using the trackpad. After confirming your "
+                 "sequence, you will then be asked to physically press the keys for your planned "
+                 "sequence. Press SPACE when you are done.")
+    elif block_type == "pre_test":
+        title = "Baseline"
+        desc  = ("In this block you will go back to FREE PLAY. Trials are NO LONGER split into "
+                 "planning and action stages. You will have 6 seconds to navigate the MOUSE to "
+                 "the CHEESE. Try to find the shortest sequence using all keys at least once.")
+    elif block_type == "post_test":
+        title = "Final Block"
+        desc  = ("In this block you will go back to FREE PLAY. Trials are NO LONGER split into "
+                 "planning and action stages. You will have 6 seconds to navigate the MOUSE to "
+                 "the CHEESE. Try to find the shortest sequence using all keys at least once.")
+    elif block_type == "practice":
+        title = "Practice"
+        if is_mi:
+            desc = ("In this block you will see the grid for 6 seconds. As you plan your "
+                    "sequence, enter it into the provided space using the trackpad. After "
+                    "confirming your sequence, you will then be asked to IMAGINE pressing the "
+                    "keys for your planned sequence. Focus on imagining the movements as you "
+                    "just described them to the researcher.")
+        elif is_pp:
+            desc = ("In this block you will see the grid for 6 seconds. As you plan your "
+                    "sequence, enter it into the provided space using the trackpad. After "
+                    "confirming your sequence, you will then be asked to physically press the "
+                    "keys for your planned sequence.")
+        else:  # CTRL
+            desc = ("In this block you will see the grid for 6 seconds. As you plan your "
+                    "sequence, enter it into the provided space using the trackpad. After "
+                    "confirming your sequence, you will immediately receive feedback on your "
+                    "response.")
+    else:
+        title = block_type.replace("_", " ").title()
+        desc  = ""
+
+    badge = f"Session {session_number}  ·  Block {block_number}"
     lines = [(desc, DIM)]
+    if block_type == "practice" and is_ctrl:
+        lines += [
+            ("", DIM),
+            ("PLEASE DO NOT PRESS THE 3-KEY KEYPAD DURING THESE TRIALS.", WHITE),
+        ]
     _card_screen(screen, clock, fonts,
-                 title=block_type.replace("_", " ").title(),
+                 title=title,
                  title_col=ACCENT, badge=badge, lines=lines,
                  hint_text="Press  SPACE  to begin")
 
@@ -615,23 +719,230 @@ def _show_block_intro(screen, clock, fonts, block_type, block_number,
 def _show_break(screen, clock, fonts,
                 completed_block, next_block, block_num, total_blocks):
     """Information slide shown between blocks."""
-    next_descriptions = {
-        "familiarization": "The next block is another familiarization. Continue exploring at your own pace.",
-        "pre_test":        "Next is a baseline test. Plan your route carefully — no score will be shown.",
-        "practice":        "Next is a practice block. Follow your assigned condition. Score will be shown after each trial.",
-        "post_test":       "Next is the final performance test. No score will be shown.",
-    }
-    completed_label = completed_block.replace("_", " ").title()
-    next_label      = next_block.replace("_", " ").title()
     lines = [
-        (f"{completed_label} complete.  Block {block_num} of {total_blocks}.", GREEN),
-        ("", DIM),
-        (next_descriptions.get(next_block, f"Next: {next_label}"), DIM),
+        ("Well done! Take a moment to rest before continuing.", DIM),
     ]
     _card_screen(screen, clock, fonts,
-                 title="Take a Short Break",
+                 title=f"Take a Short Break  (block {block_num} of {total_blocks})",
                  title_col=GREEN, badge=None, lines=lines,
                  hint_text="Press  SPACE  when you are ready to continue")
+
+
+# ── New between-block screens ─────────────────────────────────────────────
+
+def _show_researcher_gate(screen, clock, fonts, title, participant_lines):
+    """
+    Full-screen gate showing participant-facing text, then requiring the researcher
+    to enter ADMIN_PASSWORD to unlock. After unlock, participant presses SPACE.
+
+    participant_lines: list of strings shown to the participant above the gate.
+    """
+    from config import ADMIN_PASSWORD
+    f_big, f_med, f_sm, f_xs = fonts
+    W, H = screen.get_width(), screen.get_height()
+    cx = W // 2
+
+    # Card sizing — grows with number of participant lines
+    cw      = 560
+    line_h  = f_sm.get_height() + 8
+    title_h = f_big.get_height()
+    xs_h    = f_xs.get_height()
+    fh      = 52   # input field height
+    btn_h   = 52   # unlock button height
+    part_h  = len(participant_lines) * line_h + 12
+    ch      = 22 + title_h + 14 + part_h + 12 + xs_h + 14 + fh + 12 + btn_h + 20
+
+    cy2 = H // 2 - ch // 2
+    cx2 = cx - cw // 2
+    fx  = cx2 + 24
+    fw  = cw - 48
+
+    pw       = ""
+    wrong    = False
+    shake_t0 = 0.0
+    unlocked = False
+
+    while True:
+        clock.tick(FPS)
+        now = _time.time()
+
+        # Recompute button rect each frame (depends on shake offset)
+        sx = 0
+        if shake_t0 and (now - shake_t0) < 0.5:
+            t  = (now - shake_t0) / 0.5
+            sx = int(10 * math.sin(t * 22) * (1 - t))
+
+        fy      = cy2 + 22 + title_h + 14 + part_h + 12 + xs_h + 14
+        btn_y   = fy + fh + 12
+        btn_rect = pygame.Rect(cx - 100 + sx, btn_y, 200, btn_h)
+
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT:
+                import sys; pygame.quit(); sys.exit()
+            if ev.type == pygame.KEYDOWN:
+                if unlocked:
+                    if ev.key in (pygame.K_SPACE, pygame.K_RETURN):
+                        return
+                else:
+                    if ev.key == pygame.K_BACKSPACE:
+                        pw = pw[:-1]; wrong = False
+                    elif ev.key == pygame.K_RETURN:
+                        if pw == ADMIN_PASSWORD:
+                            unlocked = True
+                        else:
+                            pw = ""; wrong = True; shake_t0 = now
+                    elif ev.unicode:
+                        if len(pw) < 64:
+                            pw += ev.unicode
+            if ev.type == pygame.MOUSEBUTTONDOWN and not unlocked:
+                if btn_rect.collidepoint(ev.pos):
+                    if pw == ADMIN_PASSWORD:
+                        unlocked = True
+                    else:
+                        pw = ""; wrong = True; shake_t0 = now
+
+        screen.fill(BG)
+        for gx in range(0, W + 48, 48):
+            for gy in range(0, H + 48, 48):
+                pygame.draw.circle(screen, (18, 18, 36), (gx, gy), 1)
+
+        x2 = cx2 + sx
+        pygame.draw.rect(screen, (4,  4, 10), (x2+4, cy2+6, cw, ch), border_radius=18)
+        pygame.draw.rect(screen, PANEL,        (x2,   cy2,   cw, ch), border_radius=18)
+        pygame.draw.rect(screen, BORDER,       (x2,   cy2,   cw, ch), width=1, border_radius=18)
+        pygame.draw.rect(screen, AMBER,        (x2+1, cy2+1, cw-2, 5), border_radius=18)
+
+        # Title
+        ts = f_big.render(title, True, WHITE)
+        screen.blit(ts, (cx - ts.get_width() // 2 + sx, cy2 + 22))
+
+        # Participant-facing lines
+        py = cy2 + 22 + title_h + 14
+        for line_text in participant_lines:
+            ls = f_sm.render(line_text, True, DIM)
+            screen.blit(ls, (cx - ls.get_width() // 2 + sx, py))
+            py += line_h
+
+        # Divider
+        div_y = py + 12
+        pygame.draw.line(screen, BORDER, (x2 + 28, div_y), (x2 + cw - 28, div_y))
+
+        gate_y = div_y + 12
+        if unlocked:
+            # Post-unlock: pulsing "Press SPACE to continue" where the button was
+            pulse = 0.55 + 0.45 * math.sin(now * math.pi * 1.6)
+            pc    = tuple(int(c * pulse) for c in ACCENT)
+            cont  = f_sm.render("Press  SPACE  to continue", True, pc)
+            screen.blit(cont, (cx - cont.get_width() // 2, gate_y + xs_h + 14 + fh // 2))
+        else:
+            gate_lbl = f_xs.render("Researcher — enter the access code to continue", True, AMBER)
+            screen.blit(gate_lbl, (cx - gate_lbl.get_width() // 2 + sx, gate_y))
+
+            fc = (210, 95, 20) if wrong else ACCENT
+            pygame.draw.rect(screen, (28, 28, 52), (fx + sx, fy, fw, fh), border_radius=10)
+            pygame.draw.rect(screen, fc,            (fx + sx, fy, fw, fh), width=2, border_radius=10)
+            disp = ("●" * len(pw)) if pw else "Code"
+            dc   = WHITE if pw else (72, 72, 112)
+            ds   = f_sm.render(disp, True, dc)
+            screen.blit(ds, (fx + sx + 16, fy + fh // 2 - ds.get_height() // 2))
+
+            if wrong and shake_t0 and (now - shake_t0) < 2.0:
+                ws = f_xs.render("Incorrect — try again", True, (210, 95, 20))
+                screen.blit(ws, (cx - ws.get_width() // 2 + sx, fy + fh + 6))
+
+            bx = cx - 100 + sx
+            hv = btn_rect.collidepoint(pygame.mouse.get_pos())
+            bc = tuple(min(255, c + 28) for c in AMBER) if hv else AMBER
+            pygame.draw.rect(screen, (4, 4, 12), (bx + 2, btn_y + 3, 200, btn_h), border_radius=10)
+            pygame.draw.rect(screen, bc,         (bx,     btn_y,     200, btn_h), border_radius=10)
+            bl = f_sm.render("Unlock", True, (8, 8, 16))
+            screen.blit(bl, (bx + 100 - bl.get_width() // 2,
+                             btn_y + btn_h // 2 - bl.get_height() // 2))
+
+        pygame.display.flip()
+
+
+def _show_pay_attention(screen, clock, fonts):
+    """MI-only slide shown after each familiarization block."""
+    _card_screen(screen, clock, fonts,
+                 title="Pay Attention!",
+                 title_col=AMBER, badge=None,
+                 lines=[
+                     ("Please pay attention to how it FEELS to press the keys.", DIM),
+                     ("What does it feel like to press the keys?", DIM),
+                     ("What sounds do the keys make when you press the keys?", DIM),
+                 ],
+                 hint_text="Press  SPACE  to continue")
+
+
+def _show_try_it_yourself_intro(screen, clock, fonts):
+    """Instruction slide shown before the 3 guided practice trials (after fam block 1)."""
+    _card_screen(screen, clock, fonts,
+                 title="Try it yourself!",
+                 title_col=GREEN, badge=None,
+                 lines=[
+                     ("Practice a few trials.", DIM),
+                     ("Please let your researcher know if you have any questions.", DIM),
+                 ],
+                 hint_text="Press  SPACE  to start")
+
+
+def _show_try_it_yourself_practice_intro(screen, clock, fonts):
+    """Shown at the start of the first practice block in Session 1 (all groups)."""
+    _card_screen(screen, clock, fonts,
+                 title="Try it yourself!",
+                 title_col=GREEN, badge=None,
+                 lines=[
+                     ("Practice a few trials.", DIM),
+                     ("Please let your researcher know if you have any questions.", DIM),
+                 ],
+                 hint_text="Press  SPACE  to begin")
+
+
+def _show_score_explanation(screen, clock, fonts):
+    """Score explanation slide shown before every practice block."""
+    _card_screen(screen, clock, fonts,
+                 title="Score",
+                 title_col=GREEN, badge=None,
+                 lines=[
+                     ("During the practice blocks you will receive feedback on your", DIM),
+                     ("planned sequences after each trial. You will receive a score", DIM),
+                     ("for each trial AND a cumulative score.", DIM),
+                     ("", DIM),
+                     ("A sequence that successfully moves the MOUSE to the CHEESE", DIM),
+                     ("using the shortest possible path and all three keys will", DIM),
+                     ("receive 100 pts. Each additional move beyond the shortest path", DIM),
+                     ("will result in a 10-pt deduction. If your sequence does not", DIM),
+                     ("move the MOUSE to the CHEESE, you will receive 0 pts.", DIM),
+                 ],
+                 hint_text="Press  SPACE  to continue")
+
+
+def _run_try_it_yourself_trials(screen, clock, fonts, pool, config,
+                                participant_id, session_number, group):
+    """Run 3 random practice trials so participants confirm they understand."""
+    from database.db import create_session, complete_session as _complete_session
+    session_id = create_session(participant_id, session_number, "guided_practice", 0)
+    sample     = random.sample(pool, min(3, len(pool)))
+    for i, puzzle in enumerate(sample):
+        trial = TrialData(
+            session_id            = session_id,
+            participant_id        = participant_id,
+            trial_number          = i + 1,
+            grid_type             = "random",
+            start                 = tuple(puzzle["start"]),
+            goal                  = tuple(puzzle["goal"]),
+            optimal_sequence      = puzzle["sequence"],
+            all_optimal_sequences = puzzle.get("sequences", [puzzle["sequence"]]),
+            group                 = group,
+        )
+        run_trial(
+            screen, clock, fonts, trial, config,
+            cumulative_score=0, session_id=session_id,
+            total_trials=3, block_type="guided_practice",
+            streak=0, show_timer=True, show_score=False,
+        )
+    _complete_session(session_id)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -658,7 +969,7 @@ def _show_instructions(screen, clock, fonts, group):
         ACCENT, None,
         [
             ("In this task, you will navigate a grid to move a", DIM),
-            ("MOUSE to a piece of CHEESE in as few steps as possible.", DIM),
+            ("MOUSE to a piece of CHEESE in as few moves as possible.", DIM),
             ("", DIM),
             ("There are three sessions in total.", DIM),
         ],
@@ -672,7 +983,8 @@ def _show_instructions(screen, clock, fonts, group):
             ("You will see a 5x5 grid.", DIM),
             ("The blue cell is the MOUSE (start).", DIM),
             ("The yellow cell is the CHEESE (goal).", DIM),
-            ("Plan the shortest path, then enter it using the keypad.", DIM),
+            ("Navigate the MOUSE to the CHEESE in as few moves as possible", DIM),
+            ("using each key at least once.", DIM),
         ],
     )
 
@@ -704,29 +1016,37 @@ def _show_instructions(screen, clock, fonts, group):
         ],
     )
 
-    # Slide 5 — Scoring (only relevant for practice)
+    # Slide 5 — Ready
     _slide(
-        "Scoring",
+        "Let's Begin",
         GREEN, None,
         [
-            ("You earn points for reaching the CHEESE.", DIM),
-            ("Extra moves beyond the shortest path reduce your score.", DIM),
-            ("Scores are shown during practice blocks only.", DIM),
+            ("The experiment will now begin.", DIM),
             ("", DIM),
-            (f"Your assigned condition:  {group}", WHITE),
+            ("Follow the instructions on each screen.", DIM),
+            ("Ask the researcher if you have any questions.", DIM),
         ],
         hint="Press  SPACE  to start",
     )
 
 
-def _show_session_complete(screen, clock, fonts, session_number, total_score):
+def _show_session_complete(screen, clock, fonts, session_number, total_score, group=""):
     next_msg = (f"Please return for Session {session_number + 1}."
                 if session_number < 3
                 else "You have completed all 3 sessions. Thank you!")
+    is_mi = group.startswith("MI")
     lines = [
         (f"Total score:  {total_score}", AMBER),
         (next_msg,                       DIM),
     ]
+    if is_mi:
+        lines += [
+            ("", DIM),
+            ("Please notify the researcher. You will be provided with a report card", DIM),
+            ("to complete about your imagery experiences. Once completed, you will", DIM),
+            ("review your responses with the researcher, after which the session", DIM),
+            ("will be complete.", DIM),
+        ]
     _card_screen(screen, clock, fonts,
                  title=f"Session {session_number} Complete!",
                  title_col=GREEN, badge=None, lines=lines,
