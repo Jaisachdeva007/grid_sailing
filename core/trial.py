@@ -798,7 +798,9 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
         is_mi   = False
         is_ctrl = False
         is_pp   = True
-    show_feedback = block_type not in ("familiarization", "pre_test", "post_test")
+    # Fam block 1 uses run_explore_trial so run_trial is only called for fam block 2 —
+    # show correct/missed feedback there (score is suppressed separately via show_score).
+    show_feedback = block_type not in ("pre_test", "post_test")
 
     p_time  = config.get("planning_time",   6)
     a_time  = config.get("action_time",     10)

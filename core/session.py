@@ -211,6 +211,31 @@ def run_block(screen, clock, fonts, block_type, block_number,
     _show_block_intro(screen, clock, fonts, block_type, block_number,
                       session_number, group, config)
 
+    is_mi = group.startswith("MI")
+
+    # Fam block 1: Pay Attention for MI groups before the exploration trials
+    if block_type == "familiarization" and block_number == 1 and is_mi:
+        _show_pay_attention(screen, clock, fonts)
+
+    # Fam block 2: guided check-in before the planning trials
+    if block_type == "familiarization" and block_number == 2:
+        _show_try_it_yourself_intro(screen, clock, fonts)
+        _run_try_it_yourself_trials(
+            screen, clock, fonts, pool, config,
+            participant_id, session_number, group
+        )
+        _show_researcher_gate(screen, clock, fonts,
+                              "Ready to move on?",
+                              ["Now that you have completed some practice trials,",
+                               "please let your researcher know if you have any questions.",
+                               "Otherwise, let the researcher know you are ready to proceed."])
+        if is_mi:
+            _show_pay_attention(screen, clock, fonts)
+
+    # Practice block 1 of Session 1: Try it yourself before the guided trials
+    if guided_gate_trial is not None:
+        _show_try_it_yourself_practice_intro(screen, clock, fonts)
+
     streak          = 0
     last_sync_time  = _time.time()
     last_sync_trial = resume_from_trial
@@ -457,10 +482,6 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
                                    "What did you notice? How did the keys feel to press?",
                                    "What sounds (if any) did the keys make?"])
 
-        # Try it yourself! intro slide (Session 1, first practice block, all groups)
-        if session_number == 1 and block_idx == first_practice_idx:
-            _show_try_it_yourself_practice_intro(screen, clock, fonts)
-
         result = run_block(
             screen            = screen,
             clock             = clock,
@@ -485,25 +506,6 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
         # ── Between-block extras ──────────────────────────────
         if block_idx < len(block_sequence) - 1:
             next_block = block_sequence[block_idx + 1]
-
-            # After each familiarization block: Pay Attention for MI groups
-            if block_type == "familiarization" and is_mi:
-                _show_pay_attention(screen, clock, fonts)
-
-            # After fam block 1: Try it yourself intro + 3 guided trials + gate
-            fam_blocks_seen = sum(1 for bt in block_sequence[:block_idx + 1]
-                                  if bt == "familiarization")
-            if block_type == "familiarization" and fam_blocks_seen == 1:
-                _show_try_it_yourself_intro(screen, clock, fonts)
-                _run_try_it_yourself_trials(
-                    screen, clock, fonts, pool, config,
-                    participant_id, session_number, group
-                )
-                _show_researcher_gate(screen, clock, fonts,
-                                      "Ready to move on?",
-                                      ["Now that you have completed some practice trials,",
-                                       "please let your researcher know if you have any questions.",
-                                       "Otherwise, let the researcher know you are ready to proceed."])
 
             _show_break(screen, clock, fonts,
                         completed_block=block_type,
@@ -545,18 +547,19 @@ def _card_screen(screen, clock, fonts, title, title_col, badge, lines,
     if hint_col is None:
         hint_col = ACCENT
 
-    # Card width — slightly wider than original to fit larger fonts
-    CW = min(W - 80, 660)
+    # Card width scales with screen so fonts don't overflow at high resolutions
+    CW = min(W - 80, max(740, W * 2 // 5))
     max_body_w = CW - 56
 
     # Word-wrap body text so long lines never overflow the card
-    def _wrap(text):
+    def _wrap(text, font=None):
+        fnt = font or f_sm
         if not text:
             return [""]
         words, out, cur = text.split(), [], ""
         for w in words:
             test = (cur + " " + w).strip()
-            if f_sm.size(test)[0] <= max_body_w:
+            if fnt.size(test)[0] <= max_body_w:
                 cur = test
             else:
                 if cur:
@@ -574,13 +577,16 @@ def _card_screen(screen, clock, fonts, title, title_col, badge, lines,
         else:
             wrapped.append(("", col))
 
-    # Compute card height from actual font sizes
-    f_big_h = f_big.get_height()
-    f_sm_h  = f_sm.get_height()
-    f_xs_h  = f_xs.get_height()
-    line_h  = f_sm_h + 8
-    badge_h = (f_xs_h + 10 + 10) if badge else 0
-    CH = max(240, 16 + badge_h + f_big_h + 14 + 12 + len(wrapped) * line_h + f_sm_h + 24)
+    # Choose title font: fall back to f_med if f_big would overflow the card
+    f_big_h   = f_big.get_height()
+    f_sm_h    = f_sm.get_height()
+    f_xs_h    = f_xs.get_height()
+    line_h    = f_sm_h + 8
+    badge_h   = (f_xs_h + 10 + 10) if badge else 0
+    ts_probe  = f_big.render(title, True, WHITE)
+    f_title   = f_med if ts_probe.get_width() > CW - 32 else f_big
+    f_title_h = f_title.get_height()
+    CH = max(240, 16 + badge_h + f_title_h + 14 + 12 + len(wrapped) * line_h + f_sm_h + 24)
 
     while True:
         for event in pygame.event.get():
@@ -622,10 +628,10 @@ def _card_screen(screen, clock, fonts, title, title_col, badge, lines,
             screen.blit(bs, (CX - bs.get_width() // 2, y + 5))
             y += pill_h + 10
 
-        # Title
-        ts = f_big.render(title, True, WHITE)
+        # Title — uses f_med automatically when f_big would overflow the card
+        ts = f_title.render(title, True, WHITE)
         screen.blit(ts, (CX - ts.get_width() // 2, y))
-        y += f_big_h + 14
+        y += f_title_h + 14
 
         # Divider
         pygame.draw.line(screen, BORDER, (cx2 + 32, y), (cx2 + CW - 32, y))
@@ -652,10 +658,6 @@ def _card_screen(screen, clock, fonts, title, title_col, badge, lines,
 
 def _show_block_intro(screen, clock, fonts, block_type, block_number,
                       session_number, group, config):
-    # Score explanation shown before every practice block (all groups, all sessions)
-    if block_type == "practice":
-        _show_score_explanation(screen, clock, fonts)
-
     is_mi   = group.startswith("MI")
     is_pp   = group.startswith("PP")
     is_ctrl = group.startswith("CTRL")
@@ -715,6 +717,10 @@ def _show_block_intro(screen, clock, fonts, block_type, block_number,
                  title_col=ACCENT, badge=badge, lines=lines,
                  hint_text="Press  SPACE  to begin")
 
+    # Score explanation follows the block intro card for every practice block
+    if block_type == "practice":
+        _show_score_explanation(screen, clock, fonts)
+
 
 def _show_break(screen, clock, fonts,
                 completed_block, next_block, block_num, total_blocks):
@@ -742,14 +748,37 @@ def _show_researcher_gate(screen, clock, fonts, title, participant_lines):
     W, H = screen.get_width(), screen.get_height()
     cx = W // 2
 
-    # Card sizing — grows with number of participant lines
-    cw      = 560
+    # Card width scales with screen (same logic as _card_screen)
+    cw      = min(W - 80, max(740, W * 2 // 5))
+    fw_body = cw - 48
+
+    # Word-wrap each participant line to fit the card
+    def _gate_wrap(text):
+        if not text:
+            return [""]
+        words, out, cur = text.split(), [], ""
+        for w in words:
+            test = (cur + " " + w).strip()
+            if f_sm.size(test)[0] <= fw_body:
+                cur = test
+            else:
+                if cur:
+                    out.append(cur)
+                cur = w
+        if cur:
+            out.append(cur)
+        return out or [""]
+
+    wrapped_lines = []
+    for ln in participant_lines:
+        wrapped_lines.extend(_gate_wrap(ln))
+
     line_h  = f_sm.get_height() + 8
     title_h = f_big.get_height()
     xs_h    = f_xs.get_height()
     fh      = 52   # input field height
     btn_h   = 52   # unlock button height
-    part_h  = len(participant_lines) * line_h + 12
+    part_h  = len(wrapped_lines) * line_h + 12
     ch      = 22 + title_h + 14 + part_h + 12 + xs_h + 14 + fh + 12 + btn_h + 20
 
     cy2 = H // 2 - ch // 2
@@ -816,9 +845,9 @@ def _show_researcher_gate(screen, clock, fonts, title, participant_lines):
         ts = f_big.render(title, True, WHITE)
         screen.blit(ts, (cx - ts.get_width() // 2 + sx, cy2 + 22))
 
-        # Participant-facing lines
+        # Participant-facing lines (word-wrapped to fit the card)
         py = cy2 + 22 + title_h + 14
-        for line_text in participant_lines:
+        for line_text in wrapped_lines:
             ls = f_sm.render(line_text, True, DIM)
             screen.blit(ls, (cx - ls.get_width() // 2 + sx, py))
             py += line_h
