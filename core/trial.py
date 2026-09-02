@@ -794,7 +794,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
     is_ctrl = _is_ctrl(trial.group)
 
     # Fam / pre-test / post-test always use PP action; feedback is suppressed
-    if block_type in ("familiarization", "pre_test", "post_test"):
+    if block_type in ("familiarization", "guided_practice", "pre_test", "post_test"):
         is_mi   = False
         is_ctrl = False
         is_pp   = True
