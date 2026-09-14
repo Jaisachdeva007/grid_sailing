@@ -49,7 +49,18 @@ from database.db import (
     initialise_database, get_all_participants,
     create_participant, verify_participant,
     get_global_repeated_puzzle, clear_global_repeated_puzzle,
+    get_completed_blocks,
 )
+
+
+def _next_session_for(participant_id):
+    """Return the next incomplete session number (1–3) for a returning participant."""
+    for sn in [1, 2, 3]:
+        expected = len(SESSION_STRUCTURE.get(sn, []))
+        done = len([b for b in get_completed_blocks(participant_id, sn) if b >= 1])
+        if done < expected:
+            return sn
+    return 3
 from screens.export_screen import run_export_screen
 from screens.data_viewer  import run_data_viewer
 
@@ -550,6 +561,10 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
     scroll_y    = 0          # vertical scroll offset for the form content
     max_scroll  = [600]      # updated each draw frame from actual content height
 
+    # Returning participant — pill hit-testing and auto-fill tracking
+    _ret_pill_rects = []     # [(pygame.Rect, participant_dict)] rebuilt each frame
+    _last_ret_pid   = [""]   # previous text so we only query DB on change
+
     all_dropdowns = [gender_dd, hand_dd, group_dd, session_dd]
     all_inputs    = [pid_box, age_box, ret_pid_box]
     all_steppers  = [planning_input, action_input, feedback_input, intertrial_input, start_block_input]
@@ -589,6 +604,26 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
 
             practice_cond.handle_event(event)
             test_cond.handle_event(event)
+
+            # Returning participant: pill click → auto-fill ID, group, session
+            if mode != "new" and event.type == pygame.MOUSEBUTTONDOWN:
+                for (pill_rect, p_data) in _ret_pill_rects:
+                    if pill_rect.collidepoint(event.pos):
+                        ret_pid_box.text = p_data["participant_id"]
+                        group_dd.value   = p_data["group_name"]
+                        session_dd.value = _next_session_for(p_data["participant_id"])
+                        break
+
+            # Returning participant: typing an ID that exists auto-fills group + session
+            if mode != "new":
+                current_pid = ret_pid_box.text.strip().upper()
+                if current_pid != _last_ret_pid[0]:
+                    _last_ret_pid[0] = current_pid
+                    if current_pid:
+                        p_lookup = verify_participant(current_pid)
+                        if p_lookup:
+                            group_dd.value   = p_lookup["group_name"]
+                            session_dd.value = _next_session_for(current_pid)
 
             # Mini grid start position selection + reset button
             if event.type == pygame.MOUSEBUTTONDOWN:
@@ -695,14 +730,20 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
             _label(screen, f_sm, "Participant ID", COL1, oy(y))
             ret_pid_box.rect.y = oy(y); ret_pid_box.draw(screen, f_sm)
 
-            parts = [p["participant_id"] for p in get_all_participants()]
+            all_parts = get_all_participants()
+            _ret_pill_rects.clear()
             px = COL2; py2 = oy(y, 6)
-            for pid in parts[:10]:
-                pw = _pill(screen, f_xs, pid, BG, ACCENT, px, py2)
-                px += pw + 8
+            selected_pid = ret_pid_box.text.strip().upper()
+            for p_data in all_parts[:16]:
+                pid  = p_data["participant_id"]
+                col  = GREEN if pid == selected_pid else ACCENT
+                pw   = _pill(screen, f_xs, pid, BG, col, px, py2)
+                ph   = f_xs.get_height() + 6
+                _ret_pill_rects.append((pygame.Rect(px, py2, pw, ph), p_data))
+                px  += pw + 8
                 if px > WINDOW_WIDTH - PAD - 60:
                     px = COL2; py2 += 28
-            if not parts:
+            if not all_parts:
                 _t(screen, f_xs, "No participants yet", DIM, COL2, oy(y, 14))
             y += ROW_H + 24
 
@@ -1067,7 +1108,8 @@ def _validate_and_launch(mode, pid_box, age_box, gender_dd, hand_dd,
         pid = ret_pid_box.text.strip().upper()
         p   = verify_participant(pid)
         if not p: return "Participant ID not found."
-        participant_id = pid
+        participant_id  = pid
+        group_dd.value  = p["group_name"]   # always use the DB group, never what's in the dropdown
 
     return {
         "participant_id":   participant_id,
