@@ -934,15 +934,9 @@ def _show_score_explanation(screen, clock, fonts):
                  title="Score",
                  title_col=GREEN, badge=None,
                  lines=[
-                     ("During the practice blocks you will receive feedback on your", DIM),
-                     ("planned sequences after each trial. You will receive a score", DIM),
-                     ("for each trial AND a cumulative score.", DIM),
+                     ("During the practice blocks you will receive feedback on your planned sequences after each trial. You will receive a score for each trial AND a cumulative score.", DIM),
                      ("", DIM),
-                     ("A sequence that successfully moves the MOUSE to the CHEESE", DIM),
-                     ("using the shortest possible path and all three keys will", DIM),
-                     ("receive 100 pts. Each additional move beyond the shortest path", DIM),
-                     ("will result in a 10-pt deduction. If your sequence does not", DIM),
-                     ("move the MOUSE to the CHEESE, you will receive 0 pts.", DIM),
+                     ("A sequence that successfully moves the MOUSE to the CHEESE using the shortest possible path and all three keys will receive 100 pts. Each additional move beyond the shortest path will result in a 10-pt deduction. If your sequence does not move the MOUSE to the CHEESE, you will receive 0 pts.", DIM),
                  ],
                  hint_text="Press  SPACE  to continue")
 
@@ -1071,10 +1065,7 @@ def _show_session_complete(screen, clock, fonts, session_number, total_score, gr
     if is_mi:
         lines += [
             ("", DIM),
-            ("Please notify the researcher. You will be provided with a report card", DIM),
-            ("to complete about your imagery experiences. Once completed, you will", DIM),
-            ("review your responses with the researcher, after which the session", DIM),
-            ("will be complete.", DIM),
+            ("Please notify the researcher. You will be provided with a report card to complete about your imagery experiences. Once completed, you will review your responses with the researcher, after which the session will be complete.", DIM),
         ]
     _card_screen(screen, clock, fonts,
                  title=f"Session {session_number} Complete!",
