@@ -242,7 +242,7 @@ def verify_participant(participant_id):
 def get_all_participants():
     """Return a list of all participant IDs for the researcher dropdown."""
     conn = get_connection()
-    rows = conn.execute("SELECT participant_id, group_name FROM participants ORDER BY participant_id").fetchall()
+    rows = conn.execute("SELECT participant_id, group_name FROM participants ORDER BY created_at DESC").fetchall()
     conn.close()
     return [dict(r) for r in rows]
 

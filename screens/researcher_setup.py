@@ -740,7 +740,7 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
             _ret_pill_rects.clear()
             px = COL2; py2 = oy(y, 6)
             selected_pid = ret_pid_box.text.strip().upper()
-            for p_data in all_parts[:16]:
+            for p_data in all_parts:
                 pid  = p_data["participant_id"]
                 col  = GREEN if pid == selected_pid else ACCENT
                 pw   = _pill(screen, f_xs, pid, BG, col, px, py2)
