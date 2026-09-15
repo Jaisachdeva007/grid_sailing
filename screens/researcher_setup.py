@@ -739,6 +739,7 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
             all_parts = get_all_participants()
             _ret_pill_rects.clear()
             px = COL2; py2 = oy(y, 6)
+            extra_pill_rows = 0
             selected_pid = ret_pid_box.text.strip().upper()
             for p_data in all_parts:
                 pid  = p_data["participant_id"]
@@ -749,9 +750,10 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
                 px  += pw + 8
                 if px > WINDOW_WIDTH - PAD - 60:
                     px = COL2; py2 += 28
+                    extra_pill_rows += 1
             if not all_parts:
                 _t(screen, f_xs, "No participants yet", DIM, COL2, oy(y, 14))
-            y += ROW_H + 24
+            y += ROW_H + 24 + extra_pill_rows * 28
 
         # ── §2: Group ─────────────────────────────────────────
         y += _section(screen, f_sec, "2  Group Assignment", oy(y))
