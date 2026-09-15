@@ -610,8 +610,11 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
                 for (pill_rect, p_data) in _ret_pill_rects:
                     if pill_rect.collidepoint(event.pos):
                         ret_pid_box.text = p_data["participant_id"]
-                        group_dd.value   = p_data["group_name"]
-                        session_dd.value = _next_session_for(p_data["participant_id"])
+                        if p_data["group_name"] in group_dd.options:
+                            group_dd.selected = group_dd.options.index(p_data["group_name"])
+                        ns = _next_session_for(p_data["participant_id"])
+                        if ns in session_dd.options:
+                            session_dd.selected = session_dd.options.index(ns)
                         break
 
             # Returning participant: typing an ID that exists auto-fills group + session
@@ -622,8 +625,11 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
                     if current_pid:
                         p_lookup = verify_participant(current_pid)
                         if p_lookup:
-                            group_dd.value   = p_lookup["group_name"]
-                            session_dd.value = _next_session_for(current_pid)
+                            if p_lookup["group_name"] in group_dd.options:
+                                group_dd.selected = group_dd.options.index(p_lookup["group_name"])
+                            ns2 = _next_session_for(current_pid)
+                            if ns2 in session_dd.options:
+                                session_dd.selected = session_dd.options.index(ns2)
 
             # Mini grid start position selection + reset button
             if event.type == pygame.MOUSEBUTTONDOWN:
@@ -1109,7 +1115,8 @@ def _validate_and_launch(mode, pid_box, age_box, gender_dd, hand_dd,
         p   = verify_participant(pid)
         if not p: return "Participant ID not found."
         participant_id  = pid
-        group_dd.value  = p["group_name"]   # always use the DB group, never what's in the dropdown
+        if p["group_name"] in group_dd.options:   # always use the DB group, never what's in the dropdown
+            group_dd.selected = group_dd.options.index(p["group_name"])
 
     return {
         "participant_id":   participant_id,
