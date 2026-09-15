@@ -109,10 +109,10 @@ FAMILIARIZATION_BLOCKS = 2
 # 0.72 = 72% repeated, 28% random.
 
 # For practice blocks (the main training phase).
-PRACTICE_REPEATED_RATIO = 0.72
+PRACTICE_REPEATED_RATIO = 0.50
 
 # For pre-test and post-test blocks.
-TEST_REPEATED_RATIO = 0.60
+TEST_REPEATED_RATIO = 0.50
 
 # For familiarisation — always fully random. Don't change this.
 FAMILIARIZATION_REPEATED_RATIO = 0.00
