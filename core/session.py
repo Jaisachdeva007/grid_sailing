@@ -69,7 +69,10 @@ def build_puzzle_pool():
         min_len = min(p["length"] for p in ps)
         if min_len > MAX_OPTIMAL_LENGTH:
             continue
-        optimal_seqs = [p["sequence"] for p in ps if p["length"] == min_len]
+        optimal_seqs = []
+        for p in ps:
+            if p["length"] == min_len:
+                optimal_seqs.extend(p.get("sequences", [p["sequence"]]))
         # Only keep puzzles where every optimal path uses all 3 keys, so
         # participants are never penalised for following the "correct" route.
         optimal_seqs = [s for s in optimal_seqs if {1, 2, 3}.issubset(set(s))]
