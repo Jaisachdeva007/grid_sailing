@@ -126,6 +126,15 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
     ]
     if not random_pool:
         random_pool = [p for p in pool if p != repeated_puzzle]
+    # Deduplicate by sequence so no two random trials present the same path to solve
+    seen_seqs: set = set()
+    deduped: list = []
+    for p in random_pool:
+        key = tuple(p["sequence"])
+        if key not in seen_seqs:
+            seen_seqs.add(key)
+            deduped.append(p)
+    random_pool = deduped if deduped else random_pool
     if len(random_pool) >= n_random:
         random_picks = random.sample(random_pool, k=n_random)
     else:
