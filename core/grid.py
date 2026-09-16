@@ -34,20 +34,21 @@ def apply_key(row, col, key):
 
 def find_valid_paths(start_row, start_col):
     """
-    BFS from start_row, start_col.
+    BFS from start_row, start_col that finds ALL optimal paths to every goal.
 
-    Because BFS explores cells in order of increasing distance, the first
-    time any cell is reached that distance IS the minimum — no shorter route
-    exists.  We only emit a puzzle when that minimum distance falls in
-    [MIN_SEQUENCE_LENGTH, MAX_SEQUENCE_LENGTH].
+    Standard BFS records only the first predecessor for each cell, missing
+    equally-short alternatives.  This version tracks every predecessor at
+    minimum distance, then backtracks to enumerate all optimal sequences.
 
-    Returns a list of dicts with keys: start, goal, sequence, length.
+    Returns a list of dicts with keys: start, goal, sequence, sequences, length.
+      sequence  — one representative optimal path (first found)
+      sequences — every optimal path of that same minimum length
     """
-    # dist  : cell → minimum steps from start
-    # parent: cell → (previous_cell, key_that_was_pressed)
-    dist   = {(start_row, start_col): 0}
-    parent = {(start_row, start_col): (None, None)}
-    queue  = deque([(start_row, start_col)])
+    start = (start_row, start_col)
+    dist  = {start: 0}
+    # preds: cell → list of (prev_cell, key) for every shortest predecessor
+    preds = {start: []}
+    queue = deque([start])
 
     while queue:
         row, col = queue.popleft()
@@ -56,32 +57,45 @@ def find_valid_paths(start_row, start_col):
             continue
         for key in [1, 2, 3]:
             nxt = apply_key(row, col, key)
-            if nxt and nxt not in dist:
-                dist[nxt]   = d + 1
-                parent[nxt] = ((row, col), key)
+            if nxt is None:
+                continue
+            if nxt not in dist:
+                dist[nxt]  = d + 1
+                preds[nxt] = [((row, col), key)]
                 queue.append(nxt)
+            elif dist[nxt] == d + 1:
+                # Another path of the same minimum length — keep it
+                preds[nxt].append(((row, col), key))
 
     results = []
     for (gr, gc), d in dist.items():
-        if (gr, gc) == (start_row, start_col):
+        if (gr, gc) == start:
             continue
         if not (MIN_SEQUENCE_LENGTH <= d <= MAX_SEQUENCE_LENGTH):
             continue
 
-        # Reconstruct the unique BFS-shortest path
-        seq  = []
-        cell = (gr, gc)
-        while parent[cell][0] is not None:
-            seq.append(parent[cell][1])
-            cell = parent[cell][0]
-        seq.reverse()
+        # Backtrack from goal to start, collecting every optimal sequence
+        all_seqs: list = []
 
-        results.append({
-            "start":    [start_row, start_col],
-            "goal":     [gr, gc],
-            "sequence": seq,
-            "length":   d,
-        })
+        def _backtrack(cell, path):
+            if cell == start:
+                all_seqs.append(list(reversed(path)))
+                return
+            for prev_cell, key in preds[cell]:
+                path.append(key)
+                _backtrack(prev_cell, path)
+                path.pop()
+
+        _backtrack((gr, gc), [])
+
+        if all_seqs:
+            results.append({
+                "start":     [start_row, start_col],
+                "goal":      [gr, gc],
+                "sequence":  all_seqs[0],
+                "sequences": all_seqs,
+                "length":    d,
+            })
 
     return results
 
