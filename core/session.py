@@ -209,6 +209,30 @@ def run_block(screen, clock, fonts, block_type, block_number,
     if first_pick:
         set_global_repeated_puzzle(repeated_puzzle)
 
+    # Guided gate: ensure the first 3 trials are all unique random puzzles
+    # so participants never see the repeated puzzle or a duplicate during try-it-yourself.
+    if guided_gate_trial:
+        n_gate = guided_gate_trial
+        random_trials   = [(p, gt) for p, gt in trials_list if gt == "random"]
+        repeated_trials = [(p, gt) for p, gt in trials_list if gt == "repeated"]
+        # Pick n_gate unique-sequence randoms for the opening gate trials
+        seen: set = set()
+        gate_trials: list = []
+        remaining_random: list = []
+        for item in random_trials:
+            key = tuple(item[0]["sequence"])
+            if len(gate_trials) < n_gate and key not in seen:
+                seen.add(key)
+                gate_trials.append(item)
+            else:
+                remaining_random.append(item)
+        # If not enough unique randoms, pad with whatever is left
+        while len(gate_trials) < n_gate and remaining_random:
+            gate_trials.append(remaining_random.pop(0))
+        rest = remaining_random + repeated_trials
+        random.shuffle(rest)
+        trials_list = gate_trials + rest
+
     # Create or find session record in DB
     resume = get_resume_point(participant_id, session_number, block_type, block_number)
     if resume:
