@@ -1071,7 +1071,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
             pause_rect, researcher_rect = _draw_stage_input(
                 screen, fonts, trial, typed_seq, blink_on,
                 total_trials, block_type, sn, btns,
-                cum_score=cumulative_score, is_mi=is_mi)
+                cum_score=cumulative_score, is_mi=is_mi, show_timer=show_timer)
         elif draw_state == ACTION:
             pause_rect, researcher_rect = _draw_stage_action(
                 screen, fonts, trial,
@@ -1413,7 +1413,7 @@ def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
 
 def _draw_stage_input(screen, fonts, trial, typed_seq, blink_on,
                       total_trials, block_type, sn, btns, cum_score: int = 0,
-                      is_mi=False):
+                      is_mi=False, show_timer: bool = True):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     GL, GT, GR, GRW, CELL = _layout(W, H)
@@ -1444,10 +1444,30 @@ def _draw_stage_input(screen, fonts, trial, typed_seq, blink_on,
 
     rx, ry = GR, GT
 
+    # ── Frozen timer card — same height as planning's timer card so nothing shifts ──
+    f_big_h = f_big.get_height()
+    f_sm_h  = f_sm.get_height()
+    f_xs_h  = f_xs.get_height()
+    if show_timer:
+        timer_card_h = 12 + f_big_h + 8 + f_xs_h + 12
+        _panel(screen, rx, ry, GRW, timer_card_h, BORDER)
+        ts = f_big.render("0.0s", True, WRONG)
+        screen.blit(ts, (rx + GRW // 2 - ts.get_width() // 2, ry + 12))
+        tl = f_xs.render("Time's up — enter your sequence", True, DIM)
+        screen.blit(tl, (rx + GRW // 2 - tl.get_width() // 2, ry + 12 + f_big_h + 8))
+    else:
+        timer_card_h = 12 + f_sm_h + 8 + f_xs_h + 12
+        _panel(screen, rx, ry, GRW, timer_card_h, BORDER)
+        rs = f_sm.render("Sequence entry", True, ACCENT)
+        screen.blit(rs, (rx + GRW // 2 - rs.get_width() // 2, ry + 12))
+        hs = f_xs.render("Enter your keys below", True, DIM)
+        screen.blit(hs, (rx + GRW // 2 - hs.get_width() // 2, ry + 12 + f_sm_h + 8))
+    ry += timer_card_h + 16
+
     # ── Sequence display ──────────────────────────────────────
-    seq_y  = 10 + f_xs.get_height() + 8
+    seq_y  = 10 + f_xs_h + 8
     cnt_y  = seq_y + f_sm.get_height() + 8
-    card_h = cnt_y + f_xs.get_height() + 10
+    card_h = cnt_y + f_xs_h + 10
     _panel(screen, rx, ry, GRW, card_h, ACCENT)
     _t(screen, f_xs, "Your sequence", DIM, rx + 14, ry + 10)
 
