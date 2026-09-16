@@ -677,7 +677,9 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                         trial.movement_time_ms = (last_key_t - first_key_t) * 1000
                         trial.planned_sequence = []
                         trial.is_correct       = True
-                        trial.reward_score     = 0
+                        used_keys = [kp["key"] for kp in trial.keypresses_log]
+                        score, _, _ = _score(used_keys, trial.optimal_sequence, cursor, trial.goal)
+                        trial.reward_score     = score
                         trial.number_of_moves  = move_count
                         trial_id = _save(trial, session_id)
                         update_session_progress(session_id, trial.trial_number)
