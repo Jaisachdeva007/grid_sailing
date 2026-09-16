@@ -667,10 +667,9 @@ def _show_block_intro(screen, clock, fonts, block_type, block_number,
                  "No timer, no score – just learn how the keys move the MOUSE.")
     elif block_type == "familiarization":
         title = "Familiarization Part Two"
-        desc  = ("In this block you will see the grid for 6 seconds. As you plan your sequence, "
-                 "enter it into the provided space using the trackpad. After confirming your "
-                 "sequence, you will then be asked to physically press the keys for your planned "
-                 "sequence. Press SPACE when you are done.")
+        desc  = ("Explore the grid freely! Press 1, 2, or 3 on the keypad to move the MOUSE. "
+                 "When you reach the CHEESE, the next trial starts automatically. "
+                 "No timer, no score – just learn how the keys move the MOUSE.")
     elif block_type == "pre_test":
         title = "Baseline"
         desc  = ("In this block you will go back to FREE PLAY. Trials are NO LONGER split into "
