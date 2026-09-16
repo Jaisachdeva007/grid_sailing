@@ -126,7 +126,11 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
     ]
     if not random_pool:
         random_pool = [p for p in pool if p != repeated_puzzle]
-    random_picks = random.choices(random_pool, k=n_random)
+    if len(random_pool) >= n_random:
+        random_picks = random.sample(random_pool, k=n_random)
+    else:
+        tiled = random_pool * (n_random // max(1, len(random_pool)) + 1)
+        random_picks = random.sample(tiled, k=n_random)
     trials += [(p, "random") for p in random_picks]
 
     random.shuffle(trials)
@@ -181,7 +185,7 @@ def run_block(screen, clock, fonts, block_type, block_number,
             pool_match = next(
                 (p for p in pool
                  if tuple(p["start"]) == stored_s and tuple(p["goal"]) == stored_g),
-                stored
+                None   # if stored puzzle not in current pool, treat as unset
             )
             repeated_puzzle = pool_match
 
@@ -213,24 +217,9 @@ def run_block(screen, clock, fonts, block_type, block_number,
 
     is_mi = group.startswith("MI")
 
-    # Fam block 1: Pay Attention for MI groups before the exploration trials
-    if block_type == "familiarization" and block_number == 1 and is_mi:
+    # Both fam blocks: Pay Attention for MI groups before the free exploration trials
+    if block_type == "familiarization" and is_mi:
         _show_pay_attention(screen, clock, fonts)
-
-    # Fam block 2: guided check-in before the planning trials
-    if block_type == "familiarization" and block_number == 2:
-        _show_try_it_yourself_intro(screen, clock, fonts)
-        _run_try_it_yourself_trials(
-            screen, clock, fonts, pool, config,
-            participant_id, session_number, group
-        )
-        _show_researcher_gate(screen, clock, fonts,
-                              "Ready to move on?",
-                              ["Now that you have completed some practice trials,",
-                               "please let your researcher know if you have any questions.",
-                               "Otherwise, let the researcher know you are ready to proceed."])
-        if is_mi:
-            _show_pay_attention(screen, clock, fonts)
 
     # Practice block 1 of Session 1: Try it yourself before the guided trials
     if guided_gate_trial is not None:
@@ -240,11 +229,11 @@ def run_block(screen, clock, fonts, block_type, block_number,
     last_sync_time  = _time.time()
     last_sync_trial = resume_from_trial
 
-    # Fam block 1 → free exploration mode (no timer, no planning, no sequence input).
-    # Fam block 2 and all other blocks → 6-second planning timer.
+    # Both fam blocks → free exploration mode (no timer, no planning, no sequence input).
+    # All other blocks → 6-second planning timer.
     # Score shown only during practice blocks.
     is_explore = (
-        (block_type == "familiarization" and block_number == 1)
+        block_type == "familiarization"
         or block_type in ("pre_test", "post_test")
     )
     show_timer = not is_explore
