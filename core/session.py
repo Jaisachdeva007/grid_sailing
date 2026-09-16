@@ -672,9 +672,9 @@ def _show_block_intro(screen, clock, fonts, block_type, block_number,
                  "No timer, no score – just learn how the keys move the MOUSE.")
     elif block_type == "pre_test":
         title = "Baseline"
-        desc  = ("In this block you will go back to FREE PLAY. Trials are NO LONGER split into "
-                 "planning and action stages. You will have 6 seconds to navigate the MOUSE to "
-                 "the CHEESE. Try to find the shortest sequence using all keys at least once.")
+        desc  = ("Trials are NOT split into planning and action stages. You will have 6 seconds "
+                 "to navigate the MOUSE to the CHEESE. Try to find the shortest sequence using "
+                 "all keys at least once.")
     elif block_type == "post_test":
         title = "Final Block"
         desc  = ("In this block you will go back to FREE PLAY. Trials are NO LONGER split into "
