@@ -103,9 +103,11 @@ class TrialData:
 
     planned_sequence:    list  = field(default_factory=list)
     keypresses_log:      list  = field(default_factory=list)
-    reaction_time_ms:    Optional[float] = None
-    movement_time_ms:    Optional[float] = None
-    imagery_duration_ms: Optional[float] = None
+    reaction_time_ms:            Optional[float] = None
+    movement_time_ms:            Optional[float] = None
+    imagery_duration_ms:         Optional[float] = None
+    time_to_imagery_start_ms:    Optional[float] = None   # MI only: action start → SPACE press
+    action_reaction_time_ms:     Optional[float] = None   # PP only: action start → first physical key
     reward_score:        int   = 0
     number_of_moves:     int   = 0
     is_correct:          bool  = False
@@ -856,6 +858,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     if not mi_space_held:
                         mi_space_held  = True
                         mi_space_start = time.time()
+                        if action_start:
+                            trial.time_to_imagery_start_ms = (mi_space_start - action_start) * 1000
                 elif ev.type == pygame.KEYUP and ev.key == pygame.K_SPACE:
                     if mi_space_held and mi_space_start:
                         trial.imagery_duration_ms = (time.time() - mi_space_start) * 1000
@@ -876,6 +880,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     _now_t = time.time()
                     if phys_first_key_t is None:
                         phys_first_key_t = _now_t
+                        if action_start:
+                            trial.action_reaction_time_ms = (phys_first_key_t - action_start) * 1000
                     phys_last_key_t = _now_t
                     pp_typed_seq.append(_pkmap[ev.key])
                 elif ev.key == pygame.K_SPACE and len(pp_typed_seq) >= 2:
@@ -1181,6 +1187,8 @@ def _save(trial, session_id):
         movement_time_ms=trial.movement_time_ms,
         elapsed_time_s=time.time() - trial.trial_start_time,
         imagery_duration_ms=trial.imagery_duration_ms,
+        time_to_imagery_start_ms=trial.time_to_imagery_start_ms,
+        action_reaction_time_ms=trial.action_reaction_time_ms,
         is_correct=trial.is_correct,
         all_optimal_sequences=all_opt_json,
         oob_count=trial.oob_count,
