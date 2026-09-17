@@ -139,6 +139,10 @@ TRIAL_COLUMNS = [
     "elapsed_time_s",
     "imagery_duration_ms",
     "imagery_duration_s",
+    "time_to_imagery_start_ms",
+    "time_to_imagery_start_s",
+    "action_reaction_time_ms",
+    "action_reaction_time_s",
     # Outcome
     "is_correct",
     "trial_created_at",
@@ -179,6 +183,8 @@ _NULLABLE_FIELDS = (
     "oob_count", "keypress_id", "key_pressed", "timestamp_ms",
     "time_since_trial_start_ms", "time_since_last_press_ms",
     "session_completed_at",
+    "time_to_imagery_start_ms", "time_to_imagery_start_s",
+    "action_reaction_time_ms", "action_reaction_time_s",
 )
 
 
@@ -207,9 +213,11 @@ def _add_derived(row: dict, cumulative_score: int) -> dict:
     row["all_optimal_sequences"] = _clean_all_optimal(row.get("all_optimal_sequences"))
 
     # Timing in seconds
-    row["reaction_time_s"]    = _ms_to_s(row.get("reaction_time_ms"))
-    row["movement_time_s"]    = _ms_to_s(row.get("movement_time_ms"))
-    row["imagery_duration_s"] = _ms_to_s(row.get("imagery_duration_ms"))
+    row["reaction_time_s"]            = _ms_to_s(row.get("reaction_time_ms"))
+    row["movement_time_s"]            = _ms_to_s(row.get("movement_time_ms"))
+    row["imagery_duration_s"]         = _ms_to_s(row.get("imagery_duration_ms"))
+    row["time_to_imagery_start_s"]    = _ms_to_s(row.get("time_to_imagery_start_ms"))
+    row["action_reaction_time_s"]     = _ms_to_s(row.get("action_reaction_time_ms"))
 
     # Boolean as text
     row["is_correct"] = "TRUE" if is_corr else "FALSE"
@@ -259,6 +267,8 @@ def _fetch_rows(participant_id=None) -> list:
             t.reward_score,
             t.reaction_time_ms, t.movement_time_ms, t.elapsed_time_s,
             t.imagery_duration_ms,
+            COALESCE(t.time_to_imagery_start_ms, NULL) AS time_to_imagery_start_ms,
+            COALESCE(t.action_reaction_time_ms,  NULL) AS action_reaction_time_ms,
             t.is_correct,
             COALESCE(t.oob_count, 0) AS oob_count,
             t.created_at             AS trial_created_at,
@@ -326,6 +336,8 @@ def _fetch_summary_rows(participant_id=None) -> list:
             t.reward_score,
             t.reaction_time_ms, t.movement_time_ms, t.elapsed_time_s,
             t.imagery_duration_ms,
+            COALESCE(t.time_to_imagery_start_ms, NULL) AS time_to_imagery_start_ms,
+            COALESCE(t.action_reaction_time_ms,  NULL) AS action_reaction_time_ms,
             t.is_correct,
             COALESCE(t.oob_count, 0) AS oob_count,
             t.created_at             AS trial_created_at
@@ -350,16 +362,36 @@ def _fetch_summary_rows(participant_id=None) -> list:
     return rows
 
 
+# ── Column display labels (bracketed descriptions in CSV headers) ────────────
+COLUMN_LABELS = {
+    "reaction_time_ms":          "reaction_time_ms [planning: trial start → first plan-key click]",
+    "reaction_time_s":           "reaction_time_s [planning: trial start → first plan-key click]",
+    "movement_time_ms":          "movement_time_ms [action: first → last key/button press]",
+    "movement_time_s":           "movement_time_s [action: first → last key/button press]",
+    "elapsed_time_s":            "elapsed_time_s [total trial duration incl. ITI]",
+    "imagery_duration_ms":       "imagery_duration_ms [MI only: spacebar hold duration]",
+    "imagery_duration_s":        "imagery_duration_s [MI only: spacebar hold duration]",
+    "time_to_imagery_start_ms":  "time_to_imagery_start_ms [MI only: action start → spacebar press]",
+    "time_to_imagery_start_s":   "time_to_imagery_start_s [MI only: action start → spacebar press]",
+    "action_reaction_time_ms":   "action_reaction_time_ms [PP only: action start → first physical key]",
+    "action_reaction_time_s":    "action_reaction_time_s [PP only: action start → first physical key]",
+}
+
+
 # ── CSV writer ───────────────────────────────────────────────
 
-def _write_csv(rows: list, filepath: str, fieldnames: list) -> bool:
+def _write_csv(rows: list, filepath: str, fieldnames: list,
+               column_labels: dict = None) -> bool:
     if not rows:
         print("[EXPORT] No data to export.")
         return False
+    labels = column_labels or {}
+    out_fieldnames = [labels.get(f, f) for f in fieldnames]
+    out_rows = [{labels.get(k, k): v for k, v in row.items()} for row in rows]
     with open(filepath, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+        writer = csv.DictWriter(f, fieldnames=out_fieldnames, extrasaction="ignore")
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows(out_rows)
     print(f"[EXPORT] {len(rows)} rows → {filepath}")
     return True
 
@@ -371,7 +403,7 @@ def export_participant(participant_id: str) -> str:
     _ensure_export_dir()
     rows     = _fetch_rows(participant_id)
     filepath = os.path.join(EXPORT_DIR, f"{participant_id}_data.csv")
-    _write_csv(rows, filepath, ALL_COLUMNS)
+    _write_csv(rows, filepath, ALL_COLUMNS, COLUMN_LABELS)
     return filepath
 
 
@@ -381,7 +413,7 @@ def export_all() -> str:
     rows     = _fetch_rows()
     ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
     filepath = os.path.join(EXPORT_DIR, f"all_participants_{ts}.csv")
-    _write_csv(rows, filepath, ALL_COLUMNS)
+    _write_csv(rows, filepath, ALL_COLUMNS, COLUMN_LABELS)
     return filepath
 
 
@@ -391,7 +423,7 @@ def export_summary() -> str:
     rows     = _fetch_summary_rows()
     ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
     filepath = os.path.join(EXPORT_DIR, f"trial_summary_{ts}.csv")
-    _write_csv(rows, filepath, TRIAL_COLUMNS)
+    _write_csv(rows, filepath, TRIAL_COLUMNS, COLUMN_LABELS)
     return filepath
 
 
