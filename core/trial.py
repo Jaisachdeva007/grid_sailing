@@ -80,7 +80,7 @@ CURSOR_W    = (248, 248, 255)
 PROG_BG     = (12,  12,   24)
 PROG_FG     = (50, 110, 220)
 
-GRID_N = 5
+GRID_N = 6
 
 TRAIL_FADE_SEC = 1.4              # seconds for a cell to fade from fresh to dim
 TRAIL_FRESH    = (110, 170, 255)  # bright blue immediately after stepping on a cell

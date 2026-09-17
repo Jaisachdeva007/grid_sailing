@@ -14,24 +14,22 @@
 #  One rule: only change the VALUE (the right side).
 #  Don't delete the variable name on the left or the # lines.
 # ============================================================
-import random
+
 
 # ── Grid ──────────────────────────────────────────────────────
 
 # The grid is a square — this sets how many rows AND columns it has.
-# 5 means a 5×5 grid (25 cells). We built the whole study around this
-# so don't change it unless you're redesigning the experiment.
-GRID_SIZE = 5
+# 6 means a 6×6 grid (36 cells).
+GRID_SIZE = 6
 
 # The longest "optimal" route we'll accept for a puzzle.
 # Any puzzle that needs more than 7 moves to solve is thrown out.
+# Shorter = harder to find; longer = easier. Leave at 7 for our protocol.
 MAX_OPTIMAL_LENGTH = 7
 
-# The shortest route we'll accept. Must be ≤ MAX_OPTIMAL_LENGTH.
-# Set to 3 because every valid puzzle already requires all 3 keys at least once,
-# so the minimum possible valid path is 3 moves.
-MIN_SEQUENCE_LENGTH = 5
-MAX_SEQUENCE_LENGTH = 7
+# The shortest route we'll accept. Puzzles shorter than this get thrown out
+# because they're too easy. Has to be ≤ MAX_OPTIMAL_LENGTH.
+MIN_SEQUENCE_LENGTH = 7
 
 
 # ── Key Mappings ──────────────────────────────────────────────
@@ -71,8 +69,9 @@ ACTION_TIME_SEC = 4
 FEEDBACK_TIME_SEC = 2
 
 # The blank "Get Ready" gap between one trial finishing and the next starting.
-# Jitter trial start between 3–5 seconds.
-INTERTRIAL_SEC = random.randint(30, 50) / 10
+# Protocol says 3–5 seconds.
+INTERTRIAL_SEC = 4
+
 
 # ── Scoring ───────────────────────────────────────────────────
 
@@ -81,10 +80,10 @@ INTERTRIAL_SEC = random.randint(30, 50) / 10
 OPTIMAL_SCORE = 100
 
 # Points taken off for every move that's MORE or FEWER than optimal.
-# e.g. optimal = 7, participant used 9 → 2 off → penalty = 2 × 10 = 20 pts
-#      optimal = 7, participant used 5 → 2 short → penalty = 2 × 10 = 20 pts
+# e.g. optimal = 7, participant used 9 → 2 off → penalty = 2 × 5 = 10 pts
+#      optimal = 7, participant used 5 → 2 short → penalty = 2 × 5 = 10 pts
 # Both directions are penalised equally.
-EXTRA_MOVE_PENALTY = 10
+EXTRA_MOVE_PENALTY = 5
 
 # Score when the participant doesn't reach the goal at all. Leave at 0.
 ERROR_SCORE = 0
@@ -109,10 +108,10 @@ FAMILIARIZATION_BLOCKS = 2
 # 0.72 = 72% repeated, 28% random.
 
 # For practice blocks (the main training phase).
-PRACTICE_REPEATED_RATIO = 0.50
+PRACTICE_REPEATED_RATIO = 0.72
 
 # For pre-test and post-test blocks.
-TEST_REPEATED_RATIO = 0.50
+TEST_REPEATED_RATIO = 0.60
 
 # For familiarisation — always fully random. Don't change this.
 FAMILIARIZATION_REPEATED_RATIO = 0.00

@@ -2,7 +2,7 @@
 
 A Pygame-based behavioural experiment for studying motor imagery (MI) in sequential motor skill learning.
 
-Participants navigate a 5 × 5 grid using three finger keys, planning and executing (or imagining) movements across three sessions. The software handles participant registration, session management, per-keypress data logging, crash recovery, and CSV export — all without the researcher needing to touch a terminal after initial setup.
+Participants navigate a 6 × 6 grid using three finger keys, planning and executing (or imagining) movements across three sessions. The software handles participant registration, session management, per-keypress data logging, crash recovery, and CSV export — all without the researcher needing to touch a terminal after initial setup.
 
 ---
 
@@ -37,7 +37,7 @@ grid_sailing/
 ├── requirements.txt
 │
 ├── core/
-│   ├── grid.py               # 5×5 grid logic + DFS puzzle generator
+│   ├── grid.py               # 6×6 grid logic + DFS puzzle generator
 │   ├── trial.py              # Trial state machine (PLANNING → INPUT → ACTION → FEEDBACK → ITI)
 │   └── session.py            # Block / session orchestration, auto-resume
 │
