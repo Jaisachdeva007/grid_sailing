@@ -39,6 +39,7 @@ from database.db import (
     create_session, complete_session,
     get_resume_point, get_completed_blocks, initialise_database,
     get_global_repeated_puzzle, set_global_repeated_puzzle,
+    get_used_random_pairs, save_used_random_pairs,
 )
 
 
@@ -92,12 +93,16 @@ def build_puzzle_pool():
 
 
 def _pick_puzzles(pool, n_trials, repeated_ratio,
-                  repeated_puzzle=None, repeated_start=None, repeated_goal=None):
+                  repeated_puzzle=None, repeated_start=None, repeated_goal=None,
+                  used_pairs: set = None):
     """
     Select n_trials puzzles with the correct repeated:random ratio.
 
     repeated_start / repeated_goal: (row, col) tuples or None.
     When set, the repeated puzzle is drawn only from puzzles matching those cells.
+
+    used_pairs: set of (tuple(start), tuple(goal)) pairs used in prior blocks.
+    Random picks exclude these so no random puzzle repeats across blocks.
     """
     if repeated_puzzle is None:
         candidates = pool
@@ -117,16 +122,26 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
         (repeated_puzzle, "repeated") for _ in range(n_repeated)
     ]
 
-    # Random trials: exclude any puzzle that shares an optimal sequence with the repeated puzzle
+    # Random trials: exclude repeated puzzle and any already-used start/goal pairs
     rep_seqs = frozenset(
         tuple(s) for s in repeated_puzzle.get("sequences", [repeated_puzzle["sequence"]])
     )
+    _used = used_pairs or set()
     random_pool = [
         p for p in pool
         if p != repeated_puzzle
         and not any(tuple(s) in rep_seqs
                     for s in p.get("sequences", [p["sequence"]]))
+        and (tuple(p["start"]), tuple(p["goal"])) not in _used
     ]
+    # Fall back progressively if exclusions leave too few puzzles
+    if len(random_pool) < n_random:
+        random_pool = [
+            p for p in pool
+            if p != repeated_puzzle
+            and not any(tuple(s) in rep_seqs
+                        for s in p.get("sequences", [p["sequence"]]))
+        ]
     if not random_pool:
         random_pool = [p for p in pool if p != repeated_puzzle]
     # Deduplicate by sequence so no two random trials present the same path to solve
@@ -145,8 +160,9 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
         random_picks = random.sample(tiled, k=n_random)
     trials += [(p, "random") for p in random_picks]
 
+    new_pairs = {(tuple(p["start"]), tuple(p["goal"])) for p in random_picks}
     random.shuffle(trials)
-    return trials, repeated_puzzle
+    return trials, repeated_puzzle, new_pairs
 
 
 # ── Block runner ─────────────────────────────────────────────
@@ -154,7 +170,8 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
 def run_block(screen, clock, fonts, block_type, block_number,
               participant_id, session_number, group, config,
               pool, repeated_puzzle, cumulative_score,
-              resume_from_trial=0, guided_gate_trial=None):
+              resume_from_trial=0, guided_gate_trial=None,
+              used_random_pairs: set = None):
     """
     Run one complete block of trials.
 
@@ -205,8 +222,9 @@ def run_block(screen, clock, fonts, block_type, block_number,
 
     repeated_start = config.get("repeated_start", None)
     repeated_goal  = config.get("repeated_goal",  None)
-    trials_list, repeated_puzzle = _pick_puzzles(
-        pool, n_trials, ratio, repeated_puzzle, repeated_start, repeated_goal
+    trials_list, repeated_puzzle, new_random_pairs = _pick_puzzles(
+        pool, n_trials, ratio, repeated_puzzle, repeated_start, repeated_goal,
+        used_pairs=used_random_pairs,
     )
 
     if first_pick:
@@ -397,7 +415,7 @@ def run_block(screen, clock, fonts, block_type, block_number,
 
     # Reflection (3E) is done as an in-person interview after the experiment — no in-app form needed.
 
-    return cumulative_score, repeated_puzzle
+    return cumulative_score, repeated_puzzle, new_random_pairs
 
 
 def _show_saved_exit(screen, clock, fonts):
@@ -462,10 +480,12 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
     _show_loading(screen, fonts)
     pool = build_puzzle_pool()
 
-    block_sequence   = SESSION_STRUCTURE.get(session_number, [])
-    cumulative_score = 0
-    repeated_puzzle  = None   # fixed across the whole session
-    start_from_block = config.get("start_from_block", 1)
+    block_sequence      = SESSION_STRUCTURE.get(session_number, [])
+    cumulative_score    = 0
+    repeated_puzzle     = None   # fixed across the whole session
+    start_from_block    = config.get("start_from_block", 1)
+    # Load previously used random puzzle pairs across all prior blocks/sessions
+    used_random_pairs   = get_used_random_pairs(participant_id)
 
     # Auto-advance past already-completed blocks so a restart never re-runs them.
     completed_blocks = get_completed_blocks(participant_id, session_number)
@@ -508,25 +528,28 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
                                    "What sounds (if any) did the keys make?"])
 
         result = run_block(
-            screen            = screen,
-            clock             = clock,
-            fonts             = fonts,
-            block_type        = block_type,
-            block_number      = block_idx + 1,
-            participant_id    = participant_id,
-            session_number    = session_number,
-            group             = group,
-            config            = config,
-            pool              = pool,
-            repeated_puzzle   = repeated_puzzle,
-            cumulative_score  = cumulative_score,
-            guided_gate_trial = guided_gate,
+            screen             = screen,
+            clock              = clock,
+            fonts              = fonts,
+            block_type         = block_type,
+            block_number       = block_idx + 1,
+            participant_id     = participant_id,
+            session_number     = session_number,
+            group              = group,
+            config             = config,
+            pool               = pool,
+            repeated_puzzle    = repeated_puzzle,
+            cumulative_score   = cumulative_score,
+            guided_gate_trial  = guided_gate,
+            used_random_pairs  = used_random_pairs,
         )
 
         if result == "exited":
             return   # participant exited mid-session
 
-        cumulative_score, repeated_puzzle = result
+        cumulative_score, repeated_puzzle, new_pairs = result
+        used_random_pairs |= new_pairs
+        save_used_random_pairs(participant_id, used_random_pairs)
 
         # ── Between-block extras ──────────────────────────────
         if block_idx < len(block_sequence) - 1:
