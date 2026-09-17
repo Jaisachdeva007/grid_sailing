@@ -47,7 +47,7 @@ from database.db import (
 
 def build_puzzle_pool():
     """
-    Generate all valid puzzles from all 25 start positions, grouped by (start, goal).
+    Generate all valid puzzles from all 36 start positions, grouped by (start, goal).
 
     Each puzzle dict has:
         start, goal        — unique pair
@@ -1054,7 +1054,7 @@ def _show_instructions(screen, clock, fonts, group):
         "The Grid",
         ACCENT, None,
         [
-            ("You will see a 5x5 grid.", DIM),
+            ("You will see a 6x6 grid.", DIM),
             ("The blue cell is the MOUSE (start).", DIM),
             ("The yellow cell is the CHEESE (goal).", DIM),
             ("Navigate the MOUSE to the CHEESE in as few moves as possible", DIM),
