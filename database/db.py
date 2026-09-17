@@ -208,6 +208,34 @@ def clear_global_repeated_puzzle():
     conn.close()
 
 
+def get_used_random_pairs(participant_id: str) -> set:
+    """Return the set of (start_tuple, goal_tuple) pairs used in random trials for this participant."""
+    import json
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT value FROM global_settings WHERE key = ?",
+        (f"used_pairs_{participant_id}",)
+    ).fetchone()
+    conn.close()
+    if not row:
+        return set()
+    pairs = json.loads(row[0])
+    return {(tuple(s), tuple(g)) for s, g in pairs}
+
+
+def save_used_random_pairs(participant_id: str, pairs: set):
+    """Persist the full set of used random puzzle pairs for this participant."""
+    import json
+    serialisable = [[list(s), list(g)] for s, g in pairs]
+    conn = get_connection()
+    conn.execute(
+        "INSERT OR REPLACE INTO global_settings (key, value) VALUES (?, ?)",
+        (f"used_pairs_{participant_id}", json.dumps(serialisable))
+    )
+    conn.commit()
+    conn.close()
+
+
 # ── Participant functions ────────────────────────────────────
 
 def create_participant(participant_id, group_name, age, gender, handedness):
