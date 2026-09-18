@@ -34,7 +34,7 @@
 #
 #  Scoring:
 #    Correct + exactly optimal moves → 100 pts (OPTIMAL_SCORE)
-#    Correct + any deviation        → 100 − |deviation| × 5 pts (EXTRA_MOVE_PENALTY)
+#    Correct + any deviation        → 100 − |deviation| × 10 pts (EXTRA_MOVE_PENALTY)
 #    Did not reach goal             → 0 pts (ERROR_SCORE)
 #  All scoring values are set in config.py.
 # ============================================================
