@@ -69,7 +69,7 @@ def _build_path(start, seq):
 
 def _draw_mini_grid(screen, start, goal, path, x, y, cell=50):
     """
-    Draw a static 9×9 mini grid with the cursor path highlighted.
+    Draw a static 10×10 mini grid with the cursor path highlighted.
     (x, y) is the top-left corner of the grid.
     """
     n        = GRID_SIZE
@@ -312,7 +312,7 @@ def _stats_modal(screen, clock, fonts, trial_info, bg_snap):
         return
 
     start = r.get("start", (0, 0))
-    goal  = r.get("goal",  (8, 8))
+    goal  = r.get("goal",  (9, 9))
     seq   = r.get("planned_sequence", [])
     opt   = r.get("optimal_sequence", [])
     path  = _build_path(start, seq)

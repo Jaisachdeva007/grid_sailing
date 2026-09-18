@@ -19,8 +19,8 @@
 # ── Grid ──────────────────────────────────────────────────────
 
 # The grid is a square — this sets how many rows AND columns it has.
-# 9 means a 9×9 grid (81 cells).
-GRID_SIZE = 9
+# 10 means a 10×10 grid (100 cells).
+GRID_SIZE = 10
 
 # The longest "optimal" route we'll accept for a puzzle.
 # Any puzzle that needs more than 7 moves to solve is thrown out.
@@ -52,8 +52,8 @@ KEY_MAPPINGS = {
 # without permanently changing this file.
 
 # How long participants get to stare at the grid and plan their route
-# before anything happens. Protocol says 6–9 seconds.
-PLANNING_TIME_SEC = 6
+# before anything happens.
+PLANNING_TIME_SEC = 9
 
 # How long they have to actually TYPE their key sequence after planning.
 # If the timer runs out, that trial gets marked as incorrect.

@@ -47,7 +47,7 @@ from database.db import (
 
 def build_puzzle_pool():
     """
-    Generate all valid puzzles from all 81 start positions, grouped by (start, goal).
+    Generate all valid puzzles from all 100 start positions, grouped by (start, goal).
 
     Each puzzle dict has:
         start, goal        — unique pair
@@ -350,7 +350,7 @@ def run_block(screen, clock, fonts, block_type, block_number,
         )
 
         if is_explore:
-            explore_time_limit = 6.0 if block_type in ("pre_test", "post_test") else None
+            explore_time_limit = 9.0 if block_type in ("pre_test", "post_test") else None
             result = run_explore_trial(
                 screen, clock, fonts, trial, config,
                 cumulative_score, session_id,
@@ -1062,7 +1062,7 @@ def _show_instructions(screen, clock, fonts, group):
         "The Grid",
         ACCENT, None,
         [
-            ("You will see a 9x9 grid.", DIM),
+            ("You will see a 10x10 grid.", DIM),
             ("The blue cell is the MOUSE (start).", DIM),
             ("The yellow cell is the CHEESE (goal).", DIM),
             ("Navigate the MOUSE to the CHEESE in as few moves as possible", DIM),
