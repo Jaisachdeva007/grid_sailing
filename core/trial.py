@@ -34,7 +34,7 @@
 #
 #  Scoring:
 #    Correct + exactly optimal moves → 100 pts (OPTIMAL_SCORE)
-#    Correct + any deviation        → 100 − |deviation| × 5 pts (EXTRA_MOVE_PENALTY)
+#    Correct + any deviation        → 100 − |deviation| × 10 pts (EXTRA_MOVE_PENALTY)
 #    Did not reach goal             → 0 pts (ERROR_SCORE)
 #  All scoring values are set in config.py.
 # ============================================================
@@ -80,7 +80,7 @@ CURSOR_W    = (248, 248, 255)
 PROG_BG     = (12,  12,   24)
 PROG_FG     = (50, 110, 220)
 
-GRID_N = 6
+GRID_N = 10
 
 TRAIL_FADE_SEC = 1.4              # seconds for a cell to fade from fresh to dim
 TRAIL_FRESH    = (110, 170, 255)  # bright blue immediately after stepping on a cell
@@ -113,6 +113,8 @@ class TrialData:
     is_correct:          bool  = False
     oob_count:           int   = 0
     trial_start_time:    float = 0.0
+    used_sequence:       list  = field(default_factory=list)
+    wrong_locked_path:   bool  = False   # True when repeated-trial lock was violated
 
 
 def _is_mi(g):   return g.startswith("MI")
@@ -743,7 +745,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
               total_trials: int = 20, block_type: str = "practice",
               streak: int = 0, show_timer: bool = True,
               show_score: bool = True,
-              session_state: dict = None) -> dict:
+              session_state: dict = None,
+              locked_sequence=None) -> dict:
 
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
@@ -864,7 +867,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     if mi_space_held and mi_space_start:
                         trial.imagery_duration_ms = (time.time() - mi_space_start) * 1000
                         mi_space_held = False
-                        _finalise(trial, trial.planned_sequence, session_id)
+                        _finalise(trial, trial.planned_sequence, session_id,
+                                  locked_sequence=locked_sequence)
                         trial_id = _save(trial, session_id)
                         update_session_progress(session_id, trial.trial_number)
                         enter_feedback() if show_feedback else enter_iti()
@@ -888,7 +892,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     if phys_first_key_t is not None and phys_last_key_t is not None:
                         trial.movement_time_ms = (
                             (phys_last_key_t - phys_first_key_t) * 1000)
-                    _finalise(trial, pp_typed_seq, session_id)
+                    _finalise(trial, pp_typed_seq, session_id,
+                              locked_sequence=locked_sequence)
                     trial_id = _save(trial, session_id)
                     update_session_progress(session_id, trial.trial_number)
                     # Replay animates actual physical sequence, not planned
@@ -970,7 +975,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                             trial.planned_sequence = list(typed_seq)
                             action_path = _build_path(trial.start, typed_seq)
                             if is_ctrl:
-                                _finalise(trial, typed_seq, session_id)
+                                _finalise(trial, typed_seq, session_id,
+                                          locked_sequence=locked_sequence)
                                 trial_id = _save(trial, session_id)
                                 update_session_progress(session_id, trial.trial_number)
                                 enter_feedback() if show_feedback else enter_iti()
@@ -1151,7 +1157,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
 
 # ── Finalise & save ───────────────────────────────────────────
 
-def _finalise(trial, used_seq, session_id):
+def _finalise(trial, used_seq, session_id, locked_sequence=None):
     from core.sounds import play as play_sound
     pos = trial.start
     oob = 0
@@ -1161,8 +1167,15 @@ def _finalise(trial, used_seq, session_id):
             pos = nxt
         else:
             oob += 1
-    trial.oob_count = oob
+    trial.oob_count    = oob
+    trial.used_sequence = list(used_seq)
     score, n, ok = _score(used_seq, trial.optimal_sequence, pos, trial.goal)
+    # Enforce locked path: repeated trials must use the exact locked sequence
+    if (trial.grid_type == "repeated"
+            and locked_sequence is not None
+            and list(used_seq) != list(locked_sequence)):
+        score, ok = 0, False
+        trial.wrong_locked_path = True
     trial.reward_score = score; trial.number_of_moves = n; trial.is_correct = ok
     play_sound("correct" if ok else "incorrect")
     if trial.movement_time_ms is None and len(trial.keypresses_log) >= 2:
@@ -1219,9 +1232,13 @@ def _draw_score_card(screen, fonts, trial, rx, ry, GRW):
     # Each entry: (label_str, value_str, lbl_col, val_col)  OR  "div" / "div2"
     rows = []
     if not trial.is_correct:
+        if getattr(trial, "wrong_locked_path", False):
+            result_label = "Wrong path — use your sequence!"
+        else:
+            result_label = "Goal not reached"
         rows = [
-            ("Result",      "Goal not reached", DIM, WRONG),
-            ("Your score",  "0 pts",            DIM, WRONG),
+            ("Result",      result_label, DIM, WRONG),
+            ("Your score",  "0 pts",      DIM, WRONG),
         ]
     else:
         mc = CORRECT if extra == 0 else (AMBER if extra <= 2 else WRONG)

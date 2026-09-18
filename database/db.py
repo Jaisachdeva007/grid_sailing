@@ -236,6 +236,66 @@ def save_used_random_pairs(participant_id: str, pairs: set):
     conn.close()
 
 
+def get_locked_sequence(participant_id: str):
+    """Return the participant's locked repeated-puzzle key sequence, or None if not yet set."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT value FROM global_settings WHERE key = ?",
+        (f"locked_seq_{participant_id}",)
+    ).fetchone()
+    conn.close()
+    if not row:
+        return None
+    return [int(x) for x in row[0].split(",")]
+
+
+def save_locked_sequence(participant_id: str, sequence: list):
+    """Lock in the key sequence once the participant has hit optimal 3 times."""
+    conn = get_connection()
+    conn.execute(
+        "INSERT OR REPLACE INTO global_settings (key, value) VALUES (?, ?)",
+        (f"locked_seq_{participant_id}", ",".join(str(x) for x in sequence))
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_lock_candidate(participant_id: str):
+    """
+    Return the (sequence, count) candidate being tracked toward locking.
+    sequence is a list of ints (or None), count is how many times that exact
+    sequence has been used optimally on the repeated puzzle so far.
+    """
+    conn = get_connection()
+    seq_row = conn.execute(
+        "SELECT value FROM global_settings WHERE key = ?",
+        (f"lock_cand_seq_{participant_id}",)
+    ).fetchone()
+    cnt_row = conn.execute(
+        "SELECT value FROM global_settings WHERE key = ?",
+        (f"lock_cand_count_{participant_id}",)
+    ).fetchone()
+    conn.close()
+    seq   = [int(x) for x in seq_row[0].split(",")] if seq_row else None
+    count = int(cnt_row[0]) if cnt_row else 0
+    return seq, count
+
+
+def update_lock_candidate(participant_id: str, sequence: list, count: int):
+    """Persist the current lock-candidate sequence and its repeat count."""
+    conn = get_connection()
+    conn.execute(
+        "INSERT OR REPLACE INTO global_settings (key, value) VALUES (?, ?)",
+        (f"lock_cand_seq_{participant_id}", ",".join(str(x) for x in sequence))
+    )
+    conn.execute(
+        "INSERT OR REPLACE INTO global_settings (key, value) VALUES (?, ?)",
+        (f"lock_cand_count_{participant_id}", str(count))
+    )
+    conn.commit()
+    conn.close()
+
+
 # ── Participant functions ────────────────────────────────────
 
 def create_participant(participant_id, group_name, age, gender, handedness):

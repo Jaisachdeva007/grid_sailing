@@ -40,6 +40,8 @@ from database.db import (
     get_resume_point, get_completed_blocks, initialise_database,
     get_global_repeated_puzzle, set_global_repeated_puzzle,
     get_used_random_pairs, save_used_random_pairs,
+    get_locked_sequence, save_locked_sequence,
+    get_lock_candidate, update_lock_candidate,
 )
 
 
@@ -47,7 +49,7 @@ from database.db import (
 
 def build_puzzle_pool():
     """
-    Generate all valid puzzles from all 36 start positions, grouped by (start, goal).
+    Generate all valid puzzles from all 100 start positions, grouped by (start, goal).
 
     Each puzzle dict has:
         start, goal        — unique pair
@@ -89,6 +91,19 @@ def build_puzzle_pool():
 
     n_paths = sum(len(p["sequences"]) for p in pool)
     print(f"[SESSION] Pool: {len(pool)} unique puzzles, {n_paths} total optimal paths.")
+
+    # Safety check: pool must cover every random slot in the experiment.
+    # If it doesn't, random grids WILL repeat — fail loudly at startup rather
+    # than silently during data collection.
+    # (120 = 40 fam + 10 pre_test + 10*6 practice + 10 post_test, at 50% random ratio)
+    MIN_REQUIRED = 120
+    if len(pool) < MIN_REQUIRED:
+        raise RuntimeError(
+            f"Puzzle pool too small: {len(pool)} unique puzzles but the experiment "
+            f"needs at least {MIN_REQUIRED}. Check GRID_SIZE, MIN_SEQUENCE_LENGTH, "
+            f"and MAX_SEQUENCE_LENGTH in config.py."
+        )
+
     return pool
 
 
@@ -127,7 +142,6 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
         tuple(s) for s in repeated_puzzle.get("sequences", [repeated_puzzle["sequence"]])
     )
     _used = used_pairs or set()
-    print(f"[DEBUG _pick_puzzles] used_pairs supplied: {len(_used)} pairs")
     random_pool = [
         p for p in pool
         if p != repeated_puzzle
@@ -135,7 +149,6 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
                     for s in p.get("sequences", [p["sequence"]]))
         and (tuple(p["start"]), tuple(p["goal"])) not in _used
     ]
-    print(f"[DEBUG _pick_puzzles] random_pool after exclusions: {len(random_pool)} puzzles, need {n_random}")
     # Fall back progressively if exclusions leave too few puzzles
     if len(random_pool) < n_random:
         random_pool = [
@@ -163,7 +176,6 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
     trials += [(p, "random") for p in random_picks]
 
     new_pairs = {(tuple(p["start"]), tuple(p["goal"])) for p in random_picks}
-    print(f"[DEBUG _pick_puzzles] new_pairs to track: {len(new_pairs)}")
     random.shuffle(trials)
     return trials, repeated_puzzle, new_pairs
 
@@ -233,6 +245,12 @@ def run_block(screen, clock, fonts, block_type, block_number,
     if first_pick:
         set_global_repeated_puzzle(repeated_puzzle)
 
+    # Save the random puzzle pairs chosen for this block immediately so that
+    # even a mid-block Save & Exit doesn't allow those same puzzles to reappear.
+    if new_random_pairs:
+        merged_pairs = (used_random_pairs or set()) | new_random_pairs
+        save_used_random_pairs(participant_id, merged_pairs)
+
     # Guided gate: ensure the first 3 trials are all unique random puzzles
     # so participants never see the repeated puzzle or a duplicate during try-it-yourself.
     if guided_gate_trial:
@@ -285,6 +303,15 @@ def run_block(screen, clock, fonts, block_type, block_number,
     streak          = 0
     last_sync_time  = _time.time()
     last_sync_trial = resume_from_trial
+
+    # Load this participant's locked repeated-puzzle sequence (None until 3 optimal solves)
+    locked_sequence = get_locked_sequence(participant_id)
+    LOCK_THRESHOLD  = 3   # same sequence must be used optimally this many times to lock
+    # Track which candidate sequence is being built toward the lock threshold
+    candidate_seq, candidate_count = (
+        (None, 0) if locked_sequence is not None
+        else get_lock_candidate(participant_id)
+    )
 
     # Both fam blocks → free exploration mode (no timer, no planning, no sequence input).
     # All other blocks → 6-second planning timer.
@@ -340,7 +367,7 @@ def run_block(screen, clock, fonts, block_type, block_number,
         )
 
         if is_explore:
-            explore_time_limit = 6.0 if block_type in ("pre_test", "post_test") else None
+            explore_time_limit = 9.0 if block_type in ("pre_test", "post_test") else None
             result = run_explore_trial(
                 screen, clock, fonts, trial, config,
                 cumulative_score, session_id,
@@ -359,6 +386,7 @@ def run_block(screen, clock, fonts, block_type, block_number,
                 show_timer=show_timer,
                 show_score=show_score,
                 session_state=session_state,
+                locked_sequence=locked_sequence if grid_type == "repeated" else None,
             )
 
         if result.get("paused_exit"):
@@ -377,6 +405,23 @@ def run_block(screen, clock, fonts, block_type, block_number,
             continue
 
         completed_in_session.add(trial_number)
+
+        # Lock in the repeated-puzzle sequence once the participant uses the
+        # SAME optimal sequence LOCK_THRESHOLD times in a row.
+        # A different optimal sequence resets the counter to 1.
+        if (grid_type == "repeated"
+                and result.get("reward_score") == 100
+                and locked_sequence is None):
+            this_seq = list(trial.used_sequence)
+            if this_seq == list(candidate_seq or []):
+                candidate_count += 1
+            else:
+                candidate_seq   = this_seq
+                candidate_count = 1
+            update_lock_candidate(participant_id, candidate_seq, candidate_count)
+            if candidate_count >= LOCK_THRESHOLD:
+                locked_sequence = candidate_seq
+                save_locked_sequence(participant_id, locked_sequence)
 
         # Mid-block researcher gate after guided practice trials
         if guided_gate_trial and trial_number == guided_gate_trial:
@@ -530,7 +575,6 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
                                    "What did you notice? How did the keys feel to press?",
                                    "What sounds (if any) did the keys make?"])
 
-        print(f"[DEBUG run_session] Starting block {block_idx+1} ({block_type}) with {len(used_random_pairs)} used pairs")
         result = run_block(
             screen             = screen,
             clock              = clock,
@@ -554,7 +598,6 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
         cumulative_score, repeated_puzzle, new_pairs = result
         used_random_pairs |= new_pairs
         save_used_random_pairs(participant_id, used_random_pairs)
-        print(f"[DEBUG run_session] Block {block_idx+1} done. used_random_pairs now: {len(used_random_pairs)}")
 
         # ── Between-block extras ──────────────────────────────
         if block_idx < len(block_sequence) - 1:
@@ -727,28 +770,28 @@ def _show_block_intro(screen, clock, fonts, block_type, block_number,
                  "No timer, no score – just learn how the keys move the MOUSE.")
     elif block_type == "pre_test":
         title = "Baseline"
-        desc  = ("You will have 6 seconds to navigate the MOUSE to the CHEESE. Try to find "
+        desc  = ("You will have 9 seconds to navigate the MOUSE to the CHEESE. Try to find "
                  "the shortest sequence using all keys at least once.")
     elif block_type == "post_test":
         title = "Final Block"
         desc  = ("In this block you will go back to FREE PLAY. Trials are NO LONGER split into "
-                 "planning and action stages. You will have 6 seconds to navigate the MOUSE to "
+                 "planning and action stages. You will have 9 seconds to navigate the MOUSE to "
                  "the CHEESE. Try to find the shortest sequence using all keys at least once.")
     elif block_type == "practice":
         title = "Practice"
         if is_mi:
-            desc = ("In this block you will see the grid for 6 seconds. As you plan your "
+            desc = ("In this block you will see the grid for 9 seconds. As you plan your "
                     "sequence, enter it into the provided space using the trackpad. After "
                     "confirming your sequence, you will then be asked to IMAGINE pressing the "
                     "keys for your planned sequence. Focus on imagining the movements as you "
                     "just described them to the researcher.")
         elif is_pp:
-            desc = ("In this block you will see the grid for 6 seconds. As you plan your "
+            desc = ("In this block you will see the grid for 9 seconds. As you plan your "
                     "sequence, enter it into the provided space using the trackpad. After "
                     "confirming your sequence, you will then be asked to physically press the "
                     "keys for your planned sequence.")
         else:  # CTRL
-            desc = ("In this block you will see the grid for 6 seconds. As you plan your "
+            desc = ("In this block you will see the grid for 9 seconds. As you plan your "
                     "sequence, enter it into the provided space using the trackpad. After "
                     "confirming your sequence, you will immediately receive feedback on your "
                     "response.")
@@ -1054,7 +1097,7 @@ def _show_instructions(screen, clock, fonts, group):
         "The Grid",
         ACCENT, None,
         [
-            ("You will see a 6x6 grid.", DIM),
+            ("You will see a 10x10 grid.", DIM),
             ("The blue cell is the MOUSE (start).", DIM),
             ("The yellow cell is the CHEESE (goal).", DIM),
             ("Navigate the MOUSE to the CHEESE in as few moves as possible", DIM),

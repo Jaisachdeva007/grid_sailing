@@ -19,8 +19,8 @@
 # ── Grid ──────────────────────────────────────────────────────
 
 # The grid is a square — this sets how many rows AND columns it has.
-# 6 means a 6×6 grid (36 cells).
-GRID_SIZE = 6
+# 10 means a 10×10 grid (100 cells).
+GRID_SIZE = 10
 
 # The longest "optimal" route we'll accept for a puzzle.
 # Any puzzle that needs more than 7 moves to solve is thrown out.
@@ -52,8 +52,8 @@ KEY_MAPPINGS = {
 # without permanently changing this file.
 
 # How long participants get to stare at the grid and plan their route
-# before anything happens. Protocol says 6–9 seconds.
-PLANNING_TIME_SEC = 6
+# before anything happens.
+PLANNING_TIME_SEC = 9
 
 # How long they have to actually TYPE their key sequence after planning.
 # If the timer runs out, that trial gets marked as incorrect.
@@ -81,10 +81,10 @@ INTERTRIAL_SEC = 4
 OPTIMAL_SCORE = 100
 
 # Points taken off for every move that's MORE or FEWER than optimal.
-# e.g. optimal = 7, participant used 9 → 2 off → penalty = 2 × 5 = 10 pts
-#      optimal = 7, participant used 5 → 2 short → penalty = 2 × 5 = 10 pts
+# e.g. optimal = 7, participant used 9 → 2 off → penalty = 2 × 10 = 20 pts
+#      optimal = 7, participant used 5 → 2 short → penalty = 2 × 10 = 20 pts
 # Both directions are penalised equally.
-EXTRA_MOVE_PENALTY = 5
+EXTRA_MOVE_PENALTY = 10
 
 # Score when the participant doesn't reach the goal at all. Leave at 0.
 ERROR_SCORE = 0
@@ -109,10 +109,10 @@ FAMILIARIZATION_BLOCKS = 2
 # 0.72 = 72% repeated, 28% random.
 
 # For practice blocks (the main training phase).
-PRACTICE_REPEATED_RATIO = 0.72
+PRACTICE_REPEATED_RATIO = 0.50
 
 # For pre-test and post-test blocks.
-TEST_REPEATED_RATIO = 0.60
+TEST_REPEATED_RATIO = 0.50
 
 # For familiarisation — always fully random. Don't change this.
 FAMILIARIZATION_REPEATED_RATIO = 0.00
