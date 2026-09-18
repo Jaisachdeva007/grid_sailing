@@ -27,9 +27,12 @@ GRID_SIZE = 6
 # Shorter = harder to find; longer = easier. Leave at 7 for our protocol.
 MAX_OPTIMAL_LENGTH = 7
 
-# The shortest route we'll accept. Puzzles shorter than this get thrown out
-# because they're too easy. Has to be ≤ MAX_OPTIMAL_LENGTH.
-MIN_SEQUENCE_LENGTH = 7
+# The shortest route we'll accept. Has to be ≤ MAX_OPTIMAL_LENGTH.
+# Note: on a 6×6 grid with these key mappings, only 18 puzzle pairs have
+# an optimal path of exactly 7 — not enough for the 116 random slots across
+# the full experiment. Setting this to 3 gives 162 unique puzzles and
+# guarantees no repeats. All puzzles still require all 3 keys.
+MIN_SEQUENCE_LENGTH = 3
 MAX_SEQUENCE_LENGTH = 7
 
 
