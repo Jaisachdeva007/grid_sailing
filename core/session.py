@@ -95,8 +95,8 @@ def build_puzzle_pool():
     # Safety check: pool must cover every random slot in the experiment.
     # If it doesn't, random grids WILL repeat — fail loudly at startup rather
     # than silently during data collection.
-    # (92 = 40 fam + 8 pre_test + 12 practice S1 + 12 S2 + 12 S3 + 8 post_test)
-    MIN_REQUIRED = 92
+    # (120 = 40 fam + 10 pre_test + 10*6 practice + 10 post_test, at 50% random ratio)
+    MIN_REQUIRED = 120
     if len(pool) < MIN_REQUIRED:
         raise RuntimeError(
             f"Puzzle pool too small: {len(pool)} unique puzzles but the experiment "
