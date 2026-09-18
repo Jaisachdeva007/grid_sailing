@@ -30,6 +30,7 @@ MAX_OPTIMAL_LENGTH = 7
 # The shortest route we'll accept. Puzzles shorter than this get thrown out
 # because they're too easy. Has to be ≤ MAX_OPTIMAL_LENGTH.
 MIN_SEQUENCE_LENGTH = 7
+MAX_SEQUENCE_LENGTH = 7
 
 
 # ── Key Mappings ──────────────────────────────────────────────
