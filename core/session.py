@@ -41,7 +41,7 @@ from database.db import (
     get_global_repeated_puzzle, set_global_repeated_puzzle,
     get_used_random_pairs, save_used_random_pairs,
     get_locked_sequence, save_locked_sequence,
-    get_optimal_solve_count, increment_optimal_solve_count,
+    get_lock_candidate, update_lock_candidate,
 )
 
 
@@ -245,6 +245,12 @@ def run_block(screen, clock, fonts, block_type, block_number,
     if first_pick:
         set_global_repeated_puzzle(repeated_puzzle)
 
+    # Save the random puzzle pairs chosen for this block immediately so that
+    # even a mid-block Save & Exit doesn't allow those same puzzles to reappear.
+    if new_random_pairs:
+        merged_pairs = (used_random_pairs or set()) | new_random_pairs
+        save_used_random_pairs(participant_id, merged_pairs)
+
     # Guided gate: ensure the first 3 trials are all unique random puzzles
     # so participants never see the repeated puzzle or a duplicate during try-it-yourself.
     if guided_gate_trial:
@@ -300,7 +306,12 @@ def run_block(screen, clock, fonts, block_type, block_number,
 
     # Load this participant's locked repeated-puzzle sequence (None until 3 optimal solves)
     locked_sequence = get_locked_sequence(participant_id)
-    LOCK_THRESHOLD  = 3   # number of optimal solves before path is locked
+    LOCK_THRESHOLD  = 3   # same sequence must be used optimally this many times to lock
+    # Track which candidate sequence is being built toward the lock threshold
+    candidate_seq, candidate_count = (
+        (None, 0) if locked_sequence is not None
+        else get_lock_candidate(participant_id)
+    )
 
     # Both fam blocks → free exploration mode (no timer, no planning, no sequence input).
     # All other blocks → 6-second planning timer.
@@ -395,14 +406,21 @@ def run_block(screen, clock, fonts, block_type, block_number,
 
         completed_in_session.add(trial_number)
 
-        # Lock in the repeated-puzzle sequence after 3 consecutive optimal solves.
-        # Once locked, _finalise enforces the exact sequence for all future trials.
+        # Lock in the repeated-puzzle sequence once the participant uses the
+        # SAME optimal sequence LOCK_THRESHOLD times in a row.
+        # A different optimal sequence resets the counter to 1.
         if (grid_type == "repeated"
                 and result.get("reward_score") == 100
                 and locked_sequence is None):
-            count = increment_optimal_solve_count(participant_id)
-            if count >= LOCK_THRESHOLD:
-                locked_sequence = list(trial.used_sequence)
+            this_seq = list(trial.used_sequence)
+            if this_seq == list(candidate_seq or []):
+                candidate_count += 1
+            else:
+                candidate_seq   = this_seq
+                candidate_count = 1
+            update_lock_candidate(participant_id, candidate_seq, candidate_count)
+            if candidate_count >= LOCK_THRESHOLD:
+                locked_sequence = candidate_seq
                 save_locked_sequence(participant_id, locked_sequence)
 
         # Mid-block researcher gate after guided practice trials

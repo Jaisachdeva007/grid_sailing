@@ -260,28 +260,40 @@ def save_locked_sequence(participant_id: str, sequence: list):
     conn.close()
 
 
-def get_optimal_solve_count(participant_id: str) -> int:
-    """Return how many times this participant has achieved optimal on the repeated puzzle (pre-lock)."""
+def get_lock_candidate(participant_id: str):
+    """
+    Return the (sequence, count) candidate being tracked toward locking.
+    sequence is a list of ints (or None), count is how many times that exact
+    sequence has been used optimally on the repeated puzzle so far.
+    """
     conn = get_connection()
-    row = conn.execute(
+    seq_row = conn.execute(
         "SELECT value FROM global_settings WHERE key = ?",
-        (f"locked_seq_count_{participant_id}",)
+        (f"lock_cand_seq_{participant_id}",)
+    ).fetchone()
+    cnt_row = conn.execute(
+        "SELECT value FROM global_settings WHERE key = ?",
+        (f"lock_cand_count_{participant_id}",)
     ).fetchone()
     conn.close()
-    return int(row[0]) if row else 0
+    seq   = [int(x) for x in seq_row[0].split(",")] if seq_row else None
+    count = int(cnt_row[0]) if cnt_row else 0
+    return seq, count
 
 
-def increment_optimal_solve_count(participant_id: str) -> int:
-    """Increment and return the pre-lock optimal-solve counter for this participant."""
-    count = get_optimal_solve_count(participant_id) + 1
+def update_lock_candidate(participant_id: str, sequence: list, count: int):
+    """Persist the current lock-candidate sequence and its repeat count."""
     conn = get_connection()
     conn.execute(
         "INSERT OR REPLACE INTO global_settings (key, value) VALUES (?, ?)",
-        (f"locked_seq_count_{participant_id}", str(count))
+        (f"lock_cand_seq_{participant_id}", ",".join(str(x) for x in sequence))
+    )
+    conn.execute(
+        "INSERT OR REPLACE INTO global_settings (key, value) VALUES (?, ?)",
+        (f"lock_cand_count_{participant_id}", str(count))
     )
     conn.commit()
     conn.close()
-    return count
 
 
 # ── Participant functions ────────────────────────────────────
