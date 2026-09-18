@@ -735,28 +735,28 @@ def _show_block_intro(screen, clock, fonts, block_type, block_number,
                  "No timer, no score – just learn how the keys move the MOUSE.")
     elif block_type == "pre_test":
         title = "Baseline"
-        desc  = ("You will have 6 seconds to navigate the MOUSE to the CHEESE. Try to find "
+        desc  = ("You will have 9 seconds to navigate the MOUSE to the CHEESE. Try to find "
                  "the shortest sequence using all keys at least once.")
     elif block_type == "post_test":
         title = "Final Block"
         desc  = ("In this block you will go back to FREE PLAY. Trials are NO LONGER split into "
-                 "planning and action stages. You will have 6 seconds to navigate the MOUSE to "
+                 "planning and action stages. You will have 9 seconds to navigate the MOUSE to "
                  "the CHEESE. Try to find the shortest sequence using all keys at least once.")
     elif block_type == "practice":
         title = "Practice"
         if is_mi:
-            desc = ("In this block you will see the grid for 6 seconds. As you plan your "
+            desc = ("In this block you will see the grid for 9 seconds. As you plan your "
                     "sequence, enter it into the provided space using the trackpad. After "
                     "confirming your sequence, you will then be asked to IMAGINE pressing the "
                     "keys for your planned sequence. Focus on imagining the movements as you "
                     "just described them to the researcher.")
         elif is_pp:
-            desc = ("In this block you will see the grid for 6 seconds. As you plan your "
+            desc = ("In this block you will see the grid for 9 seconds. As you plan your "
                     "sequence, enter it into the provided space using the trackpad. After "
                     "confirming your sequence, you will then be asked to physically press the "
                     "keys for your planned sequence.")
         else:  # CTRL
-            desc = ("In this block you will see the grid for 6 seconds. As you plan your "
+            desc = ("In this block you will see the grid for 9 seconds. As you plan your "
                     "sequence, enter it into the provided space using the trackpad. After "
                     "confirming your sequence, you will immediately receive feedback on your "
                     "response.")
