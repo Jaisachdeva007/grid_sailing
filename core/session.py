@@ -40,6 +40,8 @@ from database.db import (
     get_resume_point, get_completed_blocks, initialise_database,
     get_global_repeated_puzzle, set_global_repeated_puzzle,
     get_used_random_pairs, save_used_random_pairs,
+    get_locked_sequence, save_locked_sequence,
+    get_optimal_solve_count, increment_optimal_solve_count,
 )
 
 
@@ -296,6 +298,10 @@ def run_block(screen, clock, fonts, block_type, block_number,
     last_sync_time  = _time.time()
     last_sync_trial = resume_from_trial
 
+    # Load this participant's locked repeated-puzzle sequence (None until 3 optimal solves)
+    locked_sequence = get_locked_sequence(participant_id)
+    LOCK_THRESHOLD  = 3   # number of optimal solves before path is locked
+
     # Both fam blocks → free exploration mode (no timer, no planning, no sequence input).
     # All other blocks → 6-second planning timer.
     # Score shown only during practice blocks.
@@ -369,6 +375,7 @@ def run_block(screen, clock, fonts, block_type, block_number,
                 show_timer=show_timer,
                 show_score=show_score,
                 session_state=session_state,
+                locked_sequence=locked_sequence if grid_type == "repeated" else None,
             )
 
         if result.get("paused_exit"):
@@ -387,6 +394,16 @@ def run_block(screen, clock, fonts, block_type, block_number,
             continue
 
         completed_in_session.add(trial_number)
+
+        # Lock in the repeated-puzzle sequence after 3 consecutive optimal solves.
+        # Once locked, _finalise enforces the exact sequence for all future trials.
+        if (grid_type == "repeated"
+                and result.get("reward_score") == 100
+                and locked_sequence is None):
+            count = increment_optimal_solve_count(participant_id)
+            if count >= LOCK_THRESHOLD:
+                locked_sequence = list(trial.used_sequence)
+                save_locked_sequence(participant_id, locked_sequence)
 
         # Mid-block researcher gate after guided practice trials
         if guided_gate_trial and trial_number == guided_gate_trial:

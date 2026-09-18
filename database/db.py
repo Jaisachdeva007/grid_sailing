@@ -236,6 +236,54 @@ def save_used_random_pairs(participant_id: str, pairs: set):
     conn.close()
 
 
+def get_locked_sequence(participant_id: str):
+    """Return the participant's locked repeated-puzzle key sequence, or None if not yet set."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT value FROM global_settings WHERE key = ?",
+        (f"locked_seq_{participant_id}",)
+    ).fetchone()
+    conn.close()
+    if not row:
+        return None
+    return [int(x) for x in row[0].split(",")]
+
+
+def save_locked_sequence(participant_id: str, sequence: list):
+    """Lock in the key sequence once the participant has hit optimal 3 times."""
+    conn = get_connection()
+    conn.execute(
+        "INSERT OR REPLACE INTO global_settings (key, value) VALUES (?, ?)",
+        (f"locked_seq_{participant_id}", ",".join(str(x) for x in sequence))
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_optimal_solve_count(participant_id: str) -> int:
+    """Return how many times this participant has achieved optimal on the repeated puzzle (pre-lock)."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT value FROM global_settings WHERE key = ?",
+        (f"locked_seq_count_{participant_id}",)
+    ).fetchone()
+    conn.close()
+    return int(row[0]) if row else 0
+
+
+def increment_optimal_solve_count(participant_id: str) -> int:
+    """Increment and return the pre-lock optimal-solve counter for this participant."""
+    count = get_optimal_solve_count(participant_id) + 1
+    conn = get_connection()
+    conn.execute(
+        "INSERT OR REPLACE INTO global_settings (key, value) VALUES (?, ?)",
+        (f"locked_seq_count_{participant_id}", str(count))
+    )
+    conn.commit()
+    conn.close()
+    return count
+
+
 # ── Participant functions ────────────────────────────────────
 
 def create_participant(participant_id, group_name, age, gender, handedness):
