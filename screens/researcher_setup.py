@@ -972,7 +972,7 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
         mg_top = oy(y) + 20   # extra top margin for column headers
         mouse_pos = pygame.mouse.get_pos()
 
-        # Column headers (0–5)
+        # Column headers (0–8)
         for c in range(GRID_SIZE):
             ch = f_xs.render(str(c), True, DIM)
             cx_h = COL1 + GRID_OFF_X + c * MINI_CELL + MINI_CELL // 2

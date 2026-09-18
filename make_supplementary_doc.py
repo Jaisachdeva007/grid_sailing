@@ -20,7 +20,7 @@ KEY_MAP = {1: (-1, 0), 2: (1, 1), 3: (1, -1)}
 
 # ── PIL grid drawing ──────────────────────────────────────────────────────────
 
-def draw_grid_img(start, goal, trail=None, cell=52, gap=5, n=6, pad=9):
+def draw_grid_img(start, goal, trail=None, cell=52, gap=5, n=9, pad=9):
     trail_s = {tuple(t) for t in (trail or [])}
     W = n * (cell + gap) - gap + 2 * pad
     img = Image.new("RGB", (W, W), (8, 8, 15))
@@ -82,7 +82,7 @@ def build_path(start, seq):
     for k in seq:
         dr, dc = KEY_MAP[k]
         nr, nc = pos[0] + dr, pos[1] + dc
-        if 0 <= nr < 6 and 0 <= nc < 6:
+        if 0 <= nr < 9 and 0 <= nc < 9:
             pos = [nr, nc]
         path.append(pos[:])
     return path
@@ -201,7 +201,7 @@ doc.add_heading("1.  Task Overview", level=1)
 add_para(
     doc,
     "Participants navigate a virtual mouse from a start cell to a goal cell (marked with cheese) "
-    "on a 6×6 grid using a three-button numeric keypad. Each keypress moves the cursor in a "
+    "on a 9×9 grid using a three-button numeric keypad. Each keypress moves the cursor in a "
     "fixed direction; the task requires planning and executing a multi-step key sequence "
     "entirely from memory. The same interface runs across all three experimental groups — "
     "Physical Practice (PP), Motor Imagery (MI), and Control (CTRL) — with only the "
@@ -234,7 +234,7 @@ doc.add_heading("2.  Valid Puzzle Pool", level=1)
 add_para(
     doc,
     "Puzzles are generated at session start using Breadth-First Search (BFS) from every "
-    "possible start cell on the 6×6 grid. Because BFS explores cells in order of increasing "
+    "possible start cell on the 9×9 grid. Because BFS explores cells in order of increasing "
     "distance, the first time any goal cell is reached, that distance is the guaranteed "
     "minimum — no shorter route to the same goal can exist. A puzzle is only added to the "
     "pool if its BFS minimum path length falls between 5 and 7 steps (inclusive), ensuring "

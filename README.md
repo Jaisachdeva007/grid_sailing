@@ -37,7 +37,7 @@ grid_sailing/
 ├── requirements.txt
 │
 ├── core/
-│   ├── grid.py               # 6×6 grid logic + DFS puzzle generator
+│   ├── grid.py               # 9×9 grid logic + BFS puzzle generator
 │   ├── trial.py              # Trial state machine (PLANNING → INPUT → ACTION → FEEDBACK → ITI)
 │   └── session.py            # Block / session orchestration, auto-resume
 │

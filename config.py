@@ -19,8 +19,8 @@
 # ── Grid ──────────────────────────────────────────────────────
 
 # The grid is a square — this sets how many rows AND columns it has.
-# 6 means a 6×6 grid (36 cells).
-GRID_SIZE = 6
+# 9 means a 9×9 grid (81 cells).
+GRID_SIZE = 9
 
 # The longest "optimal" route we'll accept for a puzzle.
 # Any puzzle that needs more than 7 moves to solve is thrown out.

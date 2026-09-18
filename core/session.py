@@ -47,7 +47,7 @@ from database.db import (
 
 def build_puzzle_pool():
     """
-    Generate all valid puzzles from all 36 start positions, grouped by (start, goal).
+    Generate all valid puzzles from all 81 start positions, grouped by (start, goal).
 
     Each puzzle dict has:
         start, goal        — unique pair
@@ -127,7 +127,6 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
         tuple(s) for s in repeated_puzzle.get("sequences", [repeated_puzzle["sequence"]])
     )
     _used = used_pairs or set()
-    print(f"[DEBUG _pick_puzzles] used_pairs supplied: {len(_used)} pairs")
     random_pool = [
         p for p in pool
         if p != repeated_puzzle
@@ -135,7 +134,6 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
                     for s in p.get("sequences", [p["sequence"]]))
         and (tuple(p["start"]), tuple(p["goal"])) not in _used
     ]
-    print(f"[DEBUG _pick_puzzles] random_pool after exclusions: {len(random_pool)} puzzles, need {n_random}")
     # Fall back progressively if exclusions leave too few puzzles
     if len(random_pool) < n_random:
         random_pool = [
@@ -163,7 +161,6 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
     trials += [(p, "random") for p in random_picks]
 
     new_pairs = {(tuple(p["start"]), tuple(p["goal"])) for p in random_picks}
-    print(f"[DEBUG _pick_puzzles] new_pairs to track: {len(new_pairs)}")
     random.shuffle(trials)
     return trials, repeated_puzzle, new_pairs
 
@@ -530,7 +527,6 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
                                    "What did you notice? How did the keys feel to press?",
                                    "What sounds (if any) did the keys make?"])
 
-        print(f"[DEBUG run_session] Starting block {block_idx+1} ({block_type}) with {len(used_random_pairs)} used pairs")
         result = run_block(
             screen             = screen,
             clock              = clock,
@@ -554,7 +550,6 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
         cumulative_score, repeated_puzzle, new_pairs = result
         used_random_pairs |= new_pairs
         save_used_random_pairs(participant_id, used_random_pairs)
-        print(f"[DEBUG run_session] Block {block_idx+1} done. used_random_pairs now: {len(used_random_pairs)}")
 
         # ── Between-block extras ──────────────────────────────
         if block_idx < len(block_sequence) - 1:
@@ -1054,7 +1049,7 @@ def _show_instructions(screen, clock, fonts, group):
         "The Grid",
         ACCENT, None,
         [
-            ("You will see a 6x6 grid.", DIM),
+            ("You will see a 9x9 grid.", DIM),
             ("The blue cell is the MOUSE (start).", DIM),
             ("The yellow cell is the CHEESE (goal).", DIM),
             ("Navigate the MOUSE to the CHEESE in as few moves as possible", DIM),
