@@ -1134,7 +1134,7 @@ def _show_instructions(screen, clock, fonts, group):
         [
             ("You will see a 10x10 grid.", DIM),
             ("The blue cell is the MOUSE (start).", DIM),
-            ("The orange cell is the SMALL CHEESE (sub-goal).", DIM),
+            ("The pink cell is the SMALL CHEESE (sub-goal).", DIM),
             ("The yellow cell is the BIG CHEESE (goal).", DIM),
             ("Navigate the MOUSE through the SMALL CHEESE to the BIG CHEESE", DIM),
             ("in as few moves as possible, using each key at least once.", DIM),
