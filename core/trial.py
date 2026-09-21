@@ -74,7 +74,7 @@ AMBER       = (220, 162,  28)   # goal highlight
 CELL_DARK    = (22,  22,   44)
 CELL_TRAIL   = (30,  70,  150)
 CELL_START   = (20,  80,  180)   # blue start cell
-CELL_SUBGOAL = (170,  90,  10)   # orange — SMALL CHEESE  ← Juliet: confirm this colour
+CELL_SUBGOAL = (204, 121, 167)   # pink (Okabe-Ito #CC79A7) — SMALL CHEESE
 CELL_GOAL    = (180, 130,  18)   # amber goal cell — BIG CHEESE
 GRID_BORDER = (38,  38,   66)
 CURSOR_W    = (248, 248, 255)
@@ -969,7 +969,19 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                         if btns.get("plan_backspace") and btns["plan_backspace"].collidepoint(p) and typed_seq:
                             typed_seq.pop()
                         elif btns.get("plan_submit") and btns["plan_submit"].collidepoint(p) and typed_seq:
-                            state = INPUT
+                            # Go straight to action — skip INPUT to avoid needing a second confirm press
+                            if first_key_time:
+                                trial.reaction_time_ms = (first_key_time - planning_start) * 1000
+                            trial.planned_sequence = list(typed_seq)
+                            action_path = _build_path(trial.start, typed_seq)
+                            if is_ctrl:
+                                _finalise(trial, typed_seq, session_id,
+                                          locked_sequence=locked_sequence)
+                                trial_id = _save(trial, session_id)
+                                update_session_progress(session_id, trial.trial_number)
+                                enter_feedback() if show_feedback else enter_iti()
+                            else:
+                                enter_action()
 
                 if pause_rect and pause_rect.collidepoint(ev.pos):
                     pre_pause_state = state; state = PAUSED
@@ -1040,32 +1052,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
             if state == PAUSED:
                 continue
 
-            # Direction keys via keyboard (1/2/3 and numpad) for INPUT phase
-            if state == INPUT and ev.type == pygame.KEYDOWN:
-                if ev.key == pygame.K_BACKSPACE and typed_seq:
-                    typed_seq.pop()
-                _kmap = {
-                    pygame.K_1: 1, pygame.K_KP1: 1,
-                    pygame.K_2: 2, pygame.K_KP2: 2,
-                    pygame.K_3: 3, pygame.K_KP3: 3,
-                }
-                _dk = _kmap.get(ev.key)
-                if _dk is not None:
-                    _now_t = time.time()
-                    if first_key_time is None: first_key_time = _now_t
-                    _before = _build_path(trial.start, typed_seq)[-1]
-                    _nxt    = apply_key(_before[0], _before[1], _dk)
-                    _after  = _nxt if _nxt else _before
-                    _iki    = ((_now_t - last_key_time) * 1000
-                               if last_key_time else None)
-                    trial.keypresses_log.append({
-                        "key": _dk, "before": _before, "after": _after,
-                        "abs_ms": _now_t * 1000,
-                        "rel_ms": (_now_t - planning_start) * 1000,
-                        "iki_ms": _iki,
-                    })
-                    last_key_time = _now_t
-                    typed_seq.append(_dk)
+            # Keyboard locked during planning/input — participants must use on-screen buttons
 
             # ACTION: MI — no interaction; auto-advances via timer below
 
