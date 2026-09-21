@@ -100,6 +100,67 @@ def find_valid_paths(start_row, start_col):
     return results
 
 
+def find_paths_ranged(start_row, start_col, min_len=1, max_len=6):
+    """
+    BFS from (start_row, start_col) that finds ALL optimal paths for every
+    reachable goal at distance in [min_len, max_len].
+
+    Used to generate sub-goal legs for the triple puzzle pool:
+      leg1 = find_paths_ranged(start, 1, 6)   → paths to potential sub-goals
+      leg2 = find_paths_ranged(sub_goal, d2, d2) → paths from sub-goal to goal
+
+    Returns a list of dicts with keys: start, goal, sequences, length.
+    (No 'sequence' singular — callers iterate over sequences.)
+    """
+    start = (start_row, start_col)
+    dist  = {start: 0}
+    preds = {start: []}
+    queue = deque([start])
+
+    while queue:
+        row, col = queue.popleft()
+        d = dist[(row, col)]
+        if d >= max_len:
+            continue
+        for key in [1, 2, 3]:
+            nxt = apply_key(row, col, key)
+            if nxt is None:
+                continue
+            if nxt not in dist:
+                dist[nxt]  = d + 1
+                preds[nxt] = [((row, col), key)]
+                queue.append(nxt)
+            elif dist[nxt] == d + 1:
+                preds[nxt].append(((row, col), key))
+
+    results = []
+    for (gr, gc), d in dist.items():
+        if (gr, gc) == start:
+            continue
+        if not (min_len <= d <= max_len):
+            continue
+        all_seqs: list = []
+
+        def _bt(cell, path, _all=all_seqs, _start=start, _preds=preds):
+            if cell == _start:
+                _all.append(list(reversed(path)))
+                return
+            for prev_cell, key in _preds[cell]:
+                path.append(key)
+                _bt(prev_cell, path)
+                path.pop()
+
+        _bt((gr, gc), [])
+        if all_seqs:
+            results.append({
+                "start":     [start_row, start_col],
+                "goal":      [gr, gc],
+                "sequences": all_seqs,
+                "length":    d,
+            })
+    return results
+
+
 def find_all_valid_puzzles():
     """
     Enumerate all valid puzzles across every possible start position on the grid.

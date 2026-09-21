@@ -151,6 +151,9 @@ def initialise_database():
         "ALTER TABLE trials ADD COLUMN oob_count INTEGER DEFAULT 0",
         "ALTER TABLE trials ADD COLUMN time_to_imagery_start_ms REAL",
         "ALTER TABLE trials ADD COLUMN action_reaction_time_ms REAL",
+        "ALTER TABLE trials ADD COLUMN sub_goal_row INTEGER",
+        "ALTER TABLE trials ADD COLUMN sub_goal_col INTEGER",
+        "ALTER TABLE trials ADD COLUMN sub_goal_visited INTEGER DEFAULT 0",
     ]:
         try:
             c.execute(migration)
@@ -169,16 +172,20 @@ def get_global_repeated_puzzle():
     """Return the experiment-wide repeated puzzle as a dict, or None if not yet set."""
     conn = get_connection()
     rows = conn.execute(
-        "SELECT key, value FROM global_settings WHERE key IN ('rep_start','rep_goal','rep_seq')"
+        "SELECT key, value FROM global_settings "
+        "WHERE key IN ('rep_start','rep_sub_goal','rep_goal','rep_seq')"
     ).fetchall()
     conn.close()
     d = {r["key"]: r["value"] for r in rows}
-    if len(d) < 3:
+    if "rep_start" not in d or "rep_goal" not in d or "rep_seq" not in d:
         return None
-    start = [int(x) for x in d["rep_start"].split(",")]
-    goal  = [int(x) for x in d["rep_goal"].split(",")]
-    seq   = [int(x) for x in d["rep_seq"].split(",")]
-    return {"start": start, "goal": goal, "sequence": seq, "length": len(seq)}
+    start    = [int(x) for x in d["rep_start"].split(",")]
+    sub_goal = ([int(x) for x in d["rep_sub_goal"].split(",")]
+                if "rep_sub_goal" in d else None)
+    goal     = [int(x) for x in d["rep_goal"].split(",")]
+    seq      = [int(x) for x in d["rep_seq"].split(",")]
+    return {"start": start, "sub_goal": sub_goal, "goal": goal,
+            "sequence": seq, "length": len(seq)}
 
 
 def set_global_repeated_puzzle(puzzle):
@@ -189,6 +196,8 @@ def set_global_repeated_puzzle(puzzle):
         ("rep_goal",  ",".join(str(x) for x in puzzle["goal"])),
         ("rep_seq",   ",".join(str(x) for x in puzzle["sequence"])),
     ]
+    if puzzle.get("sub_goal"):
+        pairs.append(("rep_sub_goal", ",".join(str(x) for x in puzzle["sub_goal"])))
     for key, val in pairs:
         conn.execute(
             "INSERT OR REPLACE INTO global_settings (key, value) VALUES (?, ?)",
@@ -202,14 +211,18 @@ def clear_global_repeated_puzzle():
     """Reset the experiment-wide repeated puzzle (use when starting a new cohort)."""
     conn = get_connection()
     conn.execute(
-        "DELETE FROM global_settings WHERE key IN ('rep_start','rep_goal','rep_seq')"
+        "DELETE FROM global_settings WHERE key IN ('rep_start','rep_goal','rep_seq','rep_sub_goal')"
     )
     conn.commit()
     conn.close()
 
 
 def get_used_random_pairs(participant_id: str) -> set:
-    """Return the set of (start_tuple, goal_tuple) pairs used in random trials for this participant."""
+    """
+    Return the set of (start_tuple, sub_goal_tuple, goal_tuple) triples used in
+    random trials for this participant.  Handles legacy 2-element format from
+    pre-sub-goal data by inserting an empty sub_goal tuple.
+    """
     import json
     conn = get_connection()
     row = conn.execute(
@@ -219,18 +232,86 @@ def get_used_random_pairs(participant_id: str) -> set:
     conn.close()
     if not row:
         return set()
-    pairs = json.loads(row[0])
-    return {(tuple(s), tuple(g)) for s, g in pairs}
+    items = json.loads(row[0])
+    result = set()
+    for item in items:
+        if len(item) == 3:
+            s, sg, g = item
+            result.add((tuple(s), tuple(sg), tuple(g)))
+        else:
+            s, g = item
+            result.add((tuple(s), (), tuple(g)))
+    return result
 
 
 def save_used_random_pairs(participant_id: str, pairs: set):
-    """Persist the full set of used random puzzle pairs for this participant."""
+    """Persist the full set of used random puzzle triples for this participant."""
     import json
-    serialisable = [[list(s), list(g)] for s, g in pairs]
+    serialisable = [[list(s), list(sg), list(g)] for s, sg, g in pairs]
     conn = get_connection()
     conn.execute(
         "INSERT OR REPLACE INTO global_settings (key, value) VALUES (?, ?)",
         (f"used_pairs_{participant_id}", json.dumps(serialisable))
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_locked_sequence(participant_id: str):
+    """Return the participant's locked repeated-puzzle key sequence, or None if not yet set."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT value FROM global_settings WHERE key = ?",
+        (f"locked_seq_{participant_id}",)
+    ).fetchone()
+    conn.close()
+    if not row:
+        return None
+    return [int(x) for x in row[0].split(",")]
+
+
+def save_locked_sequence(participant_id: str, sequence: list):
+    """Lock in the key sequence once the participant has hit optimal 3 times."""
+    conn = get_connection()
+    conn.execute(
+        "INSERT OR REPLACE INTO global_settings (key, value) VALUES (?, ?)",
+        (f"locked_seq_{participant_id}", ",".join(str(x) for x in sequence))
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_lock_candidate(participant_id: str):
+    """
+    Return the (sequence, count) candidate being tracked toward locking.
+    sequence is a list of ints (or None), count is how many times that exact
+    sequence has been used optimally on the repeated puzzle so far.
+    """
+    conn = get_connection()
+    seq_row = conn.execute(
+        "SELECT value FROM global_settings WHERE key = ?",
+        (f"lock_cand_seq_{participant_id}",)
+    ).fetchone()
+    cnt_row = conn.execute(
+        "SELECT value FROM global_settings WHERE key = ?",
+        (f"lock_cand_count_{participant_id}",)
+    ).fetchone()
+    conn.close()
+    seq   = [int(x) for x in seq_row[0].split(",")] if seq_row else None
+    count = int(cnt_row[0]) if cnt_row else 0
+    return seq, count
+
+
+def update_lock_candidate(participant_id: str, sequence: list, count: int):
+    """Persist the current lock-candidate sequence and its repeat count."""
+    conn = get_connection()
+    conn.execute(
+        "INSERT OR REPLACE INTO global_settings (key, value) VALUES (?, ?)",
+        (f"lock_cand_seq_{participant_id}", ",".join(str(x) for x in sequence))
+    )
+    conn.execute(
+        "INSERT OR REPLACE INTO global_settings (key, value) VALUES (?, ?)",
+        (f"lock_cand_count_{participant_id}", str(count))
     )
     conn.commit()
     conn.close()
@@ -457,7 +538,8 @@ def save_trial(session_id, participant_id, trial_number, grid_type,
                reaction_time_ms, movement_time_ms, elapsed_time_s,
                imagery_duration_ms, is_correct,
                all_optimal_sequences=None, oob_count=0,
-               time_to_imagery_start_ms=None, action_reaction_time_ms=None):
+               time_to_imagery_start_ms=None, action_reaction_time_ms=None,
+               sub_goal_row=None, sub_goal_col=None, sub_goal_visited=0):
     """
     Save a completed trial to the database and return its trial_id.
     Called at the end of every trial regardless of outcome.
@@ -471,8 +553,9 @@ def save_trial(session_id, participant_id, trial_number, grid_type,
             number_of_moves, reward_score,
             reaction_time_ms, movement_time_ms, elapsed_time_s,
             imagery_duration_ms, is_correct, all_optimal_sequences, oob_count,
-            time_to_imagery_start_ms, action_reaction_time_ms
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            time_to_imagery_start_ms, action_reaction_time_ms,
+            sub_goal_row, sub_goal_col, sub_goal_visited
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         session_id, participant_id, trial_number, grid_type,
         start_row, start_col, goal_row, goal_col,
@@ -480,7 +563,8 @@ def save_trial(session_id, participant_id, trial_number, grid_type,
         number_of_moves, reward_score,
         reaction_time_ms, movement_time_ms, elapsed_time_s,
         imagery_duration_ms, int(is_correct), all_optimal_sequences, oob_count,
-        time_to_imagery_start_ms, action_reaction_time_ms
+        time_to_imagery_start_ms, action_reaction_time_ms,
+        sub_goal_row, sub_goal_col, int(sub_goal_visited)
     ))
     trial_id = cursor.lastrowid
     conn.commit()
