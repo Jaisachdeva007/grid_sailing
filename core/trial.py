@@ -34,7 +34,7 @@
 #
 #  Scoring:
 #    Correct + exactly optimal moves → 100 pts (OPTIMAL_SCORE)
-#    Correct + any deviation        → 100 − |deviation| × 5 pts (EXTRA_MOVE_PENALTY)
+#    Correct + any deviation        → 100 − |deviation| × 10 pts (EXTRA_MOVE_PENALTY)
 #    Did not reach goal             → 0 pts (ERROR_SCORE)
 #  All scoring values are set in config.py.
 # ============================================================
@@ -71,16 +71,17 @@ ACCENT      = (88,  148, 255)   # blue
 CORRECT     = (0,   168, 175)   # teal   — colorblind-safe "correct"
 WRONG       = (210,  95,  20)   # orange — colorblind-safe "incorrect"
 AMBER       = (220, 162,  28)   # goal highlight
-CELL_DARK   = (22,  22,   44)
-CELL_TRAIL  = (30,  70,  150)
-CELL_START  = (20,  80,  180)   # blue start cell
-CELL_GOAL   = (180, 130,  18)   # amber goal cell
+CELL_DARK    = (22,  22,   44)
+CELL_TRAIL   = (30,  70,  150)
+CELL_START   = (20,  80,  180)   # blue start cell
+CELL_SUBGOAL = (170,  90,  10)   # orange — SMALL CHEESE  ← Juliet: confirm this colour
+CELL_GOAL    = (180, 130,  18)   # amber goal cell — BIG CHEESE
 GRID_BORDER = (38,  38,   66)
 CURSOR_W    = (248, 248, 255)
 PROG_BG     = (12,  12,   24)
 PROG_FG     = (50, 110, 220)
 
-GRID_N = 6
+GRID_N = 10
 
 TRAIL_FADE_SEC = 1.4              # seconds for a cell to fade from fresh to dim
 TRAIL_FRESH    = (110, 170, 255)  # bright blue immediately after stepping on a cell
@@ -100,6 +101,7 @@ class TrialData:
     group:            str
 
     all_optimal_sequences: list = field(default_factory=list)
+    sub_goal:             Optional[tuple] = None   # (row, col) of SMALL CHEESE waypoint
 
     planned_sequence:    list  = field(default_factory=list)
     keypresses_log:      list  = field(default_factory=list)
@@ -113,6 +115,10 @@ class TrialData:
     is_correct:          bool  = False
     oob_count:           int   = 0
     trial_start_time:    float = 0.0
+    used_sequence:       list  = field(default_factory=list)
+    wrong_locked_path:   bool  = False   # True when repeated-trial lock was violated
+    sub_goal_visited:    bool  = False   # True when cursor passed through sub_goal
+    skipped_sub_goal:    bool  = False   # True when goal reached without sub_goal
 
 
 def _is_mi(g):   return g.startswith("MI")
@@ -154,7 +160,7 @@ def _layout(W, H):
     GAP    = max(32, min(56, W // 36))      # grid↔panel gap
     avail_h = H - HDR - PROG_H - 8
     avail_w = W - 40 - RPANEL - GAP
-    CELL   = max(100, min(170, min(avail_h // GRID_N, avail_w // GRID_N)))
+    CELL   = max(56, min(100, min(avail_h // GRID_N, avail_w // GRID_N)))
     GRID_W = GRID_N * CELL
     TOTAL  = GRID_W + GAP + RPANEL
     GL     = max(20, (W - TOTAL) // 2)
@@ -236,65 +242,78 @@ def _draw_progress(screen, fonts, trial, total, block_type, session_num,
     return pause_rect, res_r
 
 
-def _draw_mouse_icon(surf, cx, cy, eyes_open=True):
-    """Cartoon mouse face drawn procedurally — replaces 'MOUSE' text label."""
-    body = (195, 200, 220)   # blue-gray
-    pink = (220, 145, 158)   # inner ear / nose
-    dark = (18,  18,  36)    # eyes
-    wht  = (245, 248, 255)   # eye shine
+def _draw_mouse_icon(surf, cx, cy, eyes_open=True, cell_sz=80):
+    """Cartoon mouse face — scales to fit inside a cell of inner size cell_sz."""
+    # All pixel values are designed at cell_sz=80; s scales them to the actual cell.
+    s    = min(1.0, cell_sz / 80.0)   # cap at natural size; never stretch above it
+    body = (195, 200, 220)
+    pink = (220, 145, 158)
+    dark = (18,  18,  36)
+    wht  = (245, 248, 255)
 
-    # Ears (drawn first so head overlaps them)
-    for ex in (cx - 22, cx + 22):
-        pygame.draw.circle(surf, body, (ex, cy - 28), 16)
-        pygame.draw.circle(surf, pink, (ex, cy - 28),  9)
+    ear_off = int(22 * s)
+    ear_y   = cy - int(28 * s)
+    ear_r   = max(4, int(16 * s))
+    ear_inner = max(2, int(9 * s))
+    for ex in (cx - ear_off, cx + ear_off):
+        pygame.draw.circle(surf, body, (ex, ear_y), ear_r)
+        pygame.draw.circle(surf, pink, (ex, ear_y), ear_inner)
 
-    # Head
-    pygame.draw.circle(surf, body, (cx, cy - 4), 30)
+    head_r = max(4, int(30 * s))
+    pygame.draw.circle(surf, body, (cx, cy - int(4 * s)), head_r)
 
-    # Body (ellipse below head)
-    pygame.draw.ellipse(surf, body, pygame.Rect(cx - 24, cy + 20, 48, 26))
+    bw = max(4, int(24 * s)); bh = max(3, int(13 * s))
+    pygame.draw.ellipse(surf, body,
+                        pygame.Rect(cx - bw, cy + int(20 * s), bw * 2, bh * 2))
 
-    # Eyes — closed = thin horizontal line (eyelid), open = circle
-    for ex in (cx - 10, cx + 10):
+    eo = int(10 * s)
+    for ex in (cx - eo, cx + eo):
         if eyes_open:
-            pygame.draw.circle(surf, dark, (ex, cy - 8), 4)
-            pygame.draw.circle(surf, wht,  (ex - 1, cy - 10), 1)
+            pygame.draw.circle(surf, dark, (ex, cy - int(8 * s)), max(1, int(4 * s)))
+            pygame.draw.circle(surf, wht,  (ex - 1, cy - int(10 * s)), 1)
         else:
-            pygame.draw.line(surf, dark, (ex - 4, cy - 8), (ex + 4, cy - 8), 2)
+            pygame.draw.line(surf, dark,
+                             (ex - int(4 * s), cy - int(8 * s)),
+                             (ex + int(4 * s), cy - int(8 * s)), 2)
 
-    # Nose
-    pygame.draw.circle(surf, pink, (cx, cy + 4), 4)
+    pygame.draw.circle(surf, pink, (cx, cy + int(4 * s)), max(2, int(4 * s)))
 
-    # Whiskers (3 per side)
-    for side, sign in ((-1, -1), (1, 1)):
-        for i, dy in enumerate((-2, 2, 6)):
-            x0 = cx + sign * 5
-            x1 = cx + sign * 26
-            y0 = cy + 4 + dy
-            y1 = cy + 4 + dy + i * sign * 1
-            pygame.draw.line(surf, (150, 152, 168), (x0, y0), (x1, y1), 1)
+    if s > 0.4:   # skip whiskers at very small sizes — they become noise
+        for sign in (-1, 1):
+            for i, dy in enumerate((-2, 2, 6)):
+                x0 = cx + sign * int(5  * s)
+                x1 = cx + sign * int(26 * s)
+                y0 = cy + int((4 + dy) * s)
+                y1 = y0 + i * sign
+                pygame.draw.line(surf, (150, 152, 168), (x0, y0), (x1, y1), 1)
 
-    # Tail (short wavy line from body)
-    pygame.draw.lines(surf, body, False,
-                      [(cx + 24, cy + 30), (cx + 36, cy + 22),
-                       (cx + 44, cy + 30), (cx + 50, cy + 24)], 2)
+    t_pts = [
+        (cx + int(24 * s), cy + int(30 * s)),
+        (cx + int(36 * s), cy + int(22 * s)),
+        (cx + int(44 * s), cy + int(30 * s)),
+        (cx + int(50 * s), cy + int(24 * s)),
+    ]
+    pygame.draw.lines(surf, body, False, t_pts, max(1, int(2 * s)))
 
 
-def _draw_cheese_icon(surf, cx, cy):
-    """Cartoon cheese wedge drawn procedurally — replaces 'CHEESE' text label."""
-    yellow  = (255, 216, 42)    # main cheese colour
-    outline = (190, 148, 14)    # darker border
-    hole    = (148, 100,  8)    # hole colour (dark amber)
+def _draw_cheese_icon(surf, cx, cy, small=False, cell_sz=80):
+    """Cartoon cheese wedge — scales to fit inside a cell of inner size cell_sz.
+    small=True makes it ~45% of cell height (SMALL CHEESE sub-goal)."""
+    # Natural cheese height at sc=1.0: 64px (34 above + 30 below cx,cy)
+    sc      = cell_sz * (0.40 if small else 0.76) / 64.0
+    yellow  = (255, 216, 42)
+    outline = (190, 148, 14)
+    hole    = (148, 100,  8)
 
-    # Wedge (isoceles triangle)
-    pts = [(cx, cy - 34), (cx - 40, cy + 30), (cx + 40, cy + 30)]
+    pts = [(cx, cy - int(34 * sc)),
+           (cx - int(40 * sc), cy + int(30 * sc)),
+           (cx + int(40 * sc), cy + int(30 * sc))]
     pygame.draw.polygon(surf, yellow,  pts)
-    pygame.draw.polygon(surf, outline, pts, 2)
+    pygame.draw.polygon(surf, outline, pts, max(1, int(2 * sc)))
 
-    # Holes — positions inside the triangle
-    pygame.draw.circle(surf, hole, (cx,      cy +  8), 8)
-    pygame.draw.circle(surf, hole, (cx - 18, cy + 20), 6)
-    pygame.draw.circle(surf, hole, (cx + 17, cy + 20), 5)
+    pygame.draw.circle(surf, hole, (cx,               cy + int(8  * sc)), max(2, int(8 * sc)))
+    pygame.draw.circle(surf, hole, (cx - int(18 * sc), cy + int(20 * sc)), max(2, int(6 * sc)))
+    pygame.draw.circle(surf, hole, (cx + int(17 * sc), cy + int(20 * sc)), max(2, int(5 * sc)))
 
 
 def _draw_flame(surf, cx, cy, h=22):
@@ -380,11 +399,13 @@ def _update_draw_particles(screen, particles, dt):
     particles[:] = alive
 
 
-def _draw_grid(screen, fonts, trial, trail, cursor, show_arrows=False, eyes_open=True):
+def _draw_grid(screen, fonts, trial, trail, cursor, show_arrows=False, eyes_open=True,
+               sub_goal_visited: bool = False):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     GL, GT, GR, GRW, CELL = _layout(W, H)
     start, goal = trial.start, trial.goal
+    sub_goal = tuple(trial.sub_goal) if trial.sub_goal else None
 
     for r in range(GRID_N):
         for c in range(GRID_N):
@@ -393,8 +414,13 @@ def _draw_grid(screen, fonts, trial, trail, cursor, show_arrows=False, eyes_open
             sz = CELL - 8
             rect = pygame.Rect(px, py, sz, sz)
 
+            # After visiting sub_goal it is "eaten" — render as trail, not orange
+            sg_eaten = sub_goal_visited and sub_goal and (r, c) == sub_goal
+
             if (r, c) == goal:
                 bg = CELL_GOAL
+            elif sub_goal and (r, c) == sub_goal and not sg_eaten:
+                bg = CELL_SUBGOAL
             elif (r, c) in trail:
                 age = time.time() - trail[(r, c)]
                 t   = min(1.0, age / TRAIL_FADE_SEC)
@@ -413,13 +439,16 @@ def _draw_grid(screen, fonts, trial, trail, cursor, show_arrows=False, eyes_open
             pygame.draw.rect(screen, GRID_BORDER, rect, width=1, border_radius=br)
 
             if (r, c) == goal:
-                _draw_cheese_icon(screen, px + sz // 2, py + sz // 2)
+                _draw_cheese_icon(screen, px + sz // 2, py + sz // 2, cell_sz=sz)
+            elif sub_goal and (r, c) == sub_goal and not sg_eaten:
+                _draw_cheese_icon(screen, px + sz // 2, py + sz // 2,
+                                  small=True, cell_sz=sz)
 
     # Cursor — mouse icon travels through the grid
     if cursor:
         icx = GL + cursor[1] * CELL + CELL // 2
         icy = GT + cursor[0] * CELL + CELL // 2
-        _draw_mouse_icon(screen, icx, icy, eyes_open=eyes_open)
+        _draw_mouse_icon(screen, icx, icy, eyes_open=eyes_open, cell_sz=sz)
 
 
 def _stage_header(screen, fonts, tag, tag_col, title, subtitle):
@@ -556,7 +585,8 @@ def _draw_pause_overlay(screen, fonts, trial, total, block_type, sn):
 def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                       cumulative_score: int, session_id: int,
                       total_trials: int = 20, block_type: str = "familiarization",
-                      session_state: dict = None, time_limit: float = None) -> dict:
+                      session_state: dict = None, time_limit: float = None,
+                      show_timer_display: bool = True) -> dict:
     """
     Familiarization block 1 only.
     Grid stays visible. 1/2/3 moves the cursor live. Reaching the goal ends the trial.
@@ -577,10 +607,11 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
     researcher_rect = None
     last_frame_t = time.time()
 
-    first_key_t = None
-    last_key_t  = None
-    move_count  = 0
-    keys_used   = set()   # which of 1/2/3 have been pressed at least once
+    first_key_t     = None
+    last_key_t      = None
+    move_count      = 0
+    keys_used       = set()    # which of 1/2/3 have been pressed at least once
+    sub_goal_visited = False   # True once cursor has passed through trial.sub_goal
 
     trial.trial_start_time = time.time()
 
@@ -666,6 +697,8 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                         trail[cursor] = now_t
                         cursor = nxt
                         keys_used.add(dk)   # only counts if the cursor actually moved
+                        if trial.sub_goal and cursor == tuple(trial.sub_goal):
+                            sub_goal_visited = True
                     trial.keypresses_log.append({
                         "key":    dk,
                         "before": before,
@@ -674,11 +707,14 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                         "rel_ms": (now_t - trial.trial_start_time) * 1000,
                         "iki_ms": iki,
                     })
-                    # Only complete the trial when cursor is on cheese AND all 3 keys used
-                    if cursor == trial.goal and {1, 2, 3}.issubset(keys_used):
+                    # Complete only when cursor is on BIG CHEESE, all 3 keys used,
+                    # AND sub_goal (SMALL CHEESE) was visited first.
+                    sub_goal_ok = (trial.sub_goal is None or sub_goal_visited)
+                    if cursor == trial.goal and {1, 2, 3}.issubset(keys_used) and sub_goal_ok:
                         trial.movement_time_ms = (last_key_t - first_key_t) * 1000
                         trial.planned_sequence = []
                         trial.is_correct       = True
+                        trial.sub_goal_visited = sub_goal_visited
                         used_keys = [kp["key"] for kp in trial.keypresses_log]
                         score, _, _ = _score(used_keys, trial.optimal_sequence, cursor, trial.goal)
                         trial.reward_score     = score
@@ -699,11 +735,19 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
         draw_state = pre_pause_state if state == PAUSED else state
 
         if draw_state == "explore":
-            if cursor == trial.goal and not {1, 2, 3}.issubset(keys_used):
-                subtitle = "You found the cheese!  All 3 keys must be used to complete the trial"
-            elif time_limit:
+            _sg_ok = (trial.sub_goal is None or sub_goal_visited)
+            if cursor == trial.goal and trial.sub_goal and not sub_goal_visited:
+                subtitle = "You need to pass through the SMALL CHEESE first!"
+            elif cursor == trial.goal and not {1, 2, 3}.issubset(keys_used):
+                subtitle = "You found the BIG CHEESE!  Use all 3 keys to complete the trial"
+            elif trial.sub_goal and not sub_goal_visited:
+                if time_limit and show_timer_display:
+                    rem = max(0.0, time_limit - (now_s - trial.trial_start_time))
+                    subtitle = f"Find the SMALL CHEESE, then navigate to the BIG CHEESE  |  {rem:.1f}s"
+                else:
+                    subtitle = "Find the SMALL CHEESE, then navigate to the BIG CHEESE"
+            elif time_limit and show_timer_display:
                 rem = max(0.0, time_limit - (now_s - trial.trial_start_time))
-                tc_hint = "red" if rem < 2 else ""
                 subtitle = f"Press  1 / 2 / 3  to navigate — use all 3 keys  |  {rem:.1f}s remaining"
             else:
                 subtitle = "Press  1 / 2 / 3  on the keypad to move the mouse — use all 3 keys"
@@ -711,7 +755,8 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                           "EXPLORE", ACCENT,
                           "Find the cheese!",
                           subtitle)
-            _draw_grid(screen, fonts, trial, trail, cursor)
+            _draw_grid(screen, fonts, trial, trail, cursor,
+                       sub_goal_visited=sub_goal_visited)
         elif draw_state == ITI:
             pause_rect, researcher_rect = _draw_stage_iti(
                 screen, fonts, trial, iti_start, iti_dur,
@@ -743,7 +788,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
               total_trials: int = 20, block_type: str = "practice",
               streak: int = 0, show_timer: bool = True,
               show_score: bool = True,
-              session_state: dict = None) -> dict:
+              session_state: dict = None,
+              locked_sequence=None) -> dict:
 
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
@@ -804,7 +850,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
         is_pp   = True
     show_feedback = block_type not in ("familiarization", "guided_practice", "pre_test", "post_test")
 
-    p_time  = config.get("planning_time",   6)
+    from config import PLANNING_TIME_SEC
+    p_time  = config.get("planning_time",   PLANNING_TIME_SEC)
     a_time  = config.get("action_time",     10)
     fb_time = config.get("feedback_time",   4)
     # Jitter ITI between 3 and 5 seconds
@@ -864,7 +911,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     if mi_space_held and mi_space_start:
                         trial.imagery_duration_ms = (time.time() - mi_space_start) * 1000
                         mi_space_held = False
-                        _finalise(trial, trial.planned_sequence, session_id)
+                        _finalise(trial, trial.planned_sequence, session_id,
+                                  locked_sequence=locked_sequence)
                         trial_id = _save(trial, session_id)
                         update_session_progress(session_id, trial.trial_number)
                         enter_feedback() if show_feedback else enter_iti()
@@ -888,7 +936,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     if phys_first_key_t is not None and phys_last_key_t is not None:
                         trial.movement_time_ms = (
                             (phys_last_key_t - phys_first_key_t) * 1000)
-                    _finalise(trial, pp_typed_seq, session_id)
+                    _finalise(trial, pp_typed_seq, session_id,
+                              locked_sequence=locked_sequence)
                     trial_id = _save(trial, session_id)
                     update_session_progress(session_id, trial.trial_number)
                     # Replay animates actual physical sequence, not planned
@@ -970,7 +1019,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                             trial.planned_sequence = list(typed_seq)
                             action_path = _build_path(trial.start, typed_seq)
                             if is_ctrl:
-                                _finalise(trial, typed_seq, session_id)
+                                _finalise(trial, typed_seq, session_id,
+                                          locked_sequence=locked_sequence)
                                 trial_id = _save(trial, session_id)
                                 update_session_progress(session_id, trial.trial_number)
                                 enter_feedback() if show_feedback else enter_iti()
@@ -1151,18 +1201,34 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
 
 # ── Finalise & save ───────────────────────────────────────────
 
-def _finalise(trial, used_seq, session_id):
+def _finalise(trial, used_seq, session_id, locked_sequence=None):
     from core.sounds import play as play_sound
     pos = trial.start
     oob = 0
+    sub_goal_visited = False
+    sub_goal_tup = tuple(trial.sub_goal) if trial.sub_goal else None
     for k in used_seq:
         nxt = apply_key(pos[0], pos[1], k)
         if nxt:
             pos = nxt
+            if sub_goal_tup and pos == sub_goal_tup:
+                sub_goal_visited = True
         else:
             oob += 1
-    trial.oob_count = oob
+    trial.oob_count       = oob
+    trial.used_sequence   = list(used_seq)
+    trial.sub_goal_visited = sub_goal_visited
     score, n, ok = _score(used_seq, trial.optimal_sequence, pos, trial.goal)
+    # Sub-goal must be visited before reaching goal
+    if sub_goal_tup and not sub_goal_visited and ok:
+        score, ok = 0, False
+        trial.skipped_sub_goal = True
+    # Enforce locked path: repeated trials must use the exact locked sequence
+    if (trial.grid_type == "repeated"
+            and locked_sequence is not None
+            and list(used_seq) != list(locked_sequence)):
+        score, ok = 0, False
+        trial.wrong_locked_path = True
     trial.reward_score = score; trial.number_of_moves = n; trial.is_correct = ok
     play_sound("correct" if ok else "incorrect")
     if trial.movement_time_ms is None and len(trial.keypresses_log) >= 2:
@@ -1173,11 +1239,15 @@ def _save(trial, session_id):
     import json
     all_opt_json = (json.dumps(trial.all_optimal_sequences)
                     if trial.all_optimal_sequences else None)
+    sg = trial.sub_goal
     return save_trial(
         session_id=session_id, participant_id=trial.participant_id,
         trial_number=trial.trial_number, grid_type=trial.grid_type,
         start_row=trial.start[0], start_col=trial.start[1],
         goal_row=trial.goal[0],   goal_col=trial.goal[1],
+        sub_goal_row=(sg[0] if sg else None),
+        sub_goal_col=(sg[1] if sg else None),
+        sub_goal_visited=int(trial.sub_goal_visited),
         planned_sequence=trial.planned_sequence,
         optimal_sequence=trial.optimal_sequence,
         optimal_length=len(trial.optimal_sequence),
@@ -1219,9 +1289,15 @@ def _draw_score_card(screen, fonts, trial, rx, ry, GRW):
     # Each entry: (label_str, value_str, lbl_col, val_col)  OR  "div" / "div2"
     rows = []
     if not trial.is_correct:
+        if getattr(trial, "wrong_locked_path", False):
+            result_label = "Wrong path — use your sequence!"
+        elif getattr(trial, "skipped_sub_goal", False):
+            result_label = "Missed SMALL CHEESE — must visit it first!"
+        else:
+            result_label = "Did not reach BIG CHEESE"
         rows = [
-            ("Result",      "Goal not reached", DIM, WRONG),
-            ("Your score",  "0 pts",            DIM, WRONG),
+            ("Result",      result_label, DIM, WRONG),
+            ("Your score",  "0 pts",      DIM, WRONG),
         ]
     else:
         mc = CORRECT if extra == 0 else (AMBER if extra <= 2 else WRONG)
@@ -1567,7 +1643,7 @@ def _draw_stage_action(screen, fonts, trial,
         _stage_header(screen, fonts,
                       "IMAGERY", CORRECT,
                       "Motor Imagery",
-                      "Vividly imagine pressing your planned sequence from MOUSE to CHEESE")
+                      "Vividly imagine pressing your planned sequence from MOUSE to BIG CHEESE")
 
         seq_str = ", ".join(str(k) for k in trial.planned_sequence)
         _tc(screen, f_med, f"Your sequence:  {seq_str}", ACCENT, H // 2 - 100)
@@ -1638,7 +1714,11 @@ def _draw_stage_feedback(screen, fonts, trial, cum_score,
     new_total = cum_score + trial.reward_score
 
     # ── Animated replay of actual sequence ───────────────────
-    _draw_grid(screen, fonts, trial, rp_trail, rp_cursor)
+    # Small cheese "eaten" once the replay cursor passes through it
+    _rp_sg_visited = (trial.sub_goal is not None and
+                      tuple(trial.sub_goal) in rp_trail)
+    _draw_grid(screen, fonts, trial, rp_trail, rp_cursor,
+               sub_goal_visited=_rp_sg_visited)
 
     # ── Right panel ───────────────────────────────────────────
     rx, ry = GR, GT
@@ -1651,6 +1731,18 @@ def _draw_stage_feedback(screen, fonts, trial, cum_score,
     screen.blit(rs, (rx + GRW // 2 - rs.get_width() // 2,
                      ry + 31 - rs.get_height() // 2))
     ry += 70
+
+    # Failure reason — shown under the banner for incorrect trials
+    if not trial.is_correct:
+        if getattr(trial, "wrong_locked_path", False):
+            reason = "Use your locked sequence!"
+        elif getattr(trial, "skipped_sub_goal", False):
+            reason = "Must pass through the SMALL CHEESE!"
+        else:
+            reason = "Did not reach the BIG CHEESE"
+        rs2 = f_xs.render(reason, True, WRONG)
+        screen.blit(rs2, (rx + GRW // 2 - rs2.get_width() // 2, ry))
+        ry += rs2.get_height() + 8
 
     if show_score:
         # Streak indicator
