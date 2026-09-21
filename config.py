@@ -57,6 +57,7 @@ PLANNING_TIME_SEC = 9
 
 # How long they have to actually TYPE their key sequence after planning.
 # If the timer runs out, that trial gets marked as incorrect.
+# NOTE: currently unused — input phase is not time-limited. Reserved for future use.
 INPUT_TIME_SEC = 10
 
 # How long the action / imagery phase lasts after they submit their sequence.

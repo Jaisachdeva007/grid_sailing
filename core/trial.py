@@ -850,7 +850,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
         is_pp   = True
     show_feedback = block_type not in ("familiarization", "guided_practice", "pre_test", "post_test")
 
-    p_time  = config.get("planning_time",   6)
+    from config import PLANNING_TIME_SEC
+    p_time  = config.get("planning_time",   PLANNING_TIME_SEC)
     a_time  = config.get("action_time",     10)
     fb_time = config.get("feedback_time",   4)
     # Jitter ITI between 3 and 5 seconds
@@ -1290,8 +1291,10 @@ def _draw_score_card(screen, fonts, trial, rx, ry, GRW):
     if not trial.is_correct:
         if getattr(trial, "wrong_locked_path", False):
             result_label = "Wrong path — use your sequence!"
+        elif getattr(trial, "skipped_sub_goal", False):
+            result_label = "Missed SMALL CHEESE — must visit it first!"
         else:
-            result_label = "Goal not reached"
+            result_label = "Did not reach BIG CHEESE"
         rows = [
             ("Result",      result_label, DIM, WRONG),
             ("Your score",  "0 pts",      DIM, WRONG),

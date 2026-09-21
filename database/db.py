@@ -211,7 +211,7 @@ def clear_global_repeated_puzzle():
     """Reset the experiment-wide repeated puzzle (use when starting a new cohort)."""
     conn = get_connection()
     conn.execute(
-        "DELETE FROM global_settings WHERE key IN ('rep_start','rep_goal','rep_seq')"
+        "DELETE FROM global_settings WHERE key IN ('rep_start','rep_goal','rep_seq','rep_sub_goal')"
     )
     conn.commit()
     conn.close()
