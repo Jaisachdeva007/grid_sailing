@@ -118,6 +118,9 @@ TRIAL_COLUMNS = [
     "start_col",
     "goal_row",
     "goal_col",
+    "sub_goal_row",
+    "sub_goal_col",
+    "sub_goal_visited",
     # Sequences (human-readable: '1,2,3'; alternative paths separated by '|')
     "planned_sequence",
     "optimal_sequence",
@@ -261,6 +264,7 @@ def _fetch_rows(participant_id=None) -> list:
             s.completed_at AS session_completed_at,
             t.trial_id, t.trial_number, t.grid_type,
             t.start_row, t.start_col, t.goal_row, t.goal_col,
+            t.sub_goal_row, t.sub_goal_col, t.sub_goal_visited,
             t.planned_sequence, t.optimal_sequence, t.all_optimal_sequences,
             t.optimal_length,
             t.number_of_moves,
@@ -330,6 +334,7 @@ def _fetch_summary_rows(participant_id=None) -> list:
             s.completed_at AS session_completed_at,
             t.trial_id, t.trial_number, t.grid_type,
             t.start_row, t.start_col, t.goal_row, t.goal_col,
+            t.sub_goal_row, t.sub_goal_col, t.sub_goal_visited,
             t.planned_sequence, t.optimal_sequence, t.all_optimal_sequences,
             t.optimal_length,
             t.number_of_moves,
@@ -375,6 +380,7 @@ COLUMN_LABELS = {
     "time_to_imagery_start_s":   "time_to_imagery_start_s [MI only: action start → spacebar press]",
     "action_reaction_time_ms":   "action_reaction_time_ms [PP only: action start → first physical key]",
     "action_reaction_time_s":    "action_reaction_time_s [PP only: action start → first physical key]",
+    "sub_goal_visited":          "sub_goal_visited [1 = cursor passed through SMALL CHEESE, 0 = skipped]",
 }
 
 
