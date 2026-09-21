@@ -242,67 +242,78 @@ def _draw_progress(screen, fonts, trial, total, block_type, session_num,
     return pause_rect, res_r
 
 
-def _draw_mouse_icon(surf, cx, cy, eyes_open=True):
-    """Cartoon mouse face drawn procedurally — replaces 'MOUSE' text label."""
-    body = (195, 200, 220)   # blue-gray
-    pink = (220, 145, 158)   # inner ear / nose
-    dark = (18,  18,  36)    # eyes
-    wht  = (245, 248, 255)   # eye shine
+def _draw_mouse_icon(surf, cx, cy, eyes_open=True, cell_sz=80):
+    """Cartoon mouse face — scales to fit inside a cell of inner size cell_sz."""
+    # All pixel values are designed at cell_sz=80; s scales them to the actual cell.
+    s    = min(1.0, cell_sz / 80.0)   # cap at natural size; never stretch above it
+    body = (195, 200, 220)
+    pink = (220, 145, 158)
+    dark = (18,  18,  36)
+    wht  = (245, 248, 255)
 
-    # Ears (drawn first so head overlaps them)
-    for ex in (cx - 22, cx + 22):
-        pygame.draw.circle(surf, body, (ex, cy - 28), 16)
-        pygame.draw.circle(surf, pink, (ex, cy - 28),  9)
+    ear_off = int(22 * s)
+    ear_y   = cy - int(28 * s)
+    ear_r   = max(4, int(16 * s))
+    ear_inner = max(2, int(9 * s))
+    for ex in (cx - ear_off, cx + ear_off):
+        pygame.draw.circle(surf, body, (ex, ear_y), ear_r)
+        pygame.draw.circle(surf, pink, (ex, ear_y), ear_inner)
 
-    # Head
-    pygame.draw.circle(surf, body, (cx, cy - 4), 30)
+    head_r = max(4, int(30 * s))
+    pygame.draw.circle(surf, body, (cx, cy - int(4 * s)), head_r)
 
-    # Body (ellipse below head)
-    pygame.draw.ellipse(surf, body, pygame.Rect(cx - 24, cy + 20, 48, 26))
+    bw = max(4, int(24 * s)); bh = max(3, int(13 * s))
+    pygame.draw.ellipse(surf, body,
+                        pygame.Rect(cx - bw, cy + int(20 * s), bw * 2, bh * 2))
 
-    # Eyes — closed = thin horizontal line (eyelid), open = circle
-    for ex in (cx - 10, cx + 10):
+    eo = int(10 * s)
+    for ex in (cx - eo, cx + eo):
         if eyes_open:
-            pygame.draw.circle(surf, dark, (ex, cy - 8), 4)
-            pygame.draw.circle(surf, wht,  (ex - 1, cy - 10), 1)
+            pygame.draw.circle(surf, dark, (ex, cy - int(8 * s)), max(1, int(4 * s)))
+            pygame.draw.circle(surf, wht,  (ex - 1, cy - int(10 * s)), 1)
         else:
-            pygame.draw.line(surf, dark, (ex - 4, cy - 8), (ex + 4, cy - 8), 2)
+            pygame.draw.line(surf, dark,
+                             (ex - int(4 * s), cy - int(8 * s)),
+                             (ex + int(4 * s), cy - int(8 * s)), 2)
 
-    # Nose
-    pygame.draw.circle(surf, pink, (cx, cy + 4), 4)
+    pygame.draw.circle(surf, pink, (cx, cy + int(4 * s)), max(2, int(4 * s)))
 
-    # Whiskers (3 per side)
-    for side, sign in ((-1, -1), (1, 1)):
-        for i, dy in enumerate((-2, 2, 6)):
-            x0 = cx + sign * 5
-            x1 = cx + sign * 26
-            y0 = cy + 4 + dy
-            y1 = cy + 4 + dy + i * sign * 1
-            pygame.draw.line(surf, (150, 152, 168), (x0, y0), (x1, y1), 1)
+    if s > 0.4:   # skip whiskers at very small sizes — they become noise
+        for sign in (-1, 1):
+            for i, dy in enumerate((-2, 2, 6)):
+                x0 = cx + sign * int(5  * s)
+                x1 = cx + sign * int(26 * s)
+                y0 = cy + int((4 + dy) * s)
+                y1 = y0 + i * sign
+                pygame.draw.line(surf, (150, 152, 168), (x0, y0), (x1, y1), 1)
 
-    # Tail (short wavy line from body)
-    pygame.draw.lines(surf, body, False,
-                      [(cx + 24, cy + 30), (cx + 36, cy + 22),
-                       (cx + 44, cy + 30), (cx + 50, cy + 24)], 2)
+    t_pts = [
+        (cx + int(24 * s), cy + int(30 * s)),
+        (cx + int(36 * s), cy + int(22 * s)),
+        (cx + int(44 * s), cy + int(30 * s)),
+        (cx + int(50 * s), cy + int(24 * s)),
+    ]
+    pygame.draw.lines(surf, body, False, t_pts, max(1, int(2 * s)))
 
 
-def _draw_cheese_icon(surf, cx, cy, small=False):
-    """Cartoon cheese wedge drawn procedurally.
-    small=True draws the SMALL CHEESE (sub-goal) at ~65% scale."""
-    sc      = 0.65 if small else 1.0
+def _draw_cheese_icon(surf, cx, cy, small=False, cell_sz=80):
+    """Cartoon cheese wedge — scales to fit inside a cell of inner size cell_sz.
+    small=True makes it ~45% of cell height (SMALL CHEESE sub-goal)."""
+    # Natural cheese height at sc=1.0: 64px (34 above + 30 below cx,cy)
+    sc      = cell_sz * (0.40 if small else 0.76) / 64.0
     yellow  = (255, 216, 42)
     outline = (190, 148, 14)
     hole    = (148, 100,  8)
 
-    pts = [(cx, cy - int(34*sc)),
-           (cx - int(40*sc), cy + int(30*sc)),
-           (cx + int(40*sc), cy + int(30*sc))]
+    pts = [(cx, cy - int(34 * sc)),
+           (cx - int(40 * sc), cy + int(30 * sc)),
+           (cx + int(40 * sc), cy + int(30 * sc))]
     pygame.draw.polygon(surf, yellow,  pts)
-    pygame.draw.polygon(surf, outline, pts, 2)
+    pygame.draw.polygon(surf, outline, pts, max(1, int(2 * sc)))
 
-    pygame.draw.circle(surf, hole, (cx,               cy + int(8*sc)),  max(2, int(8*sc)))
-    pygame.draw.circle(surf, hole, (cx - int(18*sc),  cy + int(20*sc)), max(2, int(6*sc)))
-    pygame.draw.circle(surf, hole, (cx + int(17*sc),  cy + int(20*sc)), max(2, int(5*sc)))
+    pygame.draw.circle(surf, hole, (cx,               cy + int(8  * sc)), max(2, int(8 * sc)))
+    pygame.draw.circle(surf, hole, (cx - int(18 * sc), cy + int(20 * sc)), max(2, int(6 * sc)))
+    pygame.draw.circle(surf, hole, (cx + int(17 * sc), cy + int(20 * sc)), max(2, int(5 * sc)))
 
 
 def _draw_flame(surf, cx, cy, h=22):
@@ -428,15 +439,16 @@ def _draw_grid(screen, fonts, trial, trail, cursor, show_arrows=False, eyes_open
             pygame.draw.rect(screen, GRID_BORDER, rect, width=1, border_radius=br)
 
             if (r, c) == goal:
-                _draw_cheese_icon(screen, px + sz // 2, py + sz // 2)
+                _draw_cheese_icon(screen, px + sz // 2, py + sz // 2, cell_sz=sz)
             elif sub_goal and (r, c) == sub_goal and not sg_eaten:
-                _draw_cheese_icon(screen, px + sz // 2, py + sz // 2, small=True)
+                _draw_cheese_icon(screen, px + sz // 2, py + sz // 2,
+                                  small=True, cell_sz=sz)
 
     # Cursor — mouse icon travels through the grid
     if cursor:
         icx = GL + cursor[1] * CELL + CELL // 2
         icy = GT + cursor[0] * CELL + CELL // 2
-        _draw_mouse_icon(screen, icx, icy, eyes_open=eyes_open)
+        _draw_mouse_icon(screen, icx, icy, eyes_open=eyes_open, cell_sz=sz)
 
 
 def _stage_header(screen, fonts, tag, tag_col, title, subtitle):
