@@ -32,7 +32,7 @@ from config import (
     SYNC_EVERY_N_TRIALS, SYNC_TIME_SEC,
 )
 from sync.firebase_sync import sync_in_background
-from core.grid import find_valid_paths, apply_key
+from core.grid import find_valid_paths, find_paths_ranged, apply_key
 from core.trial import TrialData, run_trial, run_explore_trial
 from screens.tutorial import run_tutorial
 from database.db import (
@@ -49,53 +49,73 @@ from database.db import (
 
 def build_puzzle_pool():
     """
-    Generate all valid puzzles from all 100 start positions, grouped by (start, goal).
+    Generate all valid (start, sub_goal, goal) triple puzzles where the total
+    path length is exactly MAX_SEQUENCE_LENGTH (7) and the cursor must pass
+    through sub_goal on the way from start to goal.
 
     Each puzzle dict has:
-        start, goal        — unique pair
-        sequence           — one representative optimal sequence
-        sequences          — ALL sequences of minimal length reaching goal
-        length             — minimal path length (all sequences have this length)
+        start, sub_goal, goal  — unique triple
+        sequence               — one representative 7-key sequence via sub_goal
+        sequences              — ALL 7-key sequences via sub_goal
+        length                 — always MAX_SEQUENCE_LENGTH
     """
-    from config import MAX_OPTIMAL_LENGTH
-    from collections import defaultdict
+    from config import MAX_SEQUENCE_LENGTH
 
-    by_pair = defaultdict(list)
+    # Precompute all legs of length 1-6 from every grid position.
+    # leg1_cache[(r,c)] = find_paths_ranged(r, c, 1, 6)  — legs to potential sub-goals
+    # leg2_cache[(r,c,d)] = find_paths_ranged(r, c, d, d) — legs of exactly d steps
+    leg1_cache = {}
+    leg2_cache = {}
+
     for r in range(GRID_SIZE):
         for c in range(GRID_SIZE):
-            for p in find_valid_paths(r, c):
-                key = (tuple(p["start"]), tuple(p["goal"]))
-                by_pair[key].append(p)
+            leg1_cache[(r, c)] = find_paths_ranged(r, c, 1, MAX_SEQUENCE_LENGTH - 1)
+
+    # Build (start, sub_goal, goal) → set of full sequences
+    puzzles_by_triple = {}
+
+    for r in range(GRID_SIZE):
+        for c in range(GRID_SIZE):
+            start = (r, c)
+            for leg1 in leg1_cache[start]:
+                sg_r, sg_c = leg1["goal"]
+                d1 = leg1["length"]
+                d2 = MAX_SEQUENCE_LENGTH - d1   # steps sub_goal → goal
+                if d2 < 1:
+                    continue
+                sub_goal = (sg_r, sg_c)
+                cache_key = (sub_goal, d2)
+                if cache_key not in leg2_cache:
+                    leg2_cache[cache_key] = find_paths_ranged(sg_r, sg_c, d2, d2)
+                for leg2 in leg2_cache[cache_key]:
+                    goal = tuple(leg2["goal"])
+                    if goal == start or goal == sub_goal:
+                        continue
+                    triple = (start, sub_goal, goal)
+                    for s1 in leg1["sequences"]:
+                        for s2 in leg2["sequences"]:
+                            full = tuple(s1) + tuple(s2)
+                            if {1, 2, 3}.issubset(set(full)):
+                                if triple not in puzzles_by_triple:
+                                    puzzles_by_triple[triple] = set()
+                                puzzles_by_triple[triple].add(full)
 
     pool = []
-    for (start_t, goal_t), ps in by_pair.items():
-        min_len = min(p["length"] for p in ps)
-        if min_len > MAX_OPTIMAL_LENGTH:
-            continue
-        optimal_seqs = []
-        for p in ps:
-            if p["length"] == min_len:
-                optimal_seqs.extend(p.get("sequences", [p["sequence"]]))
-        # Only keep puzzles where every optimal path uses all 3 keys, so
-        # participants are never penalised for following the "correct" route.
-        optimal_seqs = [s for s in optimal_seqs if {1, 2, 3}.issubset(set(s))]
-        if not optimal_seqs:
-            continue
+    for (start, sub_goal, goal), seqs_set in puzzles_by_triple.items():
+        seqs = [list(s) for s in seqs_set]
         pool.append({
-            "start":     list(start_t),
-            "goal":      list(goal_t),
-            "sequence":  optimal_seqs[0],
-            "sequences": optimal_seqs,
-            "length":    min_len,
+            "start":     list(start),
+            "sub_goal":  list(sub_goal),
+            "goal":      list(goal),
+            "sequence":  seqs[0],
+            "sequences": seqs,
+            "length":    MAX_SEQUENCE_LENGTH,
         })
 
     n_paths = sum(len(p["sequences"]) for p in pool)
-    print(f"[SESSION] Pool: {len(pool)} unique puzzles, {n_paths} total optimal paths.")
+    print(f"[SESSION] Pool: {len(pool)} unique (start,sub_goal,goal) triples, "
+          f"{n_paths} total sequences.")
 
-    # Safety check: pool must cover every random slot in the experiment.
-    # If it doesn't, random grids WILL repeat — fail loudly at startup rather
-    # than silently during data collection.
-    # (120 = 40 fam + 10 pre_test + 10*6 practice + 10 post_test, at 50% random ratio)
     MIN_REQUIRED = 120
     if len(pool) < MIN_REQUIRED:
         raise RuntimeError(
@@ -116,8 +136,8 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
     repeated_start / repeated_goal: (row, col) tuples or None.
     When set, the repeated puzzle is drawn only from puzzles matching those cells.
 
-    used_pairs: set of (tuple(start), tuple(goal)) pairs used in prior blocks.
-    Random picks exclude these so no random puzzle repeats across blocks.
+    used_pairs: set of (tuple(start), tuple(sub_goal), tuple(goal)) triples used
+    in prior blocks. Random picks exclude these so no random puzzle repeats.
     """
     if repeated_puzzle is None:
         candidates = pool
@@ -132,24 +152,25 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
     n_repeated = round(n_trials * repeated_ratio)
     n_random   = n_trials - n_repeated
 
-    # Repeated trials all use the same puzzle
-    trials = [
-        (repeated_puzzle, "repeated") for _ in range(n_repeated)
-    ]
+    trials = [(repeated_puzzle, "repeated") for _ in range(n_repeated)]
 
-    # Random trials: exclude repeated puzzle and any already-used start/goal pairs
     rep_seqs = frozenset(
         tuple(s) for s in repeated_puzzle.get("sequences", [repeated_puzzle["sequence"]])
     )
+
+    def _triple_key(p):
+        return (tuple(p["start"]),
+                tuple(p.get("sub_goal", [])),
+                tuple(p["goal"]))
+
     _used = used_pairs or set()
     random_pool = [
         p for p in pool
         if p != repeated_puzzle
         and not any(tuple(s) in rep_seqs
                     for s in p.get("sequences", [p["sequence"]]))
-        and (tuple(p["start"]), tuple(p["goal"])) not in _used
+        and _triple_key(p) not in _used
     ]
-    # Fall back progressively if exclusions leave too few puzzles
     if len(random_pool) < n_random:
         random_pool = [
             p for p in pool
@@ -159,7 +180,7 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
         ]
     if not random_pool:
         random_pool = [p for p in pool if p != repeated_puzzle]
-    # Deduplicate by sequence so no two random trials present the same path to solve
+
     seen_seqs: set = set()
     deduped: list = []
     for p in random_pool:
@@ -168,6 +189,7 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
             seen_seqs.add(key)
             deduped.append(p)
     random_pool = deduped if deduped else random_pool
+
     if len(random_pool) >= n_random:
         random_picks = random.sample(random_pool, k=n_random)
     else:
@@ -175,7 +197,7 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
         random_picks = random.sample(tiled, k=n_random)
     trials += [(p, "random") for p in random_picks]
 
-    new_pairs = {(tuple(p["start"]), tuple(p["goal"])) for p in random_picks}
+    new_pairs = {_triple_key(p) for p in random_picks}
     random.shuffle(trials)
     return trials, repeated_puzzle, new_pairs
 
@@ -224,12 +246,16 @@ def run_block(screen, clock, fonts, block_type, block_number,
         stored = get_global_repeated_puzzle()
         if stored:
             # Find the full pool entry so we get all_optimal_sequences too
-            stored_s = tuple(stored["start"])
-            stored_g = tuple(stored["goal"])
+            stored_s  = tuple(stored["start"])
+            stored_sg = tuple(stored["sub_goal"]) if stored.get("sub_goal") else None
+            stored_g  = tuple(stored["goal"])
             pool_match = next(
                 (p for p in pool
-                 if tuple(p["start"]) == stored_s and tuple(p["goal"]) == stored_g),
-                None   # if stored puzzle not in current pool, treat as unset
+                 if tuple(p["start"]) == stored_s
+                 and tuple(p["goal"]) == stored_g
+                 and (stored_sg is None
+                      or tuple(p.get("sub_goal", [])) == stored_sg)),
+                None
             )
             repeated_puzzle = pool_match
 
@@ -361,13 +387,16 @@ def run_block(screen, clock, fonts, block_type, block_number,
             grid_type             = grid_type,
             start                 = tuple(puzzle["start"]),
             goal                  = tuple(puzzle["goal"]),
+            sub_goal              = (tuple(puzzle["sub_goal"])
+                                     if puzzle.get("sub_goal") else None),
             optimal_sequence      = puzzle["sequence"],
             all_optimal_sequences = puzzle.get("sequences", [puzzle["sequence"]]),
             group                 = group,
         )
 
         if is_explore:
-            explore_time_limit = 9.0 if block_type in ("pre_test", "post_test") else None
+            explore_time_limit     = 9.0 if block_type in ("pre_test", "post_test") else None
+            show_timer_in_explore  = block_type not in ("pre_test", "post_test")
             result = run_explore_trial(
                 screen, clock, fonts, trial, config,
                 cumulative_score, session_id,
@@ -375,6 +404,7 @@ def run_block(screen, clock, fonts, block_type, block_number,
                 block_type=block_type,
                 session_state=session_state,
                 time_limit=explore_time_limit,
+                show_timer_display=show_timer_in_explore,
             )
         else:
             result = run_trial(
@@ -761,40 +791,44 @@ def _show_block_intro(screen, clock, fonts, block_type, block_number,
     if block_type == "familiarization" and block_number == 1:
         title = "Familiarization Part One"
         desc  = ("Explore the grid freely! Press 1, 2, or 3 on the keypad to move the MOUSE. "
-                 "When you reach the CHEESE, the next trial starts automatically. "
+                 "Navigate through the SMALL CHEESE to the BIG CHEESE. "
+                 "When you reach the BIG CHEESE, the next trial starts automatically. "
                  "No timer, no score – just learn how the keys move the MOUSE.")
     elif block_type == "familiarization":
         title = "Familiarization Part Two"
         desc  = ("Explore the grid freely! Press 1, 2, or 3 on the keypad to move the MOUSE. "
-                 "When you reach the CHEESE, the next trial starts automatically. "
+                 "Navigate through the SMALL CHEESE to the BIG CHEESE. "
+                 "When you reach the BIG CHEESE, the next trial starts automatically. "
                  "No timer, no score – just learn how the keys move the MOUSE.")
     elif block_type == "pre_test":
         title = "Baseline"
-        desc  = ("You will have 9 seconds to navigate the MOUSE to the CHEESE. Try to find "
-                 "the shortest sequence using all keys at least once.")
+        desc  = ("Navigate the MOUSE through the SMALL CHEESE to the BIG CHEESE. "
+                 "Try to find the shortest sequence using all keys at least once.")
     elif block_type == "post_test":
         title = "Final Block"
         desc  = ("In this block you will go back to FREE PLAY. Trials are NO LONGER split into "
-                 "planning and action stages. You will have 9 seconds to navigate the MOUSE to "
-                 "the CHEESE. Try to find the shortest sequence using all keys at least once.")
+                 "planning and action stages. Navigate the MOUSE through the SMALL CHEESE to the "
+                 "BIG CHEESE. Try to find the shortest sequence using all keys at least once.")
     elif block_type == "practice":
         title = "Practice"
         if is_mi:
-            desc = ("In this block you will see the grid for 9 seconds. As you plan your "
-                    "sequence, enter it into the provided space using the trackpad. After "
-                    "confirming your sequence, you will then be asked to IMAGINE pressing the "
-                    "keys for your planned sequence. Focus on imagining the movements as you "
-                    "just described them to the researcher.")
+            desc = ("In this block you will see the grid for 9 seconds. Navigate the MOUSE "
+                    "through the SMALL CHEESE to the BIG CHEESE. As you plan your sequence, "
+                    "enter it into the provided space using the trackpad. After confirming your "
+                    "sequence, you will then be asked to IMAGINE pressing the keys for your "
+                    "planned sequence. Focus on imagining the movements as you just described "
+                    "them to the researcher.")
         elif is_pp:
-            desc = ("In this block you will see the grid for 9 seconds. As you plan your "
-                    "sequence, enter it into the provided space using the trackpad. After "
-                    "confirming your sequence, you will then be asked to physically press the "
-                    "keys for your planned sequence.")
+            desc = ("In this block you will see the grid for 9 seconds. Navigate the MOUSE "
+                    "through the SMALL CHEESE to the BIG CHEESE. As you plan your sequence, "
+                    "enter it into the provided space using the trackpad. After confirming your "
+                    "sequence, you will then be asked to physically press the keys for your "
+                    "planned sequence.")
         else:  # CTRL
-            desc = ("In this block you will see the grid for 9 seconds. As you plan your "
-                    "sequence, enter it into the provided space using the trackpad. After "
-                    "confirming your sequence, you will immediately receive feedback on your "
-                    "response.")
+            desc = ("In this block you will see the grid for 9 seconds. Navigate the MOUSE "
+                    "through the SMALL CHEESE to the BIG CHEESE. As you plan your sequence, "
+                    "enter it into the provided space using the trackpad. After confirming your "
+                    "sequence, you will immediately receive feedback on your response.")
     else:
         title = block_type.replace("_", " ").title()
         desc  = ""
@@ -1030,7 +1064,7 @@ def _show_score_explanation(screen, clock, fonts):
                  lines=[
                      ("During the practice blocks you will receive feedback on your planned sequences after each trial. You will receive a score for each trial AND a cumulative score.", DIM),
                      ("", DIM),
-                     ("A sequence that successfully moves the MOUSE to the CHEESE using the shortest possible path and all three keys will receive 100 pts. Each additional move beyond the shortest path will result in a 10-pt deduction. If your sequence does not move the MOUSE to the CHEESE, you will receive 0 pts.", DIM),
+                     ("A sequence that successfully moves the MOUSE through the SMALL CHEESE to the BIG CHEESE using the shortest possible path and all three keys will receive 100 pts. Each additional move beyond the shortest path will result in a 5-pt deduction. If your sequence does not move the MOUSE to the BIG CHEESE (or skips the SMALL CHEESE), you will receive 0 pts.", DIM),
                  ],
                  hint_text="Press  SPACE  to continue")
 
@@ -1085,8 +1119,8 @@ def _show_instructions(screen, clock, fonts, group):
         "Welcome",
         ACCENT, None,
         [
-            ("In this task, you will navigate a grid to move a", DIM),
-            ("MOUSE to a piece of CHEESE in as few moves as possible.", DIM),
+            ("In this task, you will navigate a grid to move a MOUSE", DIM),
+            ("through the SMALL CHEESE to the BIG CHEESE in as few moves as possible.", DIM),
             ("", DIM),
             ("There are three sessions in total.", DIM),
         ],
@@ -1099,9 +1133,10 @@ def _show_instructions(screen, clock, fonts, group):
         [
             ("You will see a 10x10 grid.", DIM),
             ("The blue cell is the MOUSE (start).", DIM),
-            ("The yellow cell is the CHEESE (goal).", DIM),
-            ("Navigate the MOUSE to the CHEESE in as few moves as possible", DIM),
-            ("using each key at least once.", DIM),
+            ("The orange cell is the SMALL CHEESE (sub-goal).", DIM),
+            ("The yellow cell is the BIG CHEESE (goal).", DIM),
+            ("Navigate the MOUSE through the SMALL CHEESE to the BIG CHEESE", DIM),
+            ("in as few moves as possible, using each key at least once.", DIM),
         ],
     )
 
