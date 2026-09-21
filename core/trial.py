@@ -160,7 +160,7 @@ def _layout(W, H):
     GAP    = max(32, min(56, W // 36))      # grid↔panel gap
     avail_h = H - HDR - PROG_H - 8
     avail_w = W - 40 - RPANEL - GAP
-    CELL   = max(100, min(170, min(avail_h // GRID_N, avail_w // GRID_N)))
+    CELL   = max(56, min(100, min(avail_h // GRID_N, avail_w // GRID_N)))
     GRID_W = GRID_N * CELL
     TOTAL  = GRID_W + GAP + RPANEL
     GL     = max(20, (W - TOTAL) // 2)
@@ -388,7 +388,8 @@ def _update_draw_particles(screen, particles, dt):
     particles[:] = alive
 
 
-def _draw_grid(screen, fonts, trial, trail, cursor, show_arrows=False, eyes_open=True):
+def _draw_grid(screen, fonts, trial, trail, cursor, show_arrows=False, eyes_open=True,
+               sub_goal_visited: bool = False):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     GL, GT, GR, GRW, CELL = _layout(W, H)
@@ -402,9 +403,12 @@ def _draw_grid(screen, fonts, trial, trail, cursor, show_arrows=False, eyes_open
             sz = CELL - 8
             rect = pygame.Rect(px, py, sz, sz)
 
+            # After visiting sub_goal it is "eaten" — render as trail, not orange
+            sg_eaten = sub_goal_visited and sub_goal and (r, c) == sub_goal
+
             if (r, c) == goal:
                 bg = CELL_GOAL
-            elif sub_goal and (r, c) == sub_goal:
+            elif sub_goal and (r, c) == sub_goal and not sg_eaten:
                 bg = CELL_SUBGOAL
             elif (r, c) in trail:
                 age = time.time() - trail[(r, c)]
@@ -425,7 +429,7 @@ def _draw_grid(screen, fonts, trial, trail, cursor, show_arrows=False, eyes_open
 
             if (r, c) == goal:
                 _draw_cheese_icon(screen, px + sz // 2, py + sz // 2)
-            elif sub_goal and (r, c) == sub_goal:
+            elif sub_goal and (r, c) == sub_goal and not sg_eaten:
                 _draw_cheese_icon(screen, px + sz // 2, py + sz // 2, small=True)
 
     # Cursor — mouse icon travels through the grid
@@ -739,7 +743,8 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                           "EXPLORE", ACCENT,
                           "Find the cheese!",
                           subtitle)
-            _draw_grid(screen, fonts, trial, trail, cursor)
+            _draw_grid(screen, fonts, trial, trail, cursor,
+                       sub_goal_visited=sub_goal_visited)
         elif draw_state == ITI:
             pause_rect, researcher_rect = _draw_stage_iti(
                 screen, fonts, trial, iti_start, iti_dur,
@@ -1694,7 +1699,11 @@ def _draw_stage_feedback(screen, fonts, trial, cum_score,
     new_total = cum_score + trial.reward_score
 
     # ── Animated replay of actual sequence ───────────────────
-    _draw_grid(screen, fonts, trial, rp_trail, rp_cursor)
+    # Small cheese "eaten" once the replay cursor passes through it
+    _rp_sg_visited = (trial.sub_goal is not None and
+                      tuple(trial.sub_goal) in rp_trail)
+    _draw_grid(screen, fonts, trial, rp_trail, rp_cursor,
+               sub_goal_visited=_rp_sg_visited)
 
     # ── Right panel ───────────────────────────────────────────
     rx, ry = GR, GT
