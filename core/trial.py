@@ -724,7 +724,12 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                         state     = ITI
                         iti_start = now_t
 
-        if state == ITI and iti_start and (now_s - iti_start) >= iti_dur:
+            # ITI: researcher presses SPACE to start next trial
+            if state == ITI and ev.type == pygame.KEYDOWN and ev.key == pygame.K_SPACE:
+                state = DONE
+
+        # 5-minute safety auto-advance — SPACE is normally required
+        if state == ITI and iti_start and (now_s - iti_start) >= 300.0:
             state = DONE
 
         if state == DONE:
@@ -1061,6 +1066,10 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     and ev.type == pygame.KEYDOWN and ev.key == pygame.K_SPACE):
                 state = ITI; iti_start = now_s
 
+            # ITI: researcher presses SPACE to start next trial
+            if state == ITI and ev.type == pygame.KEYDOWN and ev.key == pygame.K_SPACE:
+                state = DONE
+
         # Auto-transitions
         if state == PLANNING and show_timer and elapsed >= p_time:
             state = INPUT   # typed_seq and first_key_time carry over from planning
@@ -1080,8 +1089,9 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
             if (now_s - rp_done_time) >= 30.0:
                 state = ITI; iti_start = now_s
 
+        # 5-minute safety auto-advance — SPACE is normally required
         if state == ITI and iti_start:
-            if (now_s - iti_start) >= iti_dur:
+            if (now_s - iti_start) >= 300.0:
                 state = DONE
 
         if state == DONE:
@@ -1644,7 +1654,7 @@ def _draw_stage_action(screen, fonts, trial,
             elapsed_img = time.time() - mi_space_start if mi_space_start else 0
             pulse  = 0.5 + 0.5 * math.sin(elapsed_img * math.pi * 1.8)
             tc     = tuple(int(CORRECT[i] * pulse + (1 - pulse) * 200) for i in range(3))
-            status = f_med.render(f"Imagining…   {elapsed_img:.1f}s", True, tc)
+            status = f_med.render("Imagining…", True, tc)
             screen.blit(status, (cx - status.get_width() // 2, H // 2 - 20))
             rel = f_xs.render("Release  SPACE  when your imagery is complete", True, DIM)
             screen.blit(rel, (cx - rel.get_width() // 2, H // 2 + 24))
@@ -1800,7 +1810,7 @@ def _draw_stage_iti(screen, fonts, trial, iti_start, iti_dur,
     gr_y = cy + r_outer + 16
     screen.blit(gr, (cx - gr.get_width() // 2, gr_y))
 
-    next_lbl = f_xs.render("Next trial starting…", True, DIM)
+    next_lbl = f_xs.render("Press SPACE to continue", True, DIM)
     screen.blit(next_lbl, (cx - next_lbl.get_width() // 2,
                             gr_y + gr.get_height() + 8))
 
