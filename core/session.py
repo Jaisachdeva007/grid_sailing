@@ -234,7 +234,7 @@ def run_block(screen, clock, fonts, block_type, block_number,
     if block_type == "familiarization":
         ratio = FAMILIARIZATION_REPEATED_RATIO
     elif block_type in ("pre_test", "post_test"):
-        ratio = config.get("test_ratio", TEST_REPEATED_RATIO)
+        ratio = TEST_REPEATED_RATIO   # always fixed — researcher setup cannot override test blocks
     else:  # practice
         ratio = config.get("practice_ratio", PRACTICE_REPEATED_RATIO)
 
