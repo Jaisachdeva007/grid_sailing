@@ -1061,11 +1061,6 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
 
             # ACTION: MI — no interaction; auto-advances via timer below
 
-            # FEEDBACK: SPACE to continue once replay has finished
-            if (state == FEEDBACK and rp_done
-                    and ev.type == pygame.KEYDOWN and ev.key == pygame.K_SPACE):
-                state = ITI; iti_start = now_s
-
             # ITI: researcher presses SPACE to start next trial
             if state == ITI and ev.type == pygame.KEYDOWN and ev.key == pygame.K_SPACE:
                 state = DONE
@@ -1084,9 +1079,9 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     rp_done = True
                     rp_done_time = now_s   # record when replay finished
 
-        # Safety auto-advance if participant doesn't press SPACE within 30 s
+        # Auto-advance from feedback to Get Ready after fb_time seconds
         if state == FEEDBACK and rp_done and rp_done_time:
-            if (now_s - rp_done_time) >= 30.0:
+            if (now_s - rp_done_time) >= fb_time:
                 state = ITI; iti_start = now_s
 
         # 5-minute safety auto-advance — SPACE is normally required
