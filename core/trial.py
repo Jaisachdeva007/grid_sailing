@@ -779,7 +779,7 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
         if state == PAUSED:
             _draw_pause_overlay(screen, fonts, trial, total_trials, block_type, sn)
 
-        if draw_state != ITI:
+        if draw_state not in (ITI, JITTER):
             pause_rect, researcher_rect = _draw_progress(
                 screen, fonts, trial, total_trials, block_type, sn,
                 cum_score=cumulative_score)
