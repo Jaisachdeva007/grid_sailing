@@ -57,6 +57,7 @@ COUNTDOWN = "countdown"
 ACTION    = "action"
 FEEDBACK  = "feedback"
 ITI       = "iti"
+JITTER    = "jitter"   # brief random delay after SPACE, before trial starts
 DONE      = "done"
 PAUSED    = "paused"
 
@@ -600,10 +601,11 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
     trail  = {}
     state  = "explore"
     pre_pause_state = "explore"
-    iti_start  = None
-    iti_dur    = random.uniform(3.0, 5.0)
-    trial_id   = None
-    pause_rect = None
+    iti_start    = None
+    jitter_start = None
+    jitter_dur   = 0.0
+    trial_id     = None
+    pause_rect   = None
     researcher_rect = None
     last_frame_t = time.time()
 
@@ -724,12 +726,18 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                         state     = ITI
                         iti_start = now_t
 
-            # ITI: researcher presses SPACE to start next trial
+            # ITI: SPACE triggers jitter then trial start
             if state == ITI and ev.type == pygame.KEYDOWN and ev.key == pygame.K_SPACE:
-                state = DONE
+                state        = JITTER
+                jitter_start = now_s
+                jitter_dur   = random.uniform(0.4, 0.6)
 
-        # 5-minute safety auto-advance — SPACE is normally required
+        # Safety auto-advance from ITI after 5 min (SPACE normally required)
         if state == ITI and iti_start and (now_s - iti_start) >= 300.0:
+            state = JITTER; jitter_start = now_s; jitter_dur = 0.0
+
+        # Jitter → trial start
+        if state == JITTER and jitter_start and (now_s - jitter_start) >= jitter_dur:
             state = DONE
 
         if state == DONE:
@@ -762,10 +770,11 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                           subtitle)
             _draw_grid(screen, fonts, trial, trail, cursor,
                        sub_goal_visited=sub_goal_visited)
-        elif draw_state == ITI:
+        elif draw_state in (ITI, JITTER):
             pause_rect, researcher_rect = _draw_stage_iti(
-                screen, fonts, trial, iti_start, iti_dur,
-                total_trials, block_type, sn, cum_score=cumulative_score)
+                screen, fonts, trial, iti_start, 0,
+                total_trials, block_type, sn, cum_score=cumulative_score,
+                get_ready=(draw_state == JITTER))
 
         if state == PAUSED:
             _draw_pause_overlay(screen, fonts, trial, total_trials, block_type, sn)
@@ -808,6 +817,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
     action_path     = []
     feedback_start  = None
     iti_start       = None
+    jitter_start    = None
+    jitter_dur      = 0.0
     action_start    = None
     trial_id        = None
     blink_on        = True
@@ -1061,9 +1072,11 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
 
             # ACTION: MI — no interaction; auto-advances via timer below
 
-            # ITI: researcher presses SPACE to start next trial
+            # ITI: SPACE triggers jitter then trial start
             if state == ITI and ev.type == pygame.KEYDOWN and ev.key == pygame.K_SPACE:
-                state = DONE
+                state        = JITTER
+                jitter_start = now_s
+                jitter_dur   = random.uniform(0.4, 0.6)
 
         # Auto-transitions
         if state == PLANNING and show_timer and elapsed >= p_time:
@@ -1084,10 +1097,13 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
             if (now_s - rp_done_time) >= fb_time:
                 state = ITI; iti_start = now_s
 
-        # 5-minute safety auto-advance — SPACE is normally required
-        if state == ITI and iti_start:
-            if (now_s - iti_start) >= 300.0:
-                state = DONE
+        # Safety auto-advance from ITI after 5 min (SPACE normally required)
+        if state == ITI and iti_start and (now_s - iti_start) >= 300.0:
+            state = JITTER; jitter_start = now_s; jitter_dur = 0.0
+
+        # Jitter → trial start
+        if state == JITTER and jitter_start and (now_s - jitter_start) >= jitter_dur:
+            state = DONE
 
         if state == DONE:
             break
@@ -1156,11 +1172,12 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     streak=streak, show_score=show_score)
             if particles:
                 _update_draw_particles(screen, particles, dt)
-        elif draw_state == ITI:
+        elif draw_state in (ITI, JITTER):
             pause_rect, researcher_rect = _draw_stage_iti(
-                screen, fonts, trial, iti_start, iti_dur,
+                screen, fonts, trial, iti_start, 0,
                 total_trials, block_type, sn,
-                cum_score=cumulative_score + trial.reward_score)
+                cum_score=cumulative_score + trial.reward_score,
+                get_ready=(draw_state == JITTER))
 
         if state == PAUSED:
             _draw_pause_overlay(screen, fonts, trial, total_trials, block_type, sn)
@@ -1781,13 +1798,17 @@ def _draw_stage_feedback(screen, fonts, trial, cum_score,
 
 
 def _draw_stage_iti(screen, fonts, trial, iti_start, iti_dur,
-                    total_trials, block_type, sn, cum_score: int = 0):
+                    total_trials, block_type, sn, cum_score: int = 0,
+                    get_ready: bool = False):
+    """
+    get_ready=False (ITI):    shows "Press SPACE to continue" — waiting for researcher
+    get_ready=True  (JITTER): shows "Get Ready"               — trial about to start
+    """
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     cx, cy = W // 2, H // 2 - 30
 
-    elapsed   = time.time() - (iti_start or time.time())
-    remaining = max(0, iti_dur - elapsed)
+    elapsed = time.time() - (iti_start or time.time())
 
     pulse   = 0.5 + 0.5 * math.sin(elapsed * math.pi * 1.6)
     r_inner = int(38 + 6  * pulse)
@@ -1801,13 +1822,15 @@ def _draw_stage_iti(screen, fonts, trial, iti_start, iti_dur,
                        (r_outer + 2, r_outer + 2), r_inner)
     screen.blit(ring_surf, (cx - r_outer - 2, cy - r_outer - 2))
 
-    gr = f_big.render("Get Ready", True, WHITE)
-    gr_y = cy + r_outer + 16
-    screen.blit(gr, (cx - gr.get_width() // 2, gr_y))
+    if get_ready:
+        main_text = f_big.render("Get Ready", True, WHITE)
+        sub_text  = None
+    else:
+        main_text = f_big.render("Press SPACE to continue", True, WHITE)
+        sub_text  = None
 
-    next_lbl = f_xs.render("Press SPACE to continue", True, DIM)
-    screen.blit(next_lbl, (cx - next_lbl.get_width() // 2,
-                            gr_y + gr.get_height() + 8))
+    gr_y = cy + r_outer + 16
+    screen.blit(main_text, (cx - main_text.get_width() // 2, gr_y))
 
     return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
                           cum_score=cum_score)
