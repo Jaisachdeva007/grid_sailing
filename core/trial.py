@@ -1785,14 +1785,6 @@ def _draw_stage_feedback(screen, fonts, trial, cum_score,
         screen.blit(tot_s, (rx + GRW - tot_s.get_width() - 16, ry + 12))
         ry += 68
 
-    # ── Press SPACE ───────────────────────────────────────────
-    ry += 6
-    if rp_done:
-        pulse = 0.55 + 0.45 * math.sin(time.time() * math.pi * 1.6)
-        pc = tuple(int(c * pulse) for c in ACCENT)
-        hs = f_sm.render("Press  SPACE  to continue", True, pc)
-        screen.blit(hs, (rx + GRW // 2 - hs.get_width() // 2, ry))
-
     return _draw_progress(screen, fonts, trial, total_trials, block_type, sn,
                           cum_score=new_total)
 
