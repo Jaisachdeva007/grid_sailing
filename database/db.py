@@ -219,9 +219,12 @@ def clear_global_repeated_puzzle():
 
 def get_used_random_pairs(participant_id: str) -> set:
     """
-    Return the set of (start_tuple, sub_goal_tuple, goal_tuple) triples used in
-    random trials for this participant.  Handles legacy 2-element format from
-    pre-sub-goal data by inserting an empty sub_goal tuple.
+    Return the set of sequence tuples used in random trials for this participant.
+
+    New format (v2): each stored item is a list of ints — the key sequence.
+    Legacy format (v1): each stored item is [[row,col], [row,col], [row,col]] —
+    the old (start, sub_goal, goal) triple. Legacy entries are skipped; they came
+    from pre-fix data and the new format takes over from the next block onward.
     """
     import json
     conn = get_connection()
@@ -235,19 +238,18 @@ def get_used_random_pairs(participant_id: str) -> set:
     items = json.loads(row[0])
     result = set()
     for item in items:
-        if len(item) == 3:
-            s, sg, g = item
-            result.add((tuple(s), tuple(sg), tuple(g)))
-        else:
-            s, g = item
-            result.add((tuple(s), (), tuple(g)))
+        if item and isinstance(item[0], int):
+            # v2: sequence of key-press ints
+            result.add(tuple(item))
+        # v1 legacy triples (item[0] is a list) are intentionally dropped —
+        # they can't be compared to v2 sequence tuples, so we start fresh.
     return result
 
 
 def save_used_random_pairs(participant_id: str, pairs: set):
-    """Persist the full set of used random puzzle triples for this participant."""
+    """Persist the set of used random-trial key sequences for this participant."""
     import json
-    serialisable = [[list(s), list(sg), list(g)] for s, sg, g in pairs]
+    serialisable = [list(seq) for seq in pairs]
     conn = get_connection()
     conn.execute(
         "INSERT OR REPLACE INTO global_settings (key, value) VALUES (?, ?)",
