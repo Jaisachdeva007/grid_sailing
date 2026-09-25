@@ -159,23 +159,21 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
         tuple(s) for s in repeated_puzzle.get("sequences", [repeated_puzzle["sequence"]])
     )
 
-    def _triple_key(p):
-        return tuple(p["sequence"])
+    def _all_seqs(p):
+        return frozenset(tuple(s) for s in p.get("sequences", [p["sequence"]]))
 
     _used = used_pairs or set()
     random_pool = [
         p for p in pool
         if p != repeated_puzzle
-        and not any(tuple(s) in rep_seqs
-                    for s in p.get("sequences", [p["sequence"]]))
-        and _triple_key(p) not in _used
+        and not (_all_seqs(p) & rep_seqs)        # no overlap with repeated puzzle
+        and not (_all_seqs(p) & _used)            # no overlap with any prior random sequence
     ]
     if len(random_pool) < n_random:
         random_pool = [
             p for p in pool
             if p != repeated_puzzle
-            and not any(tuple(s) in rep_seqs
-                        for s in p.get("sequences", [p["sequence"]]))
+            and not (_all_seqs(p) & rep_seqs)
         ]
     if not random_pool:
         random_pool = [p for p in pool if p != repeated_puzzle]
@@ -183,9 +181,9 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
     seen_seqs: set = set()
     deduped: list = []
     for p in random_pool:
-        key = tuple(p["sequence"])
-        if key not in seen_seqs:
-            seen_seqs.add(key)
+        p_seqs = _all_seqs(p)
+        if not (p_seqs & seen_seqs):             # no overlap with already-selected puzzles
+            seen_seqs |= p_seqs
             deduped.append(p)
     random_pool = deduped if deduped else random_pool
 
@@ -196,7 +194,9 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
         random_picks = random.sample(tiled, k=n_random)
     trials += [(p, "random") for p in random_picks]
 
-    new_pairs = {_triple_key(p) for p in random_picks}
+    new_pairs: set = set()
+    for p in random_picks:
+        new_pairs |= _all_seqs(p)
     random.shuffle(trials)
     return trials, repeated_puzzle, new_pairs
 
