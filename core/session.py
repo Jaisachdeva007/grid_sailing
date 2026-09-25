@@ -159,31 +159,36 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
         tuple(s) for s in repeated_puzzle.get("sequences", [repeated_puzzle["sequence"]])
     )
 
-    def _all_seqs(p):
-        return frozenset(tuple(s) for s in p.get("sequences", [p["sequence"]]))
-
+    # Cross-block: exclude puzzles whose PRIMARY sequence was already used in a prior block.
+    # We track primaries only (not alternates) so the pool does not deplete across sessions.
+    # Juliet's reported bug — same primary sequence in two blocks even with different sub_goals —
+    # is fully covered: the primary IS the sequence that was pressed / guided in practice.
     _used = used_pairs or set()
     random_pool = [
         p for p in pool
         if p != repeated_puzzle
-        and not (_all_seqs(p) & rep_seqs)        # no overlap with repeated puzzle
-        and not (_all_seqs(p) & _used)            # no overlap with any prior random sequence
+        and not any(tuple(s) in rep_seqs
+                    for s in p.get("sequences", [p["sequence"]]))   # no overlap with repeated puzzle (all seqs)
+        and tuple(p["sequence"]) not in _used                       # primary not used in a prior block
     ]
     if len(random_pool) < n_random:
         random_pool = [
             p for p in pool
             if p != repeated_puzzle
-            and not (_all_seqs(p) & rep_seqs)
+            and not any(tuple(s) in rep_seqs
+                        for s in p.get("sequences", [p["sequence"]]))
         ]
     if not random_pool:
         random_pool = [p for p in pool if p != repeated_puzzle]
 
+    # Within-block: deduplicate by primary sequence so no two random trials
+    # in the same block require the same key sequence.
     seen_seqs: set = set()
     deduped: list = []
     for p in random_pool:
-        p_seqs = _all_seqs(p)
-        if not (p_seqs & seen_seqs):             # no overlap with already-selected puzzles
-            seen_seqs |= p_seqs
+        key = tuple(p["sequence"])
+        if key not in seen_seqs:
+            seen_seqs.add(key)
             deduped.append(p)
     random_pool = deduped if deduped else random_pool
 
@@ -194,9 +199,7 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
         random_picks = random.sample(tiled, k=n_random)
     trials += [(p, "random") for p in random_picks]
 
-    new_pairs: set = set()
-    for p in random_picks:
-        new_pairs |= _all_seqs(p)
+    new_pairs = {tuple(p["sequence"]) for p in random_picks}
     random.shuffle(trials)
     return trials, repeated_puzzle, new_pairs
 

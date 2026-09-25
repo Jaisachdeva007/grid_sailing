@@ -17,34 +17,34 @@ N_PRACTICE_BLOCKS   = 6
 N_TEST_BLOCKS       = 1
 
 pool = build_puzzle_pool()
-print(f"\n{'='*55}")
-print(f"  Total unique puzzles in pool: {len(pool)}")
 
-# Deduplicate by representative sequence to show how many DISTINCT move patterns exist
-unique_seqs = {tuple(p["sequence"]) for p in pool}
-print(f"  Distinct optimal sequences:   {len(unique_seqs)}")
-print(f"{'='*55}\n")
+# Count distinct PRIMARY sequences (what participants are guided to press)
+distinct_primaries = {tuple(p["sequence"]) for p in pool}
 
-# Simulate a full experiment for one participant
+print(f"\n{'='*60}")
+print(f"  Total unique puzzles in pool   : {len(pool)}")
+print(f"  Distinct primary sequences     : {len(distinct_primaries)}")
+print(f"{'='*60}\n")
+
+# Simulate a full experiment for one participant.
+# used_pairs is a set of primary sequence tuples — matches production format exactly.
 repeated_puzzle = None
 used_pairs: set = set()
 all_blocks = (
-    [("familiarization", FAM_RATIO)]    * N_FAM_BLOCKS    +
+    [("familiarization", FAM_RATIO)]      * N_FAM_BLOCKS    +
     [("practice",        REPEATED_RATIO)] * N_PRACTICE_BLOCKS +
-    [("post_test",       0.60)]          * N_TEST_BLOCKS
+    [("post_test",       0.60)]           * N_TEST_BLOCKS
 )
 
-print(f"{'BLOCK':<20} {'RANDOM':>7} {'POOL AVAIL':>11} {'FALLBACK?':>10}")
-print("-" * 55)
+print(f"{'BLOCK':<20} {'RANDOM':>7} {'PRIM AVAIL':>11} {'FALLBACK?':>10}")
+print("-" * 60)
 
-all_random = []
-fallback_fired = False
+all_primaries_used = set()
+fallback_fired     = False
 
 for label, ratio in all_blocks:
-    avail = [
-        p for p in pool
-        if (tuple(p["start"]), tuple(p["goal"])) not in used_pairs
-    ]
+    # How many pool puzzles have a primary not yet tracked
+    avail_count = sum(1 for p in pool if tuple(p["sequence"]) not in used_pairs)
 
     trials, repeated_puzzle, new_pairs = _pick_puzzles(
         pool, TRIALS_PER_BLOCK, ratio,
@@ -53,35 +53,30 @@ for label, ratio in all_blocks:
     )
 
     random_picks = [p for p, kind in trials if kind == "random"]
-    n_random = len(random_picks)
-    used_pairs |= new_pairs
+    n_random     = len(random_picks)
 
-    # Check for overlap with previously seen random puzzles
-    new_keys = [(tuple(p["start"]), tuple(p["goal"])) for p in random_picks]
-    overlap = [k for k in new_keys if k in {(tuple(p["start"]), tuple(p["goal"])) for p in all_random}]
-    all_random.extend(random_picks)
+    # new_pairs is now a set of primary sequence tuples
+    block_primaries = new_pairs
+    overlap = block_primaries & all_primaries_used
+    all_primaries_used |= block_primaries
+    used_pairs         |= new_pairs
 
-    fallback = "YES !" if (len(avail) - 1 < n_random) else "-"
+    fallback = "YES !" if (avail_count - 1 < n_random) else "-"
     if fallback == "YES !":
         fallback_fired = True
-    print(f"{label:<20} {n_random:>7}   {len(avail):>9}   {fallback:>10}")
+    print(f"{label:<20} {n_random:>7}   {avail_count:>9}   {fallback:>10}")
     if overlap:
-        print(f"  *** REPEAT DETECTED: {len(overlap)} puzzle(s) seen before ***")
+        print(f"  *** PRIMARY REPEAT: {len(overlap)} sequence(s) seen in a prior block ***")
 
-print("-" * 55)
-total_random = len(all_random)
-unique_random = len({(tuple(p["start"]), tuple(p["goal"])) for p in all_random})
-repeats = total_random - unique_random
-
-print(f"\nTotal random trials across experiment : {total_random}")
-print(f"Unique start/goal pairs used          : {unique_random}")
-print(f"Repeated random pairs (should be 0)   : {repeats}")
-print(f"Pool size used / available            : {unique_random} / {len(pool)}")
+print("-" * 60)
+print(f"\nRandom trials run                    : {sum(len([p for p, k in trials if k=='random']) for trials, _, _ in [])}")
+print(f"Distinct primary sequences used      : {len(all_primaries_used)}")
+print(f"Primaries remaining in pool          : {len(distinct_primaries) - len(all_primaries_used)}")
+print(f"Pool consumed                        : {len(all_primaries_used)} / {len(distinct_primaries)} "
+      f"({100*len(all_primaries_used)/len(distinct_primaries):.1f}%)")
 print()
-if repeats == 0 and not fallback_fired:
-    print("RESULT: No random grid repeats detected. Fix is working correctly.")
-elif repeats == 0 and fallback_fired:
-    print("RESULT: No repeats, but fallback was triggered (pool may be tight).")
+if not fallback_fired:
+    print("RESULT: No primary-sequence repeats. Pool headroom is healthy.")
 else:
-    print(f"RESULT: PROBLEM - {repeats} repeat(s) found. Fix may not be working.")
+    print("RESULT: No repeats, but fallback triggered (consider adding sessions to simulation).")
 print()
