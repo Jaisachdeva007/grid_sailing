@@ -136,8 +136,9 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
     repeated_start / repeated_goal: (row, col) tuples or None.
     When set, the repeated puzzle is drawn only from puzzles matching those cells.
 
-    used_pairs: set of (tuple(start), tuple(sub_goal), tuple(goal)) triples used
-    in prior blocks. Random picks exclude these so no random puzzle repeats.
+    used_pairs: set of sequence tuples used in prior random trials.  Random picks
+    exclude these so no random key sequence repeats across blocks, regardless of
+    whether sub_goal differs.
     """
     if repeated_puzzle is None:
         candidates = pool
@@ -159,9 +160,7 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
     )
 
     def _triple_key(p):
-        return (tuple(p["start"]),
-                tuple(p.get("sub_goal", [])),
-                tuple(p["goal"]))
+        return tuple(p["sequence"])
 
     _used = used_pairs or set()
     random_pool = [
