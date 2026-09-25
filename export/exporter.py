@@ -123,6 +123,7 @@ TRIAL_COLUMNS = [
     "sub_goal_visited",
     # Sequences (human-readable: '1,2,3'; alternative paths separated by '|')
     "planned_sequence",
+    "actual_sequence_used",
     "optimal_sequence",
     "all_optimal_sequences",
     "optimal_length",
@@ -246,6 +247,29 @@ def _add_derived(row: dict, cumulative_score: int) -> dict:
 
 # ── Fetch functions ──────────────────────────────────────────
 
+def _fetch_actual_sequences(participant_id=None) -> dict:
+    """
+    Return {trial_id: '1,2,3,...'} — the actual keys pressed during each trial
+    in chronological order, reconstructed from the keypresses table.
+    """
+    from collections import defaultdict
+    conn       = _get_conn()
+    pid_filter = "AND t.participant_id = ?" if participant_id else ""
+    params     = (participant_id,) if participant_id else ()
+    rows = conn.execute(f"""
+        SELECT k.trial_id, k.key_pressed
+        FROM keypresses k
+        JOIN trials t ON k.trial_id = t.trial_id
+        WHERE 1=1 {pid_filter}
+        ORDER BY k.trial_id, k.keypress_id
+    """, params).fetchall()
+    conn.close()
+    seqs = defaultdict(list)
+    for r in rows:
+        seqs[r["trial_id"]].append(str(r["key_pressed"]))
+    return {tid: ",".join(keys) for tid, keys in seqs.items()}
+
+
 def _fetch_rows(participant_id=None) -> list:
     """
     Fetch per-keypress rows (one row per key press; trials with no
@@ -298,6 +322,7 @@ def _fetch_rows(participant_id=None) -> list:
     raw = conn.execute(query, params).fetchall()
     conn.close()
 
+    actual_seqs     = _fetch_actual_sequences(participant_id)
     cum_by_pid      = {}
     last_tid_by_pid = {}
     rows            = []
@@ -312,6 +337,7 @@ def _fetch_rows(participant_id=None) -> list:
             cum_by_pid[pid] = cum_by_pid.get(pid, 0) + (d.get("reward_score") or 0)
             last_tid_by_pid[pid] = tid
 
+        d["actual_sequence_used"] = actual_seqs.get(tid, "")
         rows.append(_add_derived(d, cum_by_pid[pid]))
 
     return rows
@@ -355,13 +381,15 @@ def _fetch_summary_rows(participant_id=None) -> list:
     raw = conn.execute(query, params).fetchall()
     conn.close()
 
-    cum_by_pid = {}
-    rows       = []
+    actual_seqs = _fetch_actual_sequences(participant_id)
+    cum_by_pid  = {}
+    rows        = []
 
     for r in raw:
         d   = dict(r)
         pid = d["participant_id"]
         cum_by_pid[pid] = cum_by_pid.get(pid, 0) + (d.get("reward_score") or 0)
+        d["actual_sequence_used"] = actual_seqs.get(d["trial_id"], "")
         rows.append(_add_derived(d, cum_by_pid[pid]))
 
     return rows
@@ -378,6 +406,7 @@ COLUMN_LABELS = {
     "imagery_duration_s":        "imagery_duration_s [MI only: spacebar hold duration]",
     "time_to_imagery_start_ms":  "time_to_imagery_start_ms [MI only: action start → spacebar press]",
     "time_to_imagery_start_s":   "time_to_imagery_start_s [MI only: action start → spacebar press]",
+    "actual_sequence_used":      "actual_sequence_used [keys physically pressed during trial, e.g. 1,2,3,1,2]",
     "action_reaction_time_ms":   "action_reaction_time_ms [PP only: action start → first physical key]",
     "action_reaction_time_s":    "action_reaction_time_s [PP only: action start → first physical key]",
     "sub_goal_visited":          "sub_goal_visited [1 = cursor passed through SMALL CHEESE, 0 = skipped]",
