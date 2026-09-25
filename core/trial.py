@@ -730,7 +730,7 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
             if state == ITI and ev.type == pygame.KEYDOWN and ev.key == pygame.K_SPACE:
                 state        = JITTER
                 jitter_start = now_s
-                jitter_dur   = random.uniform(0.4, 0.6)
+                jitter_dur   = random.uniform(3.0, 5.0)
 
         # Safety auto-advance from ITI after 5 min (SPACE normally required)
         if state == ITI and iti_start and (now_s - iti_start) >= 300.0:
@@ -1076,7 +1076,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
             if state == ITI and ev.type == pygame.KEYDOWN and ev.key == pygame.K_SPACE:
                 state        = JITTER
                 jitter_start = now_s
-                jitter_dur   = random.uniform(0.4, 0.6)
+                jitter_dur   = random.uniform(3.0, 5.0)
 
         # Auto-transitions
         if state == PLANNING and show_timer and elapsed >= p_time:
