@@ -149,6 +149,8 @@ TRIAL_COLUMNS = [
     "action_reaction_time_s",
     # Outcome
     "is_correct",
+    "wrong_locked_path",
+    "skipped_sub_goal",
     "trial_created_at",
 ]
 
@@ -298,8 +300,10 @@ def _fetch_rows(participant_id=None) -> list:
             COALESCE(t.time_to_imagery_start_ms, NULL) AS time_to_imagery_start_ms,
             COALESCE(t.action_reaction_time_ms,  NULL) AS action_reaction_time_ms,
             t.is_correct,
-            COALESCE(t.oob_count, 0) AS oob_count,
-            t.created_at             AS trial_created_at,
+            COALESCE(t.oob_count, 0)           AS oob_count,
+            COALESCE(t.wrong_locked_path, 0)   AS wrong_locked_path,
+            COALESCE(t.skipped_sub_goal, 0)    AS skipped_sub_goal,
+            t.created_at                       AS trial_created_at,
             k.keypress_id,
             k.key_pressed,
             k.cursor_row_before, k.cursor_col_before,
@@ -370,8 +374,10 @@ def _fetch_summary_rows(participant_id=None) -> list:
             COALESCE(t.time_to_imagery_start_ms, NULL) AS time_to_imagery_start_ms,
             COALESCE(t.action_reaction_time_ms,  NULL) AS action_reaction_time_ms,
             t.is_correct,
-            COALESCE(t.oob_count, 0) AS oob_count,
-            t.created_at             AS trial_created_at
+            COALESCE(t.oob_count, 0)           AS oob_count,
+            COALESCE(t.wrong_locked_path, 0)   AS wrong_locked_path,
+            COALESCE(t.skipped_sub_goal, 0)    AS skipped_sub_goal,
+            t.created_at                       AS trial_created_at
         FROM participants p
         JOIN sessions s ON p.participant_id = s.participant_id
         JOIN trials   t ON s.session_id     = t.session_id
@@ -410,6 +416,8 @@ COLUMN_LABELS = {
     "action_reaction_time_ms":   "action_reaction_time_ms [PP only: action start → first physical key]",
     "action_reaction_time_s":    "action_reaction_time_s [PP only: action start → first physical key]",
     "sub_goal_visited":          "sub_goal_visited [1 = cursor passed through SMALL CHEESE, 0 = skipped]",
+    "wrong_locked_path":         "wrong_locked_path [1 = repeated trial penalised for not using locked sequence]",
+    "skipped_sub_goal":          "skipped_sub_goal [1 = reached BIG CHEESE without visiting SMALL CHEESE first]",
 }
 
 
