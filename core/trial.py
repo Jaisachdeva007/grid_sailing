@@ -645,10 +645,11 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                 if resume_r.collidepoint(ev.pos):
                     state = pre_pause_state
                 elif exit_r.collidepoint(ev.pos):
+                    _flush_keypresses(trial_id, trial)
                     return {"paused_exit": True, "reward_score": 0,
                             "is_correct": False,
                             "cumulative_score": cumulative_score,
-                            "trial_id": None, "streak": 0}
+                            "trial_id": trial_id, "streak": 0}
 
             if state == PAUSED:
                 continue
@@ -662,15 +663,17 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     action, target = run_researcher_access(
                         screen, clock, fonts, session_state)
                     if action == "jump":
+                        _flush_keypresses(trial_id, trial)
                         return {"researcher_jump": target, "reward_score": 0,
                                 "is_correct": False,
                                 "cumulative_score": cumulative_score,
-                                "trial_id": None, "streak": 0}
+                                "trial_id": trial_id, "streak": 0}
                     elif action == "exit":
+                        _flush_keypresses(trial_id, trial)
                         return {"paused_exit": True, "reward_score": 0,
                                 "is_correct": False,
                                 "cumulative_score": cumulative_score,
-                                "trial_id": None, "streak": 0}
+                                "trial_id": trial_id, "streak": 0}
 
             # Time limit auto-advance (pre_test / post_test)
             if (state == "explore" and time_limit
@@ -678,6 +681,7 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                 trial.is_correct = False
                 trial.reward_score = 0
                 trial.number_of_moves = move_count
+                trial.sub_goal_visited = sub_goal_visited
                 trial_id = _save(trial, session_id)
                 update_session_progress(session_id, trial.trial_number)
                 state = ITI
@@ -786,17 +790,7 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
 
         pygame.display.flip()
 
-    if trial_id and trial.keypresses_log:
-        for kp in trial.keypresses_log:
-            save_keypress(
-                trial_id=trial_id, participant_id=trial.participant_id,
-                key_pressed=kp["key"],
-                cursor_row_before=kp["before"][0], cursor_col_before=kp["before"][1],
-                cursor_row_after=kp["after"][0],   cursor_col_after=kp["after"][1],
-                timestamp_ms=kp["abs_ms"],
-                time_since_trial_start_ms=kp["rel_ms"],
-                time_since_last_press_ms=kp["iki_ms"],
-            )
+    _flush_keypresses(trial_id, trial)
 
     return {
         "reward_score":     0,
@@ -958,8 +952,20 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                         phys_first_key_t = _now_t
                         if action_start:
                             trial.action_reaction_time_ms = (phys_first_key_t - action_start) * 1000
+                    _iki    = (_now_t - phys_last_key_t) * 1000 if phys_last_key_t else None
+                    _before = _build_path(trial.start, pp_typed_seq)[-1]
                     phys_last_key_t = _now_t
                     pp_typed_seq.append(_pkmap[ev.key])
+                    _after  = apply_key(_before[0], _before[1], _pkmap[ev.key]) or _before
+                    trial.keypresses_log.append({
+                        "key":    _pkmap[ev.key],
+                        "before": list(_before),
+                        "after":  list(_after),
+                        "abs_ms": _now_t * 1000,
+                        "rel_ms": (_now_t - trial.trial_start_time) * 1000,
+                        "iki_ms": _iki,
+                        "phase":  "action",
+                    })
                 elif ev.key == pygame.K_SPACE and len(pp_typed_seq) >= 2:
                     if phys_first_key_t is not None and phys_last_key_t is not None:
                         trial.movement_time_ms = (
@@ -1020,13 +1026,15 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     mi_space_held = False   # clear any in-progress imagery hold
                     action, target = run_researcher_access(screen, clock, fonts, session_state)
                     if action == "jump":
+                        _flush_keypresses(trial_id, trial)
                         return {"researcher_jump": target, "reward_score": 0,
                                 "is_correct": False, "cumulative_score": cumulative_score,
-                                "trial_id": None}
+                                "trial_id": trial_id}
                     elif action == "exit":
+                        _flush_keypresses(trial_id, trial)
                         return {"paused_exit": True, "reward_score": 0,
                                 "is_correct": False, "cumulative_score": cumulative_score,
-                                "trial_id": None}
+                                "trial_id": trial_id}
                     # action == "resume": fall through, trial continues
 
                 elif state == INPUT and ev.button == 1:
@@ -1073,9 +1081,10 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                 if resume_r.collidepoint(ev.pos):
                     state = pre_pause_state
                 elif exit_r.collidepoint(ev.pos):
+                    _flush_keypresses(trial_id, trial)
                     return {"paused_exit": True, "reward_score": 0,
                             "is_correct": False, "cumulative_score": cumulative_score,
-                            "trial_id": None}
+                            "trial_id": trial_id}
 
             if state == PAUSED:
                 continue
@@ -1197,18 +1206,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
         pygame.display.flip()
         clock.tick(60)
 
-    # Save INPUT-phase keypresses (logged for all groups)
-    if trial_id and trial.keypresses_log:
-        for kp in trial.keypresses_log:
-            save_keypress(
-                trial_id=trial_id, participant_id=trial.participant_id,
-                key_pressed=kp["key"],
-                cursor_row_before=kp["before"][0], cursor_col_before=kp["before"][1],
-                cursor_row_after=kp["after"][0],   cursor_col_after=kp["after"][1],
-                timestamp_ms=kp["abs_ms"],
-                time_since_trial_start_ms=kp["rel_ms"],
-                time_since_last_press_ms=kp["iki_ms"],
-            )
+    _flush_keypresses(trial_id, trial)
 
     new_streak = (streak + 1) if trial.is_correct else 0
     return {
@@ -1256,6 +1254,22 @@ def _finalise(trial, used_seq, session_id, locked_sequence=None):
         trial.movement_time_ms = (trial.keypresses_log[-1]["abs_ms"]
                                   - trial.keypresses_log[0]["abs_ms"])
 
+def _flush_keypresses(trial_id, trial):
+    """Flush trial.keypresses_log to the DB. Safe to call more than once — log is not cleared."""
+    if not (trial_id and trial.keypresses_log):
+        return
+    for kp in trial.keypresses_log:
+        save_keypress(
+            trial_id=trial_id, participant_id=trial.participant_id,
+            key_pressed=kp["key"],
+            cursor_row_before=kp["before"][0], cursor_col_before=kp["before"][1],
+            cursor_row_after=kp["after"][0],   cursor_col_after=kp["after"][1],
+            timestamp_ms=kp["abs_ms"],
+            time_since_trial_start_ms=kp["rel_ms"],
+            time_since_last_press_ms=kp["iki_ms"],
+        )
+
+
 def _save(trial, session_id):
     import json
     all_opt_json = (json.dumps(trial.all_optimal_sequences)
@@ -1283,6 +1297,8 @@ def _save(trial, session_id):
         is_correct=trial.is_correct,
         all_optimal_sequences=all_opt_json,
         oob_count=trial.oob_count,
+        wrong_locked_path=int(trial.wrong_locked_path),
+        skipped_sub_goal=int(trial.skipped_sub_goal),
     )
 
 
