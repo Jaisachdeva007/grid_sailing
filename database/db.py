@@ -98,6 +98,8 @@ def initialise_database():
             imagery_duration_ms  REAL,
             is_correct           INTEGER,
             oob_count            INTEGER DEFAULT 0,
+            wrong_locked_path    INTEGER DEFAULT 0,
+            skipped_sub_goal     INTEGER DEFAULT 0,
             created_at           TEXT DEFAULT (datetime('now')),
             FOREIGN KEY (session_id) REFERENCES sessions(session_id)
         )
@@ -154,6 +156,8 @@ def initialise_database():
         "ALTER TABLE trials ADD COLUMN sub_goal_row INTEGER",
         "ALTER TABLE trials ADD COLUMN sub_goal_col INTEGER",
         "ALTER TABLE trials ADD COLUMN sub_goal_visited INTEGER DEFAULT 0",
+        "ALTER TABLE trials ADD COLUMN wrong_locked_path INTEGER DEFAULT 0",
+        "ALTER TABLE trials ADD COLUMN skipped_sub_goal INTEGER DEFAULT 0",
     ]:
         try:
             c.execute(migration)
@@ -541,7 +545,8 @@ def save_trial(session_id, participant_id, trial_number, grid_type,
                imagery_duration_ms, is_correct,
                all_optimal_sequences=None, oob_count=0,
                time_to_imagery_start_ms=None, action_reaction_time_ms=None,
-               sub_goal_row=None, sub_goal_col=None, sub_goal_visited=0):
+               sub_goal_row=None, sub_goal_col=None, sub_goal_visited=0,
+               wrong_locked_path=0, skipped_sub_goal=0):
     """
     Save a completed trial to the database and return its trial_id.
     Called at the end of every trial regardless of outcome.
@@ -556,8 +561,9 @@ def save_trial(session_id, participant_id, trial_number, grid_type,
             reaction_time_ms, movement_time_ms, elapsed_time_s,
             imagery_duration_ms, is_correct, all_optimal_sequences, oob_count,
             time_to_imagery_start_ms, action_reaction_time_ms,
-            sub_goal_row, sub_goal_col, sub_goal_visited
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            sub_goal_row, sub_goal_col, sub_goal_visited,
+            wrong_locked_path, skipped_sub_goal
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         session_id, participant_id, trial_number, grid_type,
         start_row, start_col, goal_row, goal_col,
@@ -566,7 +572,8 @@ def save_trial(session_id, participant_id, trial_number, grid_type,
         reaction_time_ms, movement_time_ms, elapsed_time_s,
         imagery_duration_ms, int(is_correct), all_optimal_sequences, oob_count,
         time_to_imagery_start_ms, action_reaction_time_ms,
-        sub_goal_row, sub_goal_col, int(sub_goal_visited)
+        sub_goal_row, sub_goal_col, int(sub_goal_visited),
+        int(wrong_locked_path), int(skipped_sub_goal)
     ))
     trial_id = cursor.lastrowid
     conn.commit()
