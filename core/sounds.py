@@ -71,12 +71,24 @@ def _build_streak() -> pygame.mixer.Sound:
     return _make_sound(wave.astype(np.float32))
 
 
+def _build_error() -> pygame.mixer.Sound:
+    """Short harsh buzz — warns participant not to press keys during imagery."""
+    dur = 0.20
+    t   = np.linspace(0, dur, int(_RATE * dur), endpoint=False)
+    # Sawtooth-like overtone stack at 220 Hz for a buzzy character
+    wave = sum(np.sin(2 * np.pi * 220 * n * t) / n for n in range(1, 6))
+    env  = np.exp(-12 * t / dur)
+    wave = wave * env * 0.35
+    return _make_sound(wave.astype(np.float32))
+
+
 def load():
     """Pre-build all sounds. Call once at startup after pygame.init()."""
     _init_mixer()
     _sounds["correct"]   = _build_correct()
     _sounds["incorrect"] = _build_incorrect()
     _sounds["streak"]    = _build_streak()
+    _sounds["error"]     = _build_error()
 
 
 def play(name: str):

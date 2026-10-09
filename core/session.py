@@ -200,7 +200,42 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
     trials += [(p, "random") for p in random_picks]
 
     new_pairs = {tuple(p["sequence"]) for p in random_picks}
-    random.shuffle(trials)
+
+    # Chunked ordering (Austin's recommendation): prevents long runs of one
+    # trial type by shuffling in small blocks that mirror the repeated:random
+    # ratio, rather than doing a single shuffle over the full block.
+    if n_repeated > 0 and n_random > 0:
+        g          = math.gcd(n_repeated, n_random)
+        chunk_rep  = n_repeated // g
+        chunk_rand = n_random   // g
+        # Ensure chunk contains at least 2 of each type so genuine
+        # randomisation happens within the chunk (not forced alternation).
+        if chunk_rep + chunk_rand < 4:
+            chunk_rep  *= 2
+            chunk_rand *= 2
+        chunk_template = ["repeated"] * chunk_rep + ["random"] * chunk_rand
+
+        type_seq: list = []
+        while len(type_seq) < n_trials:
+            chunk = chunk_template.copy()
+            random.shuffle(chunk)
+            type_seq.extend(chunk)
+        type_seq = type_seq[:n_trials]
+
+        rep_trials  = [(p, k) for p, k in trials if k == "repeated"]
+        rand_trials = [(p, k) for p, k in trials if k == "random"]
+        ri = rni = 0
+        trials = []
+        for kind in type_seq:
+            if kind == "repeated":
+                trials.append(rep_trials[ri % len(rep_trials)])
+                ri += 1
+            else:
+                trials.append(rand_trials[rni])
+                rni += 1
+    else:
+        random.shuffle(trials)
+
     return trials, repeated_puzzle, new_pairs
 
 
