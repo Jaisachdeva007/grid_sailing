@@ -1518,7 +1518,7 @@ def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
         ry += s_card_h + 10
 
         _b = btns if btns is not None else {}
-        btn_w = (GRW - 24) // 4   # 4 slots: 1, 2, 3, ⌫
+        btn_w = (GRW - 24) // 4   # 4 slots: 1, 2, 3, DEL
         btn_h = 56
         for i, k in enumerate((1, 2, 3)):
             _draw_key_button(screen, fonts,
@@ -1614,7 +1614,7 @@ def _draw_stage_input(screen, fonts, trial, typed_seq, blink_on,
     ry += card_h + 10
 
     # ── Direction buttons (1 / 2 / 3) + backspace ────────────
-    btn_w = (GRW - 36) // 4   # 4 slots: 1, 2, 3, ⌫
+    btn_w = (GRW - 36) // 4   # 4 slots: 1, 2, 3, DEL
     btn_h = 68
     for i, k in enumerate((1, 2, 3)):
         _draw_key_button(screen, fonts,
