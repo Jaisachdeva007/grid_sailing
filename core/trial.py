@@ -938,6 +938,12 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                         trial_id = _save(trial, session_id)
                         update_session_progress(session_id, trial.trial_number)
                         enter_feedback() if show_feedback else enter_iti()
+                elif (ev.type == pygame.KEYDOWN and ev.key in (
+                        pygame.K_1, pygame.K_KP1,
+                        pygame.K_2, pygame.K_KP2,
+                        pygame.K_3, pygame.K_KP3)):
+                    from core.sounds import play as _play_snd
+                    _play_snd("error")
 
             # PP ACTION: participant physically re-types their sequence; SPACE ends trial
             if state == ACTION and is_pp and ev.type == pygame.KEYDOWN:
@@ -1520,7 +1526,7 @@ def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
                              k, _b, f"plan_key{k}")
         _draw_cmd_button(screen, fonts,
                          pygame.Rect(rx + 3 * (btn_w + 12), ry, btn_w, btn_h),
-                         "⌫", AMBER, bool(typed_seq), _b, "plan_backspace")
+                         "DEL", AMBER, bool(typed_seq), _b, "plan_backspace")
         ry += btn_h + 8
 
         if typed_seq:
@@ -1616,7 +1622,7 @@ def _draw_stage_input(screen, fonts, trial, typed_seq, blink_on,
                          k, btns, f"key{k}")
     # Backspace button
     bk_rect = pygame.Rect(rx + 3 * (btn_w + 12), ry, btn_w, btn_h)
-    _draw_cmd_button(screen, fonts, bk_rect, "⌫", AMBER, bool(typed_seq), btns, "backspace")
+    _draw_cmd_button(screen, fonts, bk_rect, "DEL", AMBER, bool(typed_seq), btns, "backspace")
     ry += btn_h + 10
 
     # ── Confirm button (all groups) ───────────────────────────
@@ -1682,15 +1688,14 @@ def _draw_stage_action(screen, fonts, trial,
                       "Motor Imagery",
                       "Vividly imagine pressing your planned sequence from MOUSE to BIG CHEESE")
 
-        seq_str = ", ".join(str(k) for k in trial.planned_sequence)
-        _tc(screen, f_med, f"Your sequence:  {seq_str}", ACCENT, H // 2 - 100)
-
         if not mi_space_held:
-            prompt = f_med.render("Press and hold  SPACE  to begin imagery", True, ACCENT)
+            prompt = f_med.render("Press and hold  SPACE  to see your sequence and begin imagery", True, ACCENT)
             screen.blit(prompt, (cx - prompt.get_width() // 2, H // 2 - 20))
             hint = f_xs.render("Hold until your imagined movement is complete", True, DIM)
             screen.blit(hint, (cx - hint.get_width() // 2, H // 2 + 24))
         else:
+            seq_str = ", ".join(str(k) for k in trial.planned_sequence)
+            _tc(screen, f_med, f"Your sequence:  {seq_str}", ACCENT, H // 2 - 100)
             elapsed_img = time.time() - mi_space_start if mi_space_start else 0
             pulse  = 0.5 + 0.5 * math.sin(elapsed_img * math.pi * 1.8)
             tc     = tuple(int(CORRECT[i] * pulse + (1 - pulse) * 200) for i in range(3))
