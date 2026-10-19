@@ -1426,6 +1426,13 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
             if ev.type == pygame.QUIT:
                 pygame.quit(); import sys; sys.exit()
 
+            # F12 — save screenshot to Desktop
+            if ev.type == pygame.KEYDOWN and ev.key == pygame.K_F12:
+                import datetime, os as _os
+                _ts   = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                _path = _os.path.expanduser(f"~/Desktop/screenshot_{_ts}.png")
+                pygame.image.save(screen, _path)
+
             # Pause toggle
             if ev.type == pygame.KEYDOWN and ev.key in (pygame.K_p, pygame.K_ESCAPE):
                 if state == PAUSED:
