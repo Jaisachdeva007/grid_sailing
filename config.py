@@ -110,7 +110,7 @@ FAMILIARIZATION_BLOCKS = 2
 # 0.72 = 72% repeated, 28% random.
 
 # For practice blocks (the main training phase).
-PRACTICE_REPEATED_RATIO = 0.50
+PRACTICE_REPEATED_RATIO = 0.25
 
 # For pre-test and post-test blocks.
 TEST_REPEATED_RATIO = 0.50
@@ -200,13 +200,6 @@ DEVICE_NAME = DEVICE_ID
 # Path to the Firebase key file. Set this in local_config.py.
 # If it's left as None, cloud sync is simply skipped (no crash).
 FIREBASE_CREDENTIALS = None
-
-# Push to Firebase after this many completed trials.
-SYNC_EVERY_N_TRIALS = 5
-
-# Also push if this many seconds have passed since the last sync
-# — whichever of the two comes first triggers it.
-SYNC_TIME_SEC = 20
 
 # Load per-machine settings (local_config.py is private to each computer
 # and never gets uploaded to GitHub).
