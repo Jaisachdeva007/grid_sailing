@@ -87,6 +87,23 @@ GRID_N = 10
 TRAIL_FADE_SEC = 1.4              # seconds for a cell to fade from fresh to dim
 TRAIL_FRESH    = (110, 170, 255)  # bright blue immediately after stepping on a cell
 
+# ── Mouse upgrade tiers ──────────────────────────────────────
+# Each entry: (min_score, body_rgb, inner_ear_rgb, tier_name, headline, sub_line)
+_MOUSE_TIERS = [
+    (   0, (195, 200, 220), (220, 145, 158), "Mouse",            "",                                ""),
+    (1000, (100, 160, 220), (160, 200, 255), "Scout Mouse",      "1,000 points!",                   "Your mouse has leveled up!"),
+    (2000, (210, 170,  45), (255, 215, 100), "Golden Navigator", "2,000 points!",                   "You’re a Golden Navigator now!"),
+    (3000, (160, 100, 210), (200, 150, 255), "Master Explorer",  "3,000 points!",                   "Master Explorer status unlocked!"),
+]
+
+def _tier_for_score(score: int) -> int:
+    """Return the current tier index (0-based) for the given cumulative score."""
+    tier = 0
+    for i, (threshold, *_) in enumerate(_MOUSE_TIERS):
+        if score >= threshold:
+            tier = i
+    return tier
+
 _COUNTDOWN_FONT = None   # cached to avoid per-frame SysFont allocation
 
 
@@ -244,12 +261,13 @@ def _draw_progress(screen, fonts, trial, total, block_type, session_num,
     return pause_rect, res_r
 
 
-def _draw_mouse_icon(surf, cx, cy, eyes_open=True, cell_sz=80):
+def _draw_mouse_icon(surf, cx, cy, eyes_open=True, cell_sz=80, mouse_tier=0):
     """Cartoon mouse face — scales to fit inside a cell of inner size cell_sz."""
     # All pixel values are designed at cell_sz=80; s scales them to the actual cell.
     s    = min(1.0, cell_sz / 80.0)   # cap at natural size; never stretch above it
-    body = (195, 200, 220)
-    pink = (220, 145, 158)
+    _t   = _MOUSE_TIERS[min(mouse_tier, len(_MOUSE_TIERS) - 1)]
+    body = _t[1]
+    pink = _t[2]
     dark = (18,  18,  36)
     wht  = (245, 248, 255)
 
@@ -402,7 +420,7 @@ def _update_draw_particles(screen, particles, dt):
 
 
 def _draw_grid(screen, fonts, trial, trail, cursor, show_arrows=False, eyes_open=True,
-               sub_goal_visited: bool = False):
+               sub_goal_visited: bool = False, mouse_tier: int = 0):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     GL, GT, GR, GRW, CELL = _layout(W, H)
@@ -450,7 +468,7 @@ def _draw_grid(screen, fonts, trial, trail, cursor, show_arrows=False, eyes_open
     if cursor:
         icx = GL + cursor[1] * CELL + CELL // 2
         icy = GT + cursor[0] * CELL + CELL // 2
-        _draw_mouse_icon(screen, icx, icy, eyes_open=eyes_open, cell_sz=sz)
+        _draw_mouse_icon(screen, icx, icy, eyes_open=eyes_open, cell_sz=sz, mouse_tier=mouse_tier)
 
 
 def _stage_header(screen, fonts, tag, tag_col, title, subtitle):
@@ -802,6 +820,77 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
     }
 
 
+# ── Milestone overlay ─────────────────────────────────────────
+
+def show_milestone_overlay(screen, clock, fonts, tier: int, score: int):
+    """Full-screen celebration shown when the participant unlocks a new mouse tier.
+    Displays for up to 3 s; any key or click advances immediately."""
+    if tier <= 0 or tier >= len(_MOUSE_TIERS):
+        return
+    f_big, f_med, f_sm, f_xs = fonts
+    W, H = screen.get_width(), screen.get_height()
+    cx = W // 2
+
+    _, body_col, ear_col, tier_name, headline, sub_line = _MOUSE_TIERS[tier]
+
+    start = time.time()
+    DURATION = 3.0
+
+    while True:
+        elapsed = time.time() - start
+        if elapsed >= DURATION:
+            break
+
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT:
+                pygame.quit(); import sys; sys.exit()
+            if ev.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
+                return   # early exit on any input
+
+        # Fade-in alpha (0→255 over first 0.35 s, then hold)
+        alpha = min(255, int(255 * elapsed / 0.35))
+
+        overlay = pygame.Surface((W, H), pygame.SRCALPHA)
+        overlay.fill((8, 8, 20, min(alpha, 210)))
+        screen.blit(overlay, (0, 0))
+
+        # Glowing ring behind the mouse
+        ring_r = int(min(W, H) * 0.17)
+        ring_surf = pygame.Surface((ring_r * 2 + 20, ring_r * 2 + 20), pygame.SRCALPHA)
+        pulse = 0.82 + 0.18 * math.sin(elapsed * 4.5)
+        glow_col = tuple(min(255, int(c * pulse)) for c in body_col) + (120,)
+        pygame.draw.circle(ring_surf, glow_col,
+                           (ring_r + 10, ring_r + 10), ring_r, 14)
+        screen.blit(ring_surf, (cx - ring_r - 10, H // 2 - 140 - ring_r - 10))
+
+        # Big mouse icon
+        _draw_mouse_icon(screen, cx, H // 2 - 140, eyes_open=True,
+                         cell_sz=120, mouse_tier=tier)
+
+        # Tier badge
+        badge_surf = f_xs.render(tier_name.upper(), True, body_col)
+        badge_bg   = pygame.Rect(cx - badge_surf.get_width() // 2 - 10,
+                                 H // 2 - 50, badge_surf.get_width() + 20, 26)
+        pygame.draw.rect(screen, (*body_col, 60), badge_bg, border_radius=13)
+        screen.blit(badge_surf, (badge_bg.x + 10, badge_bg.y + 4))
+
+        # Headline
+        hl = f_big.render(headline, True, WHITE)
+        screen.blit(hl, (cx - hl.get_width() // 2, H // 2 - 10))
+
+        # Sub-line
+        sl = f_med.render(sub_line, True, DIM)
+        screen.blit(sl, (cx - sl.get_width() // 2, H // 2 + 50))
+
+        # "tap to continue" hint fades in after 0.8 s
+        if elapsed > 0.8:
+            hint = f_xs.render("Tap to continue", True, (70, 70, 110))
+            screen.blit(hint, (cx - hint.get_width() // 2, H // 2 + 100))
+
+        pygame.display.flip()
+        clock.tick(60)
+
+
 # ── Main trial runner ─────────────────────────────────────────
 
 def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
@@ -810,7 +899,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
               streak: int = 0, show_timer: bool = True,
               show_score: bool = True,
               session_state: dict = None,
-              locked_sequence=None) -> dict:
+              locked_sequence=None,
+              mouse_tier: int = 0) -> dict:
 
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
@@ -1165,7 +1255,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                 total_trials, block_type, sn,
                 cum_score=cumulative_score, show_timer=show_timer,
                 eyes_open=blink_on, amb_particles=amb_particles,
-                typed_seq=typed_seq, btns=btns)
+                typed_seq=typed_seq, btns=btns, mouse_tier=mouse_tier)
         elif draw_state == INPUT:
             pause_rect, researcher_rect = _draw_stage_input(
                 screen, fonts, trial, typed_seq, blink_on,
@@ -1202,7 +1292,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     screen, fonts, trial, cumulative_score,
                     rp_cursor, rp_trail, rp_done,
                     total_trials, block_type, sn,
-                    streak=streak, show_score=show_score)
+                    streak=streak, show_score=show_score, mouse_tier=mouse_tier)
             if particles:
                 _update_draw_particles(screen, particles, dt)
         elif draw_state in (ITI, JITTER):
@@ -1445,7 +1535,7 @@ def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
                          total_trials, block_type, sn, cum_score: int = 0,
                          show_timer: bool = True, eyes_open: bool = True,
                          amb_particles: list = None, typed_seq: list = None,
-                         btns: dict = None):
+                         btns: dict = None, mouse_tier: int = 0):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     GL, GT, GR, GRW, CELL = _layout(W, H)
@@ -1488,7 +1578,7 @@ def _draw_stage_planning(screen, fonts, trial, elapsed, p_time,
             pygame.draw.circle(s, col, (2, 2), 2)
             screen.blit(s, (int(p["x"]) - 2, int(p["y"]) - 2))
 
-    _draw_grid(screen, fonts, trial, {}, trial.start, eyes_open=eyes_open)
+    _draw_grid(screen, fonts, trial, {}, trial.start, eyes_open=eyes_open, mouse_tier=mouse_tier)
 
     rx, ry = GR, GT
 
@@ -1752,7 +1842,7 @@ def _draw_stage_action(screen, fonts, trial,
 def _draw_stage_feedback(screen, fonts, trial, cum_score,
                          rp_cursor, rp_trail, rp_done,
                          total_trials, block_type, sn,
-                         streak: int = 0, show_score: bool = True):
+                         streak: int = 0, show_score: bool = True, mouse_tier: int = 0):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     GL, GT, GR, GRW, CELL = _layout(W, H)
@@ -1769,7 +1859,7 @@ def _draw_stage_feedback(screen, fonts, trial, cum_score,
     _rp_sg_visited = (trial.sub_goal is not None and
                       tuple(trial.sub_goal) in rp_trail)
     _draw_grid(screen, fonts, trial, rp_trail, rp_cursor,
-               sub_goal_visited=_rp_sg_visited)
+               sub_goal_visited=_rp_sg_visited, mouse_tier=mouse_tier)
 
     # ── Right panel ───────────────────────────────────────────
     rx, ry = GR, GT

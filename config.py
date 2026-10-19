@@ -118,6 +118,9 @@ TEST_REPEATED_RATIO = 0.50
 # For familiarisation — always fully random. Don't change this.
 FAMILIARIZATION_REPEATED_RATIO = 0.00
 
+# Points threshold at which participants unlock a mouse upgrade and see the milestone overlay.
+SCORE_MILESTONE = 1000
+
 
 # ── Experimental Groups ───────────────────────────────────────
 # The list that appears in the Group dropdown on the setup screen.
