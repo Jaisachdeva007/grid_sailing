@@ -997,6 +997,8 @@ def _draw_mouse_accessory(surf, cx: int, cy: int, tier_idx: int, s: float):
     """Draw the tier cosmetic (hat / crown / wreath / crown+cape) on surf."""
     if tier_idx < 2:
         return
+    # Mirror _draw_mouse_icon's cap: mouse head never scales past s=1.0
+    s = min(s, 1.0)
     head_top_y = cy - int(34 * s)
 
     if tier_idx == 2:  # party hat
