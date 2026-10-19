@@ -1020,9 +1020,9 @@ def _draw_mouse_accessory(surf, cx: int, cy: int, tier_idx: int, s: float):
                            (cx, head_top_y - hat_h), max(3, int(6 * s)))
 
     elif tier_idx == 3:  # 3-point crown
-        crown_bw = int(40 * s)
-        crown_h  = int(26 * s)
-        tip_h    = int(24 * s)
+        crown_bw = int(33 * s)
+        crown_h  = int(21 * s)
+        tip_h    = int(19 * s)
         band_y   = head_top_y - crown_h
 
         # Tapered band (trapezoid — slightly wider at bottom)
@@ -1037,7 +1037,7 @@ def _draw_mouse_accessory(surf, cx: int, cy: int, tier_idx: int, s: float):
 
         # 3 tall triangular points
         for off in [-int(crown_bw * 0.75), 0, int(crown_bw * 0.75)]:
-            hw = int(11 * s)
+            hw = int(9 * s)
             tip_pts = [
                 (cx + off - hw, band_y + int(2 * s)),
                 (cx + off,      band_y - tip_h),
@@ -1053,14 +1053,14 @@ def _draw_mouse_accessory(surf, cx: int, cy: int, tier_idx: int, s: float):
 
         # Jewels with specular highlight dot
         jewel_y = band_y + crown_h // 2
-        for ox, col in [(-int(17 * s), (230, 50, 50)),
+        for ox, col in [(-int(14 * s), (230, 50, 50)),
                         (0,             (60, 160, 255)),
-                        (int(17 * s),   (50, 200, 60))]:
-            r = max(3, int(5 * s))
+                        (int(14 * s),   (50, 200, 60))]:
+            r = max(2, int(4 * s))
             pygame.draw.circle(surf, col, (cx + ox, jewel_y), r)
             pygame.draw.circle(surf, (255, 255, 255),
                                (cx + ox - max(1, r // 3), jewel_y - max(1, r // 3)),
-                               max(1, int(2 * s)))
+                               max(1, int(1.5 * s)))
 
     elif tier_idx == 4:  # laurel wreath
         head_r   = int(30 * s)
@@ -1098,8 +1098,8 @@ def _draw_mouse_accessory(surf, cx: int, cy: int, tier_idx: int, s: float):
             surf.blit(cape, (cx - ox, cy - oy))
 
         # 5-point crown: tall-short-tall-short-tall alternating tips
-        crown_bw = int(44 * s)
-        crown_h  = int(28 * s)
+        crown_bw = int(37 * s)
+        crown_h  = int(23 * s)
         band_y   = head_top_y - crown_h
 
         band_pts = [
@@ -1111,11 +1111,11 @@ def _draw_mouse_accessory(surf, cx: int, cy: int, tier_idx: int, s: float):
         pygame.draw.polygon(surf, (175, 135, 8), band_pts)
         pygame.draw.polygon(surf, (255, 215, 0), band_pts, max(1, int(2 * s)))
 
-        tip_heights = [int(28*s), int(16*s), int(34*s), int(16*s), int(28*s)]
+        tip_heights = [int(23*s), int(13*s), int(28*s), int(13*s), int(23*s)]
         n = len(tip_heights)
         for i, th in enumerate(tip_heights):
             tx = cx - crown_bw + int(i * crown_bw * 2 / (n - 1))
-            hw = int(8 * s)
+            hw = int(7 * s)
             tip_pts = [
                 (tx - hw, band_y + int(2 * s)),
                 (tx,      band_y - th),
