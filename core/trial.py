@@ -1019,25 +1019,48 @@ def _draw_mouse_accessory(surf, cx: int, cy: int, tier_idx: int, s: float):
         pygame.draw.circle(surf, (255, 240, 80),
                            (cx, head_top_y - hat_h), max(3, int(6 * s)))
 
-    elif tier_idx == 3:  # crown
-        crown_h  = int(24 * s)
-        crown_bw = int(34 * s)
-        base = pygame.Rect(cx - crown_bw, head_top_y - crown_h,
-                           crown_bw * 2, crown_h)
-        pygame.draw.rect(surf, (200, 155, 15), base)
-        pygame.draw.rect(surf, (255, 210, 50), base, width=max(1, int(2 * s)))
-        for off in (-crown_bw, 0, crown_bw):
-            tip_y = head_top_y - crown_h - int(16 * s)
-            pygame.draw.polygon(surf, (220, 175, 20), [
-                (cx + off - int(9 * s), head_top_y - crown_h),
-                (cx + off,              tip_y),
-                (cx + off + int(9 * s), head_top_y - crown_h)])
-        for ox, col in [(-int(18*s), (220,50,50)),
-                        (0,          (50,180,255)),
-                        (int(18*s),  (50,200,60))]:
-            pygame.draw.circle(surf, col,
-                               (cx + ox, head_top_y - crown_h // 2),
-                               max(2, int(4 * s)))
+    elif tier_idx == 3:  # 3-point crown
+        crown_bw = int(40 * s)
+        crown_h  = int(26 * s)
+        tip_h    = int(24 * s)
+        band_y   = head_top_y - crown_h
+
+        # Tapered band (trapezoid — slightly wider at bottom)
+        band_pts = [
+            (cx - crown_bw - int(2 * s), head_top_y),
+            (cx + crown_bw + int(2 * s), head_top_y),
+            (cx + crown_bw,              band_y),
+            (cx - crown_bw,              band_y),
+        ]
+        pygame.draw.polygon(surf, (185, 140, 12), band_pts)
+        pygame.draw.polygon(surf, (255, 215, 45), band_pts, max(1, int(2 * s)))
+
+        # 3 tall triangular points
+        for off in [-int(crown_bw * 0.75), 0, int(crown_bw * 0.75)]:
+            hw = int(11 * s)
+            tip_pts = [
+                (cx + off - hw, band_y + int(2 * s)),
+                (cx + off,      band_y - tip_h),
+                (cx + off + hw, band_y + int(2 * s)),
+            ]
+            pygame.draw.polygon(surf, (220, 175, 20), tip_pts)
+            pygame.draw.polygon(surf, (255, 215, 50), tip_pts, max(1, int(1 * s)))
+
+        # Re-draw top edge to clean up point bases
+        pygame.draw.line(surf, (255, 215, 45),
+                         (cx - crown_bw, band_y), (cx + crown_bw, band_y),
+                         max(1, int(2 * s)))
+
+        # Jewels with specular highlight dot
+        jewel_y = band_y + crown_h // 2
+        for ox, col in [(-int(17 * s), (230, 50, 50)),
+                        (0,             (60, 160, 255)),
+                        (int(17 * s),   (50, 200, 60))]:
+            r = max(3, int(5 * s))
+            pygame.draw.circle(surf, col, (cx + ox, jewel_y), r)
+            pygame.draw.circle(surf, (255, 255, 255),
+                               (cx + ox - max(1, r // 3), jewel_y - max(1, r // 3)),
+                               max(1, int(2 * s)))
 
     elif tier_idx == 4:  # laurel wreath
         head_r   = int(30 * s)
@@ -1073,26 +1096,48 @@ def _draw_mouse_accessory(surf, cx: int, cy: int, tier_idx: int, s: float):
                           max(1, int(2 * s)))
         surf.blit(cape, (cx - ox, cy - oy))
 
-        # Fancy 5-point crown
+        # 5-point crown: tall-short-tall-short-tall alternating tips
+        crown_bw = int(44 * s)
         crown_h  = int(28 * s)
-        crown_bw = int(38 * s)
-        base = pygame.Rect(cx - crown_bw, head_top_y - crown_h,
-                           crown_bw * 2, crown_h)
-        pygame.draw.rect(surf, (175, 125, 5), base)
-        pygame.draw.rect(surf, (255, 215, 0), base, width=max(1, int(2 * s)))
-        step = max(1, crown_bw // 2)
-        for i, off in enumerate(range(-crown_bw, crown_bw + 1, step)):
-            tip_y = head_top_y - crown_h - int((12 + (i % 3) * 4) * s)
-            pygame.draw.polygon(surf, (220, 185, 10), [
-                (cx + off - int(7 * s), head_top_y - crown_h),
-                (cx + off,              tip_y),
-                (cx + off + int(7 * s), head_top_y - crown_h)])
-        for j, col in enumerate([(255,50,50),(255,230,50),(50,180,255),
-                                  (50,210,60),(255,80,210)]):
-            ox2 = int((-2 + j) * (crown_bw // 2))
-            pygame.draw.circle(surf, col,
-                               (cx + ox2, head_top_y - crown_h // 2),
-                               max(2, int(4 * s)))
+        band_y   = head_top_y - crown_h
+
+        band_pts = [
+            (cx - crown_bw - int(2 * s), head_top_y),
+            (cx + crown_bw + int(2 * s), head_top_y),
+            (cx + crown_bw,              band_y),
+            (cx - crown_bw,              band_y),
+        ]
+        pygame.draw.polygon(surf, (175, 135, 8), band_pts)
+        pygame.draw.polygon(surf, (255, 215, 0), band_pts, max(1, int(2 * s)))
+
+        tip_heights = [int(28*s), int(16*s), int(34*s), int(16*s), int(28*s)]
+        n = len(tip_heights)
+        for i, th in enumerate(tip_heights):
+            tx = cx - crown_bw + int(i * crown_bw * 2 / (n - 1))
+            hw = int(8 * s)
+            tip_pts = [
+                (tx - hw, band_y + int(2 * s)),
+                (tx,      band_y - th),
+                (tx + hw, band_y + int(2 * s)),
+            ]
+            pygame.draw.polygon(surf, (225, 185, 15), tip_pts)
+            pygame.draw.polygon(surf, (255, 215, 30), tip_pts, max(1, int(1 * s)))
+
+        pygame.draw.line(surf, (255, 215, 0),
+                         (cx - crown_bw, band_y), (cx + crown_bw, band_y),
+                         max(1, int(2 * s)))
+
+        # 5 jewels with highlight dot
+        jewel_y = band_y + crown_h // 2
+        jewel_cols = [(255, 50, 50), (255, 215, 0), (60, 160, 255),
+                      (50, 200, 60), (255, 80, 210)]
+        for j, col in enumerate(jewel_cols):
+            tx = cx - crown_bw + int(j * crown_bw * 2 / (n - 1))
+            r = max(3, int(4 * s))
+            pygame.draw.circle(surf, col, (tx, jewel_y), r)
+            pygame.draw.circle(surf, (255, 255, 255),
+                               (tx - max(1, r // 3), jewel_y - max(1, r // 3)),
+                               max(1, int(1.5 * s)))
 
 
 def _draw_mouse_with_animation(surf, cx: int, cy: int,
@@ -1224,8 +1269,9 @@ def show_milestone_overlay(screen, clock, fonts, tier: int, score: int):
 
         # Tier badge
         bs     = f_xs.render(tier_name.upper(), True, body_col)
+        badge_y = MCY + icon_sz // 2 + 16
         bb     = pygame.Rect(cx - bs.get_width() // 2 - 14,
-                             MCY + icon_sz // 2 + 12,
+                             badge_y,
                              bs.get_width() + 28, 28)
         pygame.draw.rect(screen, (*body_col, int(55 * fade)), bb, border_radius=14)
         screen.blit(bs, (bb.x + 14, bb.y + 5))
@@ -1236,12 +1282,12 @@ def show_milestone_overlay(screen, clock, fonts, tier: int, score: int):
         displayed = int(prev_milestone +
                         (current_milestone - prev_milestone) * _ease_out_cubic(t_c))
 
-        hl_y = MCY + icon_sz // 2 + 50 + int(14 * (1 - fade))
+        hl_y = badge_y + 28 + 18 + int(10 * (1 - fade))
         hl   = f_big.render(f"{displayed:,} points!", True, WHITE)
         screen.blit(hl, (cx - hl.get_width() // 2, hl_y))
 
         sl = f_med.render(sub_line, True, DIM)
-        screen.blit(sl, (cx - sl.get_width() // 2, hl_y + 60))
+        screen.blit(sl, (cx - sl.get_width() // 2, hl_y + 76))
 
         # Tier-5 white flash fades out over first 0.2 s
         if tier == 5 and elapsed < 0.20:
@@ -1255,7 +1301,7 @@ def show_milestone_overlay(screen, clock, fonts, tier: int, score: int):
             hint_fade = min(1.0, (elapsed - 0.85) / 0.4)
             hint = f_xs.render("Tap to continue", True,
                                 tuple(int(c * hint_fade) for c in (90, 90, 140)))
-            screen.blit(hint, (cx - hint.get_width() // 2, hl_y + 108))
+            screen.blit(hint, (cx - hint.get_width() // 2, hl_y + 138))
 
         pygame.display.flip()
         clock.tick(60)
