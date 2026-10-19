@@ -537,6 +537,22 @@ def get_resume_point(participant_id, session_number, block_type, block_number):
     return dict(row) if row else None
 
 
+# ── Milestone score ─────────────────────────────────────────
+
+def get_practice_score_total(participant_id: str) -> int:
+    """Sum of reward_score across all completed practice-block trials for this participant.
+    Used to restore the milestone cumulative score when a new session starts."""
+    conn = get_connection()
+    row  = conn.execute("""
+        SELECT COALESCE(SUM(t.reward_score), 0) AS total
+        FROM trials t
+        JOIN sessions s ON t.session_id = s.session_id
+        WHERE s.participant_id = ? AND s.block_type = 'practice'
+    """, (participant_id,)).fetchone()
+    conn.close()
+    return int(row["total"]) if row else 0
+
+
 # ── Trial functions ──────────────────────────────────────────
 
 def save_trial(session_id, participant_id, trial_number, grid_type,

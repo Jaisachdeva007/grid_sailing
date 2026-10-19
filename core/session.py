@@ -40,6 +40,7 @@ from database.db import (
     get_used_random_pairs, save_used_random_pairs,
     get_locked_sequence, save_locked_sequence,
     get_lock_candidate, update_lock_candidate,
+    get_practice_score_total,
 )
 
 
@@ -362,7 +363,10 @@ def run_block(screen, clock, fonts, block_type, block_number,
         _show_try_it_yourself_practice_intro(screen, clock, fonts)
 
     streak             = 0
-    milestone_tier     = _tier_for_score(cumulative_score)   # tier already earned from prior blocks
+    is_practice        = (block_type == "practice")
+    # Milestone tiers and overlays are only active during practice blocks.
+    # Non-practice blocks always show the default (tier 0) mouse.
+    milestone_tier     = _tier_for_score(cumulative_score) if is_practice else 0
 
     # Load this participant's locked repeated-puzzle sequence (None until 3 optimal solves)
     locked_sequence = get_locked_sequence(participant_id)
@@ -512,11 +516,12 @@ def run_block(screen, clock, fonts, block_type, block_number,
         cumulative_score = result["cumulative_score"]
         streak           = result.get("streak", 0)
 
-        # Check for mouse tier upgrade
-        new_tier = _tier_for_score(cumulative_score)
-        if new_tier > milestone_tier:
-            show_milestone_overlay(screen, clock, fonts, new_tier, cumulative_score)
-            milestone_tier = new_tier
+        # Milestone check: only during practice blocks
+        if is_practice:
+            new_tier = _tier_for_score(cumulative_score)
+            if new_tier > milestone_tier:
+                show_milestone_overlay(screen, clock, fonts, new_tier, cumulative_score)
+                milestone_tier = new_tier
 
         i += 1
 
@@ -590,11 +595,12 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
     pool = build_puzzle_pool()
 
     block_sequence      = SESSION_STRUCTURE.get(session_number, [])
-    cumulative_score    = 0
     repeated_puzzle     = None   # fixed across the whole session
     start_from_block    = config.get("start_from_block", 1)
     # Load previously used random puzzle pairs across all prior blocks/sessions
     used_random_pairs   = get_used_random_pairs(participant_id)
+    # Milestone cumulative score — practice blocks only, continuous across sessions
+    practice_cumulative = get_practice_score_total(participant_id)
 
     # Auto-advance past already-completed blocks so a restart never re-runs them.
     completed_blocks = get_completed_blocks(participant_id, session_number)
@@ -636,6 +642,10 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
                                    "What did you notice? How did the keys feel to press?",
                                    "What sounds (if any) did the keys make?"])
 
+        # Practice blocks use the continuous cross-session practice score;
+        # all other block types start at 0 (score UI is hidden during them anyway).
+        block_start_score = practice_cumulative if block_type == "practice" else 0
+
         result = run_block(
             screen             = screen,
             clock              = clock,
@@ -648,7 +658,7 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
             config             = config,
             pool               = pool,
             repeated_puzzle    = repeated_puzzle,
-            cumulative_score   = cumulative_score,
+            cumulative_score   = block_start_score,
             guided_gate_trial  = guided_gate,
             used_random_pairs  = used_random_pairs,
         )
@@ -656,7 +666,9 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
         if result == "exited":
             return   # participant exited mid-session
 
-        cumulative_score, repeated_puzzle, new_pairs = result
+        block_final, repeated_puzzle, new_pairs = result
+        if block_type == "practice":
+            practice_cumulative = block_final
         used_random_pairs |= new_pairs
         save_used_random_pairs(participant_id, used_random_pairs)
 
@@ -670,7 +682,7 @@ def run_session(screen, clock, fonts, config: dict, participant: dict):
                         block_num=block_idx + 1,
                         total_blocks=len(block_sequence))
 
-    _show_session_complete(screen, clock, fonts, session_number, cumulative_score, group)
+    _show_session_complete(screen, clock, fonts, session_number, practice_cumulative, group)
 
 
 # ── Between-block screens ─────────────────────────────────────
