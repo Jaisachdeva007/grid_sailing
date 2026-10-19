@@ -315,7 +315,46 @@ for name, fn in [
     test(name, fn)
 
 
-# ── 9. Pool diagnostics ───────────────────────────────────────
+# ── 9. Mouse tier system ─────────────────────────────────────
+
+print("\n── Mouse tier system ──")
+
+def test_tier_thresholds():
+    from core.trial import _tier_for_score, _MOUSE_TIERS
+    thresholds = [t[0] for t in _MOUSE_TIERS]
+    for i, thresh in enumerate(thresholds):
+        assert _tier_for_score(thresh) == i, \
+            f"Score {thresh} should give tier {i}, got {_tier_for_score(thresh)}"
+        if thresh > 0:
+            assert _tier_for_score(thresh - 1) == i - 1, \
+                f"Score {thresh - 1} should give tier {i - 1}"
+
+def test_tier_names():
+    from core.trial import _MOUSE_TIERS
+    names = [t[3] for t in _MOUSE_TIERS]
+    expected = ["Mouse", "Scout Mouse", "Golden Navigator",
+                "Master Explorer", "Emerald Champion", "Diamond Legend"]
+    assert names == expected, f"Tier names mismatch: {names}"
+
+def test_six_tiers_defined():
+    from core.trial import _MOUSE_TIERS
+    assert len(_MOUSE_TIERS) == 6, f"Expected 6 tiers, got {len(_MOUSE_TIERS)}"
+
+def test_tier_at_15k():
+    from core.trial import _tier_for_score
+    assert _tier_for_score(15000) == 5, "15,000 pts should give tier 5 (Diamond Legend)"
+    assert _tier_for_score(99999) == 5, "Score beyond max tier should stay at tier 5"
+
+for name, fn in [
+    ("tier thresholds map correctly (0/3k/6k/9k/12k/15k)", test_tier_thresholds),
+    ("all 6 tier names present in order", test_tier_names),
+    ("6 tiers defined in _MOUSE_TIERS", test_six_tiers_defined),
+    ("score ≥15,000 gives Diamond Legend (tier 5)", test_tier_at_15k),
+]:
+    test(name, fn)
+
+
+# ── 10. Pool diagnostics ──────────────────────────────────────
 
 print("\n── Puzzle pool ──")
 
