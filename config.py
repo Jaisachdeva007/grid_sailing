@@ -119,7 +119,7 @@ TEST_REPEATED_RATIO = 0.50
 FAMILIARIZATION_REPEATED_RATIO = 0.00
 
 # Points threshold at which participants unlock a mouse upgrade and see the milestone overlay.
-SCORE_MILESTONE = 1000
+SCORE_MILESTONE = 3000
 
 
 # ── Experimental Groups ───────────────────────────────────────
