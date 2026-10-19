@@ -73,9 +73,10 @@ def render_frame(surf, tier_idx, elapsed, particles):
     _draw_mouse_with_animation(surf, cx, MCY, tier_idx, elapsed, icon_sz)
 
     # Tier badge
-    bs  = f_xs.render(tier_name.upper(), True, body_col)
+    bs     = f_xs.render(tier_name.upper(), True, body_col)
+    badge_y = MCY + icon_sz//2 + 16
     bb  = pygame.Rect(cx - bs.get_width()//2 - 14,
-                      MCY + icon_sz//2 + 12, bs.get_width()+28, 28)
+                      badge_y, bs.get_width()+28, 28)
     pygame.draw.rect(surf, (*body_col, int(55 * fade)), bb, border_radius=14)
     surf.blit(bs, (bb.x + 14, bb.y + 5))
 
@@ -84,12 +85,12 @@ def render_frame(surf, tier_idx, elapsed, particles):
     t_c = min(1.0, elapsed / COUNTER_DUR)
     displayed = int(prev_milestone +
                     (current_milestone - prev_milestone) * _ease_out_cubic(t_c))
-    hl_y = MCY + icon_sz//2 + 50 + int(14 * (1 - fade))
+    hl_y = badge_y + 28 + 18 + int(10 * (1 - fade))
     hl   = f_big.render(f"{displayed:,} points!", True, WHITE)
     surf.blit(hl, (cx - hl.get_width()//2, hl_y))
 
     sl = f_med.render(sub_line, True, DIM)
-    surf.blit(sl, (cx - sl.get_width()//2, hl_y + 60))
+    surf.blit(sl, (cx - sl.get_width()//2, hl_y + 76))
 
     # Tier-5 white flash
     if tier_idx == 5 and elapsed < 0.20:
@@ -103,7 +104,7 @@ def render_frame(surf, tier_idx, elapsed, particles):
         hint_fade = min(1.0, (elapsed - 0.85) / 0.4)
         hint = f_xs.render("Tap to continue", True,
                             tuple(int(c * hint_fade) for c in (90, 90, 140)))
-        surf.blit(hint, (cx - hint.get_width()//2, hl_y + 108))
+        surf.blit(hint, (cx - hint.get_width()//2, hl_y + 138))
 
 
 surf = pygame.Surface((W, H))
