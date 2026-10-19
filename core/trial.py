@@ -471,6 +471,8 @@ def _draw_grid(screen, fonts, trial, trail, cursor, show_arrows=False, eyes_open
         icx = GL + cursor[1] * CELL + CELL // 2
         icy = GT + cursor[0] * CELL + CELL // 2
         _draw_mouse_icon(screen, icx, icy, eyes_open=eyes_open, cell_sz=sz, mouse_tier=mouse_tier)
+        if mouse_tier > 0:
+            _draw_mouse_accessory(screen, icx, icy, mouse_tier, sz / 80.0)
 
 
 def _stage_header(screen, fonts, tag, tag_col, title, subtitle):
