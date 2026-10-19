@@ -998,6 +998,7 @@ def _draw_mouse_accessory(surf, cx: int, cy: int, tier_idx: int, s: float):
     if tier_idx < 2:
         return
     # Mirror _draw_mouse_icon's cap: mouse head never scales past s=1.0
+    s_orig = s
     s = min(s, 1.0)
     head_top_y = cy - int(34 * s)
 
@@ -1086,8 +1087,8 @@ def _draw_mouse_accessory(surf, cx: int, cy: int, tier_idx: int, s: float):
                                   ly - rleaf.get_height() // 2))
 
     elif tier_idx == 5:  # fancy crown + cape
-        # Cape only at overlay scale — too small/blurry at grid scale
-        if s >= 1.0:
+        # Cape only in the full-screen overlay (original s > 1.2)
+        if s_orig > 1.2:
             cap_h = int(55 * s)
             cap_w = int(52 * s)
             cape_sz = (int(cap_w * 2 + 20), int(cap_h + int(18 * s) + 20))
