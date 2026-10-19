@@ -1084,17 +1084,18 @@ def _draw_mouse_accessory(surf, cx: int, cy: int, tier_idx: int, s: float):
                                   ly - rleaf.get_height() // 2))
 
     elif tier_idx == 5:  # fancy crown + cape
-        # Cape first (behind the mouse body)
-        cap_h = int(55 * s)
-        cap_w = int(52 * s)
-        cape_sz = (int(cap_w * 2 + 20), int(cap_h + int(18 * s) + 20))
-        cape = pygame.Surface(cape_sz, pygame.SRCALPHA)
-        ox, oy = cap_w + 10, int(18 * s) + 10
-        cape_pts = [(ox, oy), (10, cap_h + oy), (int(cap_w * 2 + 10), cap_h + oy)]
-        pygame.draw.polygon(cape, (130, 60, 175, 190), cape_pts)
-        pygame.draw.lines(cape, (200, 150, 255, 220), False, cape_pts,
-                          max(1, int(2 * s)))
-        surf.blit(cape, (cx - ox, cy - oy))
+        # Cape only at overlay scale — too small/blurry at grid scale
+        if s >= 1.0:
+            cap_h = int(55 * s)
+            cap_w = int(52 * s)
+            cape_sz = (int(cap_w * 2 + 20), int(cap_h + int(18 * s) + 20))
+            cape = pygame.Surface(cape_sz, pygame.SRCALPHA)
+            ox, oy = cap_w + 10, int(18 * s) + 10
+            cape_pts = [(ox, oy), (10, cap_h + oy), (int(cap_w * 2 + 10), cap_h + oy)]
+            pygame.draw.polygon(cape, (130, 60, 175, 190), cape_pts)
+            pygame.draw.lines(cape, (200, 150, 255, 220), False, cape_pts,
+                              max(1, int(2 * s)))
+            surf.blit(cape, (cx - ox, cy - oy))
 
         # 5-point crown: tall-short-tall-short-tall alternating tips
         crown_bw = int(44 * s)
