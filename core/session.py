@@ -31,7 +31,7 @@ from config import (
     FAMILIARIZATION_REPEATED_RATIO, FPS,
 )
 from core.grid import find_valid_paths, find_paths_ranged, apply_key
-from core.trial import TrialData, run_trial, run_explore_trial
+from core.trial import TrialData, run_trial, run_explore_trial, show_milestone_overlay, _tier_for_score
 from screens.tutorial import run_tutorial
 from database.db import (
     create_session, complete_session,
@@ -361,7 +361,8 @@ def run_block(screen, clock, fonts, block_type, block_number,
     if guided_gate_trial is not None:
         _show_try_it_yourself_practice_intro(screen, clock, fonts)
 
-    streak = 0
+    streak             = 0
+    milestone_tier     = _tier_for_score(cumulative_score)   # tier already earned from prior blocks
 
     # Load this participant's locked repeated-puzzle sequence (None until 3 optimal solves)
     locked_sequence = get_locked_sequence(participant_id)
@@ -450,6 +451,7 @@ def run_block(screen, clock, fonts, block_type, block_number,
                 show_score=show_score,
                 session_state=session_state,
                 locked_sequence=locked_sequence if grid_type == "repeated" else None,
+                mouse_tier=milestone_tier,
             )
 
         if result.get("paused_exit"):
@@ -509,6 +511,12 @@ def run_block(screen, clock, fonts, block_type, block_number,
 
         cumulative_score = result["cumulative_score"]
         streak           = result.get("streak", 0)
+
+        # Check for mouse tier upgrade
+        new_tier = _tier_for_score(cumulative_score)
+        if new_tier > milestone_tier:
+            show_milestone_overlay(screen, clock, fonts, new_tier, cumulative_score)
+            milestone_tier = new_tier
 
         i += 1
 
