@@ -368,6 +368,15 @@ def run_block(screen, clock, fonts, block_type, block_number,
     # Non-practice blocks always show the default (tier 0) mouse.
     milestone_tier     = _tier_for_score(cumulative_score) if is_practice else 0
 
+    def _do_milestone(new_score: int):
+        nonlocal milestone_tier
+        if not is_practice:
+            return
+        new_tier = _tier_for_score(new_score)
+        if new_tier > milestone_tier:
+            show_milestone_overlay(screen, clock, fonts, new_tier, new_score)
+            milestone_tier = new_tier
+
     # Load this participant's locked repeated-puzzle sequence (None until 3 optimal solves)
     locked_sequence = get_locked_sequence(participant_id)
     LOCK_THRESHOLD  = 3   # same sequence must be used optimally this many times to lock
@@ -456,6 +465,7 @@ def run_block(screen, clock, fonts, block_type, block_number,
                 session_state=session_state,
                 locked_sequence=locked_sequence if grid_type == "repeated" else None,
                 mouse_tier=milestone_tier,
+                milestone_fn=_do_milestone,
             )
 
         if result.get("paused_exit"):
@@ -515,13 +525,6 @@ def run_block(screen, clock, fonts, block_type, block_number,
 
         cumulative_score = result["cumulative_score"]
         streak           = result.get("streak", 0)
-
-        # Milestone check: only during practice blocks
-        if is_practice:
-            new_tier = _tier_for_score(cumulative_score)
-            if new_tier > milestone_tier:
-                show_milestone_overlay(screen, clock, fonts, new_tier, cumulative_score)
-                milestone_tier = new_tier
 
         i += 1
 
