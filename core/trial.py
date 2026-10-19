@@ -822,21 +822,365 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
     }
 
 
+# ── Milestone overlay helpers ──────────────────────────────────
+
+def _ease_out_cubic(t: float) -> float:
+    t = min(1.0, max(0.0, t))
+    return 1 - (1 - t) ** 3
+
+
+def _spring_settle(t: float) -> float:
+    """Damped spring easing: 0→1 with natural overshoot and settle."""
+    t = min(1.0, max(0.0, t))
+    if t >= 1.0:
+        return 1.0
+    omega, zeta = 14.0, 0.45
+    wd = omega * math.sqrt(max(1e-6, 1 - zeta * zeta))
+    return 1 - math.exp(-zeta * omega * t) * (
+        math.cos(wd * t) + (zeta * omega / wd) * math.sin(wd * t))
+
+
+def _draw_star(surf, color, cx: int, cy: int, r: int):
+    """5-pointed star centred at (cx, cy) with outer radius r."""
+    pts = []
+    inner = max(1, int(r * 0.42))
+    for i in range(10):
+        a   = math.radians(i * 36 - 90)
+        rad = r if i % 2 == 0 else inner
+        pts.append((cx + math.cos(a) * rad, cy + math.sin(a) * rad))
+    if len(pts) >= 3:
+        pygame.draw.polygon(surf, color, pts)
+
+
+def _draw_diamond_alpha(surf, color_rgba: tuple, cx: int, cy: int,
+                         size: int, angle_deg: float):
+    """Rotated 4-pointed diamond with alpha, blitted onto surf."""
+    sz  = size * 4 + 4
+    s   = pygame.Surface((sz, sz), pygame.SRCALPHA)
+    mid = sz // 2
+    rad = math.radians(angle_deg)
+    pts = [(mid + math.cos(rad + i * math.pi / 2) * size,
+            mid + math.sin(rad + i * math.pi / 2) * size * 0.6)
+           for i in range(4)]
+    if len(pts) >= 3:
+        pygame.draw.polygon(s, color_rgba, pts)
+    surf.blit(s, (cx - mid, cy - mid))
+
+
+def _draw_rotated_rect(surf, color: tuple, cx: int, cy: int,
+                        w: float, h: float, angle_deg: float):
+    """Rotated rectangle for confetti pieces."""
+    rad   = math.radians(angle_deg)
+    cos_a = math.cos(rad)
+    sin_a = math.sin(rad)
+    hw, hh = w / 2, h / 2
+    pts = [(cx + x * cos_a - y * sin_a, cy + x * sin_a + y * cos_a)
+           for x, y in ((-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh))]
+    pygame.draw.polygon(surf, color, pts)
+
+
+def _init_milestone_particles(tier: int, cx: int, cy: int,
+                                W: int, H: int) -> list:
+    """Return a deterministic particle list for the given tier."""
+    import random as _r
+    _r.seed(tier * 137 + 42)
+
+    if tier == 1:  # white sparkles shoot outward
+        return [{"angle": i * (360 / 24),
+                 "speed": _r.uniform(110, 230),
+                 "size":  _r.randint(2, 5),
+                 "life":  _r.uniform(0.7, 1.9)}
+                for i in range(24)]
+
+    if tier == 2:  # gold coins rain from top
+        return [{"x":       _r.uniform(0, W), "y":       _r.uniform(-320, -10),
+                 "vx":      _r.uniform(-45, 45), "vy":   _r.uniform(190, 340),
+                 "rot":     _r.uniform(0, 360), "rot_spd": _r.uniform(-120, 120),
+                 "sz":      _r.randint(10, 20)}
+                for _ in range(26)]
+
+    if tier == 3:  # purple stars orbit the mouse
+        return [{"base_angle": i * (360 / 7),
+                 "radius":    105 + (i % 3) * 32,
+                 "speed":      65 + (i % 4) * 28,
+                 "size":        5 + (i % 3) * 2}
+                for i in range(7)]
+
+    if tier == 4:  # emerald diamond shards burst outward
+        return [{"angle":   i * (360 / 14),
+                 "speed":   _r.uniform(170, 360),
+                 "sz":      _r.randint(7, 16),
+                 "rot":     _r.uniform(0, 360),
+                 "rot_spd": _r.uniform(-220, 220)}
+                for i in range(14)]
+
+    if tier == 5:  # rainbow confetti shower
+        colors = [(255,80,80),(80,255,80),(80,100,255),(255,230,50),
+                  (255,80,200),(80,230,255),(255,165,50),(200,80,255)]
+        return [{"x":       _r.uniform(0, W), "y":      _r.uniform(-H, 0),
+                 "vx":      _r.uniform(-55, 55), "vy":  _r.uniform(130, 280),
+                 "rot":     _r.uniform(0, 360), "rot_spd": _r.uniform(-320, 320),
+                 "color":   _r.choice(colors),
+                 "w":       _r.randint(10, 22), "h":    _r.randint(5, 11)}
+                for _ in range(75)]
+    return []
+
+
+def _draw_milestone_particles(surf, tier: int, particles: list,
+                               elapsed: float, cx: int, cy: int,
+                               W: int, H: int):
+    """Draw the particle system for the current tier."""
+    if tier == 1:  # sparkles
+        for p in particles:
+            if elapsed > p["life"]:
+                continue
+            t_p  = elapsed / p["life"]
+            rad  = math.radians(p["angle"])
+            px   = int(cx + math.cos(rad) * p["speed"] * elapsed)
+            py   = int(cy + math.sin(rad) * p["speed"] * elapsed)
+            alp  = int(255 * max(0.0, 1 - t_p ** 1.1))
+            sz   = max(1, int(p["size"] * (1 - t_p * 0.5)))
+            s    = pygame.Surface((sz * 2 + 2, sz * 2 + 2), pygame.SRCALPHA)
+            pygame.draw.circle(s, (255, 252, 180, alp), (sz + 1, sz + 1), sz)
+            surf.blit(s, (px - sz, py - sz))
+
+    elif tier == 2:  # gold coins
+        for p in particles:
+            px  = int((p["x"] + p["vx"] * elapsed) % W)
+            py  = int(p["y"] + p["vy"] * elapsed)
+            if py < 0 or py > H:
+                continue
+            rot = p["rot"] + p["rot_spd"] * elapsed
+            sx  = max(0.08, abs(math.cos(math.radians(rot))))
+            wc  = max(2, int(p["sz"] * sx))
+            rect = pygame.Rect(px - wc, py - p["sz"], wc * 2, p["sz"] * 2)
+            pygame.draw.ellipse(surf, (195, 148, 25), rect)
+            if wc > 3:
+                pygame.draw.ellipse(surf, (255, 215, 100),
+                                    pygame.Rect(rect.x + 2, rect.y + 2,
+                                                max(1, rect.w - 4), p["sz"] // 2))
+
+    elif tier == 3:  # orbiting purple stars
+        for p in particles:
+            angle = math.radians(p["base_angle"] + p["speed"] * elapsed)
+            px = int(cx + math.cos(angle) * p["radius"])
+            py = int(cy + math.sin(angle) * p["radius"])
+            _draw_star(surf, (190, 135, 255), px, py, p["size"])
+            _draw_star(surf, (230, 200, 255), px, py, max(1, p["size"] - 2))
+
+    elif tier == 4:  # emerald shards burst
+        for p in particles:
+            t_p    = min(1.0, elapsed / 0.95)
+            ease_t = _ease_out_cubic(t_p)
+            rad    = math.radians(p["angle"])
+            px     = int(cx + math.cos(rad) * p["speed"] * ease_t)
+            py     = int(cy + math.sin(rad) * p["speed"] * ease_t)
+            alp    = int(255 * max(0.0, 1 - max(0.0, t_p - 0.35) / 0.65))
+            if alp <= 0:
+                continue
+            rot = p["rot"] + p["rot_spd"] * elapsed
+            _draw_diamond_alpha(surf, (40, 210, 120, alp), px, py, p["sz"], rot)
+
+    elif tier == 5:  # confetti shower
+        for p in particles:
+            px  = int((p["x"] + p["vx"] * elapsed) % W)
+            py  = int((p["y"] + p["vy"] * elapsed) % (H + 200))
+            if py > H + 100:
+                continue
+            rot = p["rot"] + p["rot_spd"] * elapsed
+            _draw_rotated_rect(surf, p["color"], px, py, p["w"], p["h"], rot)
+
+
+def _draw_mouse_accessory(surf, cx: int, cy: int, tier_idx: int, s: float):
+    """Draw the tier cosmetic (hat / crown / wreath / crown+cape) on surf."""
+    if tier_idx < 2:
+        return
+    head_top_y = cy - int(34 * s)
+
+    if tier_idx == 2:  # party hat
+        hat_h  = int(40 * s)
+        hat_bw = int(24 * s)
+        pts = [(cx,           head_top_y - hat_h),
+               (cx - hat_bw,  head_top_y + int(2 * s)),
+               (cx + hat_bw,  head_top_y + int(2 * s))]
+        pygame.draw.polygon(surf, (220, 50, 110), pts)
+        for frac in (0.35, 0.65):
+            sy   = int(head_top_y - hat_h + hat_h * frac)
+            half = int(hat_bw * frac)
+            pygame.draw.line(surf, (255, 220, 50),
+                             (cx - half, sy), (cx + half, sy),
+                             max(1, int(2 * s)))
+        pygame.draw.line(surf, (255, 160, 205),
+                         (cx - hat_bw - 3, head_top_y + int(2 * s)),
+                         (cx + hat_bw + 3, head_top_y + int(2 * s)),
+                         max(1, int(3 * s)))
+        pygame.draw.circle(surf, (255, 240, 80),
+                           (cx, head_top_y - hat_h), max(3, int(6 * s)))
+
+    elif tier_idx == 3:  # crown
+        crown_h  = int(24 * s)
+        crown_bw = int(34 * s)
+        base = pygame.Rect(cx - crown_bw, head_top_y - crown_h,
+                           crown_bw * 2, crown_h)
+        pygame.draw.rect(surf, (200, 155, 15), base)
+        pygame.draw.rect(surf, (255, 210, 50), base, width=max(1, int(2 * s)))
+        for off in (-crown_bw, 0, crown_bw):
+            tip_y = head_top_y - crown_h - int(16 * s)
+            pygame.draw.polygon(surf, (220, 175, 20), [
+                (cx + off - int(9 * s), head_top_y - crown_h),
+                (cx + off,              tip_y),
+                (cx + off + int(9 * s), head_top_y - crown_h)])
+        for ox, col in [(-int(18*s), (220,50,50)),
+                        (0,          (50,180,255)),
+                        (int(18*s),  (50,200,60))]:
+            pygame.draw.circle(surf, col,
+                               (cx + ox, head_top_y - crown_h // 2),
+                               max(2, int(4 * s)))
+
+    elif tier_idx == 4:  # laurel wreath
+        head_r   = int(30 * s)
+        leaf_col = (40, 165, 65)
+        leaf_hl  = (80, 220, 100)
+        for side in (-1, 1):
+            for i in range(5):
+                frac  = i / 4.0
+                deg   = -30 + 160 * frac
+                rad_a = math.radians(deg * side - 90)
+                lx    = cx + int(math.cos(rad_a) * (head_r + int(12 * s)))
+                ly    = cy - int(4 * s) + int(math.sin(rad_a) * head_r)
+                lw    = max(4, int(18 * s))
+                lh    = max(3, int(9 * s))
+                leaf  = pygame.Surface((lw + 4, lh + 4), pygame.SRCALPHA)
+                pygame.draw.ellipse(leaf, (*leaf_col, 230), pygame.Rect(2, 2, lw, lh))
+                pygame.draw.ellipse(leaf, (*leaf_hl, 180),
+                                    pygame.Rect(3, 3, lw // 2, lh // 2))
+                rleaf = pygame.transform.rotate(leaf, -(deg * side + 10))
+                surf.blit(rleaf, (lx - rleaf.get_width() // 2,
+                                  ly - rleaf.get_height() // 2))
+
+    elif tier_idx == 5:  # fancy crown + cape
+        # Cape first (behind the mouse body)
+        cap_h = int(55 * s)
+        cap_w = int(52 * s)
+        cape_sz = (int(cap_w * 2 + 20), int(cap_h + int(18 * s) + 20))
+        cape = pygame.Surface(cape_sz, pygame.SRCALPHA)
+        ox, oy = cap_w + 10, int(18 * s) + 10
+        cape_pts = [(ox, oy), (10, cap_h + oy), (int(cap_w * 2 + 10), cap_h + oy)]
+        pygame.draw.polygon(cape, (130, 60, 175, 190), cape_pts)
+        pygame.draw.lines(cape, (200, 150, 255, 220), False, cape_pts,
+                          max(1, int(2 * s)))
+        surf.blit(cape, (cx - ox, cy - oy))
+
+        # Fancy 5-point crown
+        crown_h  = int(28 * s)
+        crown_bw = int(38 * s)
+        base = pygame.Rect(cx - crown_bw, head_top_y - crown_h,
+                           crown_bw * 2, crown_h)
+        pygame.draw.rect(surf, (175, 125, 5), base)
+        pygame.draw.rect(surf, (255, 215, 0), base, width=max(1, int(2 * s)))
+        step = max(1, crown_bw // 2)
+        for i, off in enumerate(range(-crown_bw, crown_bw + 1, step)):
+            tip_y = head_top_y - crown_h - int((12 + (i % 3) * 4) * s)
+            pygame.draw.polygon(surf, (220, 185, 10), [
+                (cx + off - int(7 * s), head_top_y - crown_h),
+                (cx + off,              tip_y),
+                (cx + off + int(7 * s), head_top_y - crown_h)])
+        for j, col in enumerate([(255,50,50),(255,230,50),(50,180,255),
+                                  (50,210,60),(255,80,210)]):
+            ox2 = int((-2 + j) * (crown_bw // 2))
+            pygame.draw.circle(surf, col,
+                               (cx + ox2, head_top_y - crown_h // 2),
+                               max(2, int(4 * s)))
+
+
+def _draw_mouse_with_animation(surf, cx: int, cy: int,
+                                tier_idx: int, elapsed: float,
+                                icon_sz: int):
+    """Draw mouse + accessory with a tier-specific enter animation."""
+    s = icon_sz / 80.0
+
+    def _basic():
+        _draw_mouse_icon(surf, cx, cy, eyes_open=True,
+                         cell_sz=icon_sz, mouse_tier=tier_idx)
+        _draw_mouse_accessory(surf, cx, cy, tier_idx, s)
+
+    if tier_idx in (1, 5):
+        _basic()
+
+    elif tier_idx == 2:   # bounce in from above
+        spring_t = min(1.0, elapsed / 0.65)
+        spring_v = _spring_settle(spring_t)
+        start_y  = cy - surf.get_height() // 2
+        my = int(start_y + (cy - start_y) * spring_v)
+        _draw_mouse_icon(surf, cx, my, eyes_open=True,
+                         cell_sz=icon_sz, mouse_tier=tier_idx)
+        _draw_mouse_accessory(surf, cx, my, tier_idx, s)
+
+    elif tier_idx == 3:   # spin in (720° → 0°)
+        spin_dur = 0.75
+        if elapsed < spin_dur:
+            angle  = 720 * (1 - _ease_out_cubic(elapsed / spin_dur))
+            tmp_sz = icon_sz + 70
+            tmp    = pygame.Surface((tmp_sz, tmp_sz), pygame.SRCALPHA)
+            _draw_mouse_icon(tmp, tmp_sz // 2, tmp_sz // 2,
+                             eyes_open=True, cell_sz=icon_sz, mouse_tier=tier_idx)
+            _draw_mouse_accessory(tmp, tmp_sz // 2, tmp_sz // 2, tier_idx, s)
+            rot = pygame.transform.rotate(tmp, angle)
+            surf.blit(rot, (cx - rot.get_width() // 2,
+                            cy - rot.get_height() // 2))
+        else:
+            _basic()
+
+    elif tier_idx == 4:   # shatter-in: 8 ghost copies converge + main materialises
+        conv_dur = 0.70
+        if elapsed < conv_dur:
+            ease_t = _ease_out_cubic(elapsed / conv_dur)
+            for i in range(8):
+                rad  = math.radians(i * 45)
+                dist = 260 * (1 - ease_t)
+                tmp  = pygame.Surface((64, 64), pygame.SRCALPHA)
+                _draw_mouse_icon(tmp, 32, 32, eyes_open=True,
+                                 cell_sz=42, mouse_tier=tier_idx)
+                tmp.set_alpha(int(150 * ease_t))
+                surf.blit(tmp, (int(cx + math.cos(rad) * dist) - 32,
+                                int(cy + math.sin(rad) * dist) - 32))
+            tmp2 = pygame.Surface((icon_sz + 20, icon_sz + 20), pygame.SRCALPHA)
+            _draw_mouse_icon(tmp2, (icon_sz + 20) // 2, (icon_sz + 20) // 2,
+                             eyes_open=True, cell_sz=icon_sz, mouse_tier=tier_idx)
+            tmp2.set_alpha(int(255 * ease_t))
+            surf.blit(tmp2, (cx - (icon_sz + 20) // 2, cy - (icon_sz + 20) // 2))
+            _draw_mouse_accessory(surf, cx, cy, tier_idx, s * ease_t)
+        else:
+            _basic()
+
+    else:
+        _basic()
+
+
 # ── Milestone overlay ─────────────────────────────────────────
 
 def show_milestone_overlay(screen, clock, fonts, tier: int, score: int):
-    """Full-screen celebration shown when the participant unlocks a new mouse tier.
-    Displays for up to 3 s; any key or click advances immediately."""
+    """Full-screen celebration when the participant unlocks a new mouse tier.
+    Displays for up to 3.5 s; any key or click advances immediately."""
     if tier <= 0 or tier >= len(_MOUSE_TIERS):
         return
+
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
-    cx = W // 2
+    cx   = W // 2
+    MCY  = H // 2 - 150   # vertical centre of mouse icon
 
-    _, body_col, ear_col, tier_name, headline, sub_line = _MOUSE_TIERS[tier]
+    _, body_col, _, tier_name, _, sub_line = _MOUSE_TIERS[tier]
+    prev_milestone    = _MOUSE_TIERS[tier - 1][0]
+    current_milestone = _MOUSE_TIERS[tier][0]
 
-    start = time.time()
-    DURATION = 3.0
+    from core.sounds import play as _play
+    _play(f"milestone_{tier}")
+
+    particles = _init_milestone_particles(tier, cx, MCY, W, H)
+
+    start    = time.time()
+    DURATION = 3.5
 
     while True:
         elapsed = time.time() - start
@@ -845,49 +1189,71 @@ def show_milestone_overlay(screen, clock, fonts, tier: int, score: int):
 
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
-                pygame.quit(); import sys; sys.exit()
+                pygame.quit()
+                import sys; sys.exit()
             if ev.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
-                return   # early exit on any input
+                return
 
-        # Fade-in alpha (0→255 over first 0.35 s, then hold)
-        alpha = min(255, int(255 * elapsed / 0.35))
-
+        # Dark overlay fade-in
+        fade = min(1.0, elapsed / 0.35)
         overlay = pygame.Surface((W, H), pygame.SRCALPHA)
-        overlay.fill((8, 8, 20, min(alpha, 210)))
+        overlay.fill((8, 8, 20, int(215 * fade)))
         screen.blit(overlay, (0, 0))
 
-        # Glowing ring behind the mouse
-        ring_r = int(min(W, H) * 0.17)
-        ring_surf = pygame.Surface((ring_r * 2 + 20, ring_r * 2 + 20), pygame.SRCALPHA)
-        pulse = 0.82 + 0.18 * math.sin(elapsed * 4.5)
-        glow_col = tuple(min(255, int(c * pulse)) for c in body_col) + (120,)
-        pygame.draw.circle(ring_surf, glow_col,
-                           (ring_r + 10, ring_r + 10), ring_r, 14)
-        screen.blit(ring_surf, (cx - ring_r - 10, H // 2 - 140 - ring_r - 10))
+        if fade < 0.05:
+            pygame.display.flip()
+            clock.tick(60)
+            continue
 
-        # Big mouse icon
-        _draw_mouse_icon(screen, cx, H // 2 - 140, eyes_open=True,
-                         cell_sz=120, mouse_tier=tier)
+        # Particles
+        _draw_milestone_particles(screen, tier, particles, elapsed, cx, MCY, W, H)
+
+        # Pulsing glow ring
+        ring_r = int(min(W, H) * 0.18)
+        rs     = pygame.Surface((ring_r * 2 + 20, ring_r * 2 + 20), pygame.SRCALPHA)
+        pulse  = 0.82 + 0.18 * math.sin(elapsed * 4.5)
+        gc     = tuple(min(255, int(c * pulse)) for c in body_col) + (int(130 * fade),)
+        pygame.draw.circle(rs, gc, (ring_r + 10, ring_r + 10), ring_r, 16)
+        screen.blit(rs, (cx - ring_r - 10, MCY - ring_r - 10))
+
+        # Mouse with per-tier enter animation
+        icon_sz = int(60 + 80 * min(1.0, elapsed / 0.40))
+        _draw_mouse_with_animation(screen, cx, MCY, tier, elapsed, icon_sz)
 
         # Tier badge
-        badge_surf = f_xs.render(tier_name.upper(), True, body_col)
-        badge_bg   = pygame.Rect(cx - badge_surf.get_width() // 2 - 10,
-                                 H // 2 - 50, badge_surf.get_width() + 20, 26)
-        pygame.draw.rect(screen, (*body_col, 60), badge_bg, border_radius=13)
-        screen.blit(badge_surf, (badge_bg.x + 10, badge_bg.y + 4))
+        bs     = f_xs.render(tier_name.upper(), True, body_col)
+        bb     = pygame.Rect(cx - bs.get_width() // 2 - 14,
+                             MCY + icon_sz // 2 + 12,
+                             bs.get_width() + 28, 28)
+        pygame.draw.rect(screen, (*body_col, int(55 * fade)), bb, border_radius=14)
+        screen.blit(bs, (bb.x + 14, bb.y + 5))
 
-        # Headline
-        hl = f_big.render(headline, True, WHITE)
-        screen.blit(hl, (cx - hl.get_width() // 2, H // 2 - 10))
+        # Animated score counter (counts up from prev milestone to current)
+        COUNTER_DUR = 1.5
+        t_c = elapsed / COUNTER_DUR if elapsed < COUNTER_DUR else 1.0
+        displayed = int(prev_milestone +
+                        (current_milestone - prev_milestone) * _ease_out_cubic(t_c))
 
-        # Sub-line
+        hl_y = MCY + icon_sz // 2 + 50 + int(14 * (1 - fade))
+        hl   = f_big.render(f"{displayed:,} points!", True, WHITE)
+        screen.blit(hl, (cx - hl.get_width() // 2, hl_y))
+
         sl = f_med.render(sub_line, True, DIM)
-        screen.blit(sl, (cx - sl.get_width() // 2, H // 2 + 50))
+        screen.blit(sl, (cx - sl.get_width() // 2, hl_y + 60))
 
-        # "tap to continue" hint fades in after 0.8 s
-        if elapsed > 0.8:
-            hint = f_xs.render("Tap to continue", True, (70, 70, 110))
-            screen.blit(hint, (cx - hint.get_width() // 2, H // 2 + 100))
+        # Tier-5 white flash fades out over first 0.2 s
+        if tier == 5 and elapsed < 0.20:
+            fs = pygame.Surface((W, H))
+            fs.fill((255, 255, 255))
+            fs.set_alpha(int(255 * (1 - elapsed / 0.20)))
+            screen.blit(fs, (0, 0))
+
+        # "Tap to continue" hint
+        if elapsed > 0.85:
+            hint_fade = min(1.0, (elapsed - 0.85) / 0.4)
+            hint = f_xs.render("Tap to continue", True,
+                                tuple(int(c * hint_fade) for c in (90, 90, 140)))
+            screen.blit(hint, (cx - hint.get_width() // 2, hl_y + 108))
 
         pygame.display.flip()
         clock.tick(60)

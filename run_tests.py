@@ -77,13 +77,21 @@ def test_error_sound_plays_without_crash():
 
 def test_all_expected_sounds():
     from core import sounds
-    for name in ("correct", "incorrect", "streak", "error"):
+    for name in ("correct", "incorrect", "streak", "error",
+                 "milestone_1", "milestone_2", "milestone_3",
+                 "milestone_4", "milestone_5"):
         assert name in sounds._sounds, f"'{name}' missing from _sounds"
+
+def test_milestone_sounds_play():
+    from core import sounds
+    for i in range(1, 6):
+        sounds.play(f"milestone_{i}")  # must not raise
 
 for name, fn in [
     ("'error' sound registered after load()", test_error_sound_registered),
     ("play('error') does not crash", test_error_sound_plays_without_crash),
-    ("all 4 sounds present", test_all_expected_sounds),
+    ("all 9 sounds present (4 core + 5 milestone)", test_all_expected_sounds),
+    ("all 5 milestone sounds play without crash", test_milestone_sounds_play),
 ]:
     test(name, fn)
 
