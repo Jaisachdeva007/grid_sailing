@@ -29,9 +29,7 @@ from config import (
     SESSION_STRUCTURE, TRIALS_PER_BLOCK, GRID_SIZE,
     PRACTICE_REPEATED_RATIO, TEST_REPEATED_RATIO,
     FAMILIARIZATION_REPEATED_RATIO, FPS,
-    SYNC_EVERY_N_TRIALS, SYNC_TIME_SEC,
 )
-from sync.firebase_sync import sync_in_background
 from core.grid import find_valid_paths, find_paths_ranged, apply_key
 from core.trial import TrialData, run_trial, run_explore_trial
 from screens.tutorial import run_tutorial
@@ -363,9 +361,7 @@ def run_block(screen, clock, fonts, block_type, block_number,
     if guided_gate_trial is not None:
         _show_try_it_yourself_practice_intro(screen, clock, fonts)
 
-    streak          = 0
-    last_sync_time  = _time.time()
-    last_sync_trial = resume_from_trial
+    streak = 0
 
     # Load this participant's locked repeated-puzzle sequence (None until 3 optimal solves)
     locked_sequence = get_locked_sequence(participant_id)
@@ -457,7 +453,6 @@ def run_block(screen, clock, fonts, block_type, block_number,
             )
 
         if result.get("paused_exit"):
-            sync_in_background(session_id, trial_number - 1)
             _show_saved_exit(screen, clock, fonts)
             return "exited"
 
@@ -515,18 +510,9 @@ def run_block(screen, clock, fonts, block_type, block_number,
         cumulative_score = result["cumulative_score"]
         streak           = result.get("streak", 0)
 
-        # Sync every N trials OR every SYNC_TIME_SEC seconds — whichever first
-        trials_due = (trial_number - last_sync_trial) >= SYNC_EVERY_N_TRIALS
-        time_due   = (_time.time() - last_sync_time)  >= SYNC_TIME_SEC
-        if trials_due or time_due:
-            sync_in_background(session_id, trial_number)
-            last_sync_time  = _time.time()
-            last_sync_trial = trial_number
-
         i += 1
 
     complete_session(session_id)
-    sync_in_background(session_id, n_trials)   # final sync on block complete
 
     # Reflection (3E) is done as an in-person interview after the experiment — no in-app form needed.
 

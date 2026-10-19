@@ -140,6 +140,8 @@ TRIAL_COLUMNS = [
     "reaction_time_s",
     "movement_time_ms",
     "movement_time_s",
+    "planning_movement_time_ms",
+    "planning_movement_time_s",
     "elapsed_time_s",
     "imagery_duration_ms",
     "imagery_duration_s",
@@ -191,6 +193,7 @@ _NULLABLE_FIELDS = (
     "session_completed_at",
     "time_to_imagery_start_ms", "time_to_imagery_start_s",
     "action_reaction_time_ms", "action_reaction_time_s",
+    "planning_movement_time_ms", "planning_movement_time_s",
 )
 
 
@@ -219,9 +222,10 @@ def _add_derived(row: dict, cumulative_score: int) -> dict:
     row["all_optimal_sequences"] = _clean_all_optimal(row.get("all_optimal_sequences"))
 
     # Timing in seconds
-    row["reaction_time_s"]            = _ms_to_s(row.get("reaction_time_ms"))
-    row["movement_time_s"]            = _ms_to_s(row.get("movement_time_ms"))
-    row["imagery_duration_s"]         = _ms_to_s(row.get("imagery_duration_ms"))
+    row["reaction_time_s"]              = _ms_to_s(row.get("reaction_time_ms"))
+    row["movement_time_s"]              = _ms_to_s(row.get("movement_time_ms"))
+    row["planning_movement_time_s"]     = _ms_to_s(row.get("planning_movement_time_ms"))
+    row["imagery_duration_s"]           = _ms_to_s(row.get("imagery_duration_ms"))
     row["time_to_imagery_start_s"]    = _ms_to_s(row.get("time_to_imagery_start_ms"))
     row["action_reaction_time_s"]     = _ms_to_s(row.get("action_reaction_time_ms"))
 
@@ -295,7 +299,9 @@ def _fetch_rows(participant_id=None) -> list:
             t.optimal_length,
             t.number_of_moves,
             t.reward_score,
-            t.reaction_time_ms, t.movement_time_ms, t.elapsed_time_s,
+            t.reaction_time_ms, t.movement_time_ms,
+            COALESCE(t.planning_movement_time_ms, NULL) AS planning_movement_time_ms,
+            t.elapsed_time_s,
             t.imagery_duration_ms,
             COALESCE(t.time_to_imagery_start_ms, NULL) AS time_to_imagery_start_ms,
             COALESCE(t.action_reaction_time_ms,  NULL) AS action_reaction_time_ms,
@@ -369,7 +375,9 @@ def _fetch_summary_rows(participant_id=None) -> list:
             t.optimal_length,
             t.number_of_moves,
             t.reward_score,
-            t.reaction_time_ms, t.movement_time_ms, t.elapsed_time_s,
+            t.reaction_time_ms, t.movement_time_ms,
+            COALESCE(t.planning_movement_time_ms, NULL) AS planning_movement_time_ms,
+            t.elapsed_time_s,
             t.imagery_duration_ms,
             COALESCE(t.time_to_imagery_start_ms, NULL) AS time_to_imagery_start_ms,
             COALESCE(t.action_reaction_time_ms,  NULL) AS action_reaction_time_ms,
@@ -405,8 +413,10 @@ def _fetch_summary_rows(participant_id=None) -> list:
 COLUMN_LABELS = {
     "reaction_time_ms":          "reaction_time_ms [planning: trial start → first plan-key click]",
     "reaction_time_s":           "reaction_time_s [planning: trial start → first plan-key click]",
-    "movement_time_ms":          "movement_time_ms [action: first → last key/button press]",
-    "movement_time_s":           "movement_time_s [action: first → last key/button press]",
+    "movement_time_ms":              "movement_time_ms [PP only: first → last physical key press during action stage]",
+    "movement_time_s":               "movement_time_s [PP only: first → last physical key press during action stage]",
+    "planning_movement_time_ms":     "planning_movement_time_ms [all groups: first → last on-screen button click during planning]",
+    "planning_movement_time_s":      "planning_movement_time_s [all groups: first → last on-screen button click during planning]",
     "elapsed_time_s":            "elapsed_time_s [total trial duration incl. ITI]",
     "imagery_duration_ms":       "imagery_duration_ms [MI only: spacebar hold duration]",
     "imagery_duration_s":        "imagery_duration_s [MI only: spacebar hold duration]",

@@ -108,6 +108,7 @@ class TrialData:
     keypresses_log:      list  = field(default_factory=list)
     reaction_time_ms:            Optional[float] = None
     movement_time_ms:            Optional[float] = None
+    planning_movement_time_ms:   Optional[float] = None
     imagery_duration_ms:         Optional[float] = None
     time_to_imagery_start_ms:    Optional[float] = None   # MI only: action start → SPACE press
     action_reaction_time_ms:     Optional[float] = None   # PP only: action start → first physical key
@@ -938,13 +939,6 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                         trial_id = _save(trial, session_id)
                         update_session_progress(session_id, trial.trial_number)
                         enter_feedback() if show_feedback else enter_iti()
-                elif (ev.type == pygame.KEYDOWN and ev.key in (
-                        pygame.K_1, pygame.K_KP1,
-                        pygame.K_2, pygame.K_KP2,
-                        pygame.K_3, pygame.K_KP3)):
-                    from core.sounds import play as _play_snd
-                    _play_snd("error")
-
             # PP ACTION: participant physically re-types their sequence; SPACE ends trial
             if state == ACTION and is_pp and ev.type == pygame.KEYDOWN:
                 _pkmap = {
@@ -1012,6 +1006,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                             # Go straight to action — skip INPUT to avoid needing a second confirm press
                             if first_key_time:
                                 trial.reaction_time_ms = (first_key_time - planning_start) * 1000
+                            if first_key_time and last_key_time and last_key_time > first_key_time:
+                                trial.planning_movement_time_ms = (last_key_time - first_key_time) * 1000
                             trial.planned_sequence = list(typed_seq)
                             action_path = _build_path(trial.start, typed_seq)
                             if is_ctrl:
@@ -1070,6 +1066,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                         elif btns.get("confirm") and btns["confirm"].collidepoint(p) and typed_seq:
                             if first_key_time:
                                 trial.reaction_time_ms = (first_key_time - planning_start) * 1000
+                            if first_key_time and last_key_time and last_key_time > first_key_time:
+                                trial.planning_movement_time_ms = (last_key_time - first_key_time) * 1000
                             trial.planned_sequence = list(typed_seq)
                             action_path = _build_path(trial.start, typed_seq)
                             if is_ctrl:
@@ -1080,6 +1078,14 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                                 enter_feedback() if show_feedback else enter_iti()
                             else:
                                 enter_action()
+
+            # Error sound: 1/2/3 keyboard keys are never correct for MI or CTRL
+            if (is_mi or is_ctrl) and ev.type == pygame.KEYDOWN and ev.key in (
+                    pygame.K_1, pygame.K_KP1,
+                    pygame.K_2, pygame.K_KP2,
+                    pygame.K_3, pygame.K_KP3):
+                from core.sounds import play as _play_snd
+                _play_snd("error")
 
             if state == PAUSED and ev.type == pygame.MOUSEBUTTONDOWN:
                 resume_r, exit_r = _draw_pause_overlay(screen, fonts, trial,
@@ -1256,9 +1262,11 @@ def _finalise(trial, used_seq, session_id, locked_sequence=None):
         trial.wrong_locked_path = True
     trial.reward_score = score; trial.number_of_moves = n; trial.is_correct = ok
     play_sound("correct" if ok else "incorrect")
-    if trial.movement_time_ms is None and len(trial.keypresses_log) >= 2:
-        trial.movement_time_ms = (trial.keypresses_log[-1]["abs_ms"]
-                                  - trial.keypresses_log[0]["abs_ms"])
+    if trial.planning_movement_time_ms is None and len(trial.keypresses_log) >= 2:
+        planning_kps = [kp for kp in trial.keypresses_log if kp.get("phase") == "planning"]
+        if len(planning_kps) >= 2:
+            trial.planning_movement_time_ms = (planning_kps[-1]["abs_ms"]
+                                               - planning_kps[0]["abs_ms"])
 
 def _flush_keypresses(trial_id, trial):
     """Flush trial.keypresses_log to the DB. Safe to call more than once — log is not cleared."""
@@ -1296,6 +1304,7 @@ def _save(trial, session_id):
         reward_score=trial.reward_score,
         reaction_time_ms=trial.reaction_time_ms,
         movement_time_ms=trial.movement_time_ms,
+        planning_movement_time_ms=trial.planning_movement_time_ms,
         elapsed_time_s=time.time() - trial.trial_start_time,
         imagery_duration_ms=trial.imagery_duration_ms,
         time_to_imagery_start_ms=trial.time_to_imagery_start_ms,
