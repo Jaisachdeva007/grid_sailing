@@ -18,6 +18,9 @@ def _init_mixer():
 def _make_sound(samples: np.ndarray) -> pygame.mixer.Sound:
     """Convert a float32 array (values -1..1) into a pygame Sound."""
     data = (np.clip(samples, -1, 1) * 32767).astype(np.int16)
+    info = pygame.mixer.get_init()
+    if info and info[2] == 2:
+        data = np.stack([data, data], axis=-1).flatten()
     return pygame.mixer.Sound(buffer=data.tobytes())
 
 
@@ -72,13 +75,12 @@ def _build_streak() -> pygame.mixer.Sound:
 
 
 def _build_error() -> pygame.mixer.Sound:
-    """Short harsh buzz — warns participant not to press keys during imagery."""
-    dur = 0.20
+    """Harsh buzz — warns participant not to press keys during imagery."""
+    dur = 0.40
     t   = np.linspace(0, dur, int(_RATE * dur), endpoint=False)
-    # Sawtooth-like overtone stack at 220 Hz for a buzzy character
     wave = sum(np.sin(2 * np.pi * 220 * n * t) / n for n in range(1, 6))
-    env  = np.exp(-12 * t / dur)
-    wave = wave * env * 0.35
+    env  = np.exp(-8 * t / dur)
+    wave = wave * env * 0.65
     return _make_sound(wave.astype(np.float32))
 
 

@@ -1320,7 +1320,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
               show_score: bool = True,
               session_state: dict = None,
               locked_sequence=None,
-              mouse_tier: int = 0) -> dict:
+              mouse_tier: int = 0,
+              milestone_fn=None) -> dict:
 
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
@@ -1638,6 +1639,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
         # Auto-advance from feedback to Get Ready after fb_time seconds
         if state == FEEDBACK and rp_done and rp_done_time:
             if (now_s - rp_done_time) >= fb_time:
+                if milestone_fn:
+                    milestone_fn(cumulative_score + trial.reward_score)
                 state = ITI; iti_start = now_s
 
         # Safety auto-advance from ITI after 5 min (SPACE normally required)
