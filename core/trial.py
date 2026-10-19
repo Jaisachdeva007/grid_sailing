@@ -90,10 +90,10 @@ TRAIL_FRESH    = (110, 170, 255)  # bright blue immediately after stepping on a 
 # ── Mouse upgrade tiers ──────────────────────────────────────
 # Each entry: (min_score, body_rgb, inner_ear_rgb, tier_name, headline, sub_line)
 _MOUSE_TIERS = [
-    (   0, (195, 200, 220), (220, 145, 158), "Mouse",            "",                                ""),
-    (1000, (100, 160, 220), (160, 200, 255), "Scout Mouse",      "1,000 points!",                   "Your mouse has leveled up!"),
-    (2000, (210, 170,  45), (255, 215, 100), "Golden Navigator", "2,000 points!",                   "You’re a Golden Navigator now!"),
-    (3000, (160, 100, 210), (200, 150, 255), "Master Explorer",  "3,000 points!",                   "Master Explorer status unlocked!"),
+    (    0, (195, 200, 220), (220, 145, 158), "Mouse",            "",                                ""),
+    ( 3000, (100, 160, 220), (160, 200, 255), "Scout Mouse",      "3,000 points!",                   "Your mouse has leveled up!"),
+    ( 6000, (210, 170,  45), (255, 215, 100), "Golden Navigator", "6,000 points!",                   "You’re a Golden Navigator now!"),
+    ( 9000, (160, 100, 210), (200, 150, 255), "Master Explorer",  "9,000 points!",                   "Master Explorer status unlocked!"),
 ]
 
 def _tier_for_score(score: int) -> int:
