@@ -21,9 +21,9 @@ import pygame
 
 
 def main():
-    # Start up pygame — the library that runs the window and reads keypresses.
+    from core.sounds import pre_init as sounds_pre_init, load as load_sounds
+    sounds_pre_init()   # must run before pygame.init() to set mono mixer defaults
     pygame.init()
-    from core.sounds import load as load_sounds
     load_sounds()
 
     # Open in fullscreen using whatever the screen's actual resolution is.
