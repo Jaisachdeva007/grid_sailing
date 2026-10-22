@@ -6,20 +6,17 @@ _initialized = False
 _sounds: dict = {}
 
 
-def pre_init():
-    """Call this before pygame.init() to lock in mono mixer settings."""
-    global _initialized
-    pygame.mixer.pre_init(frequency=_RATE, size=-16, channels=1, buffer=512)
-    _initialized = True
-
-
 def _init_mixer():
     global _initialized
     if _initialized:
         return
-    if not pygame.mixer.get_init():
-        pygame.mixer.init(frequency=_RATE, size=-16, channels=1, buffer=512)
+    pygame.mixer.pre_init(frequency=_RATE, size=-16, channels=1, buffer=512)
     _initialized = True
+
+
+def pre_init():
+    """Call this before pygame.init() to lock in mono mixer settings."""
+    _init_mixer()
 
 
 def _make_sound(samples: np.ndarray) -> pygame.mixer.Sound:
