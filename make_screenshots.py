@@ -50,9 +50,12 @@ def make_trial(start, goal, seq, sub_goal=None):
 
 
 # ── Screenshot 1: Planning stage ──────────────────────────────
-trial_plan = make_trial(start=(8, 1), goal=(1, 8),
-                        seq=[3, 3, 3, 3, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3],
-                        sub_goal=(5, 4))
+# Valid moves: 1=UP (r-1,c), 2=DOWN-RIGHT (r+1,c+1), 3=DOWN-LEFT (r+1,c-1)
+# Path: start (8,5) → 2,2,2 → (9,6),(out)... use: start(7,4), goal(1,6)
+# 2,2 → (8,5),(9,6) then 1×8 → (1,6). Sub-goal at (4,6).
+trial_plan = make_trial(start=(7, 4), goal=(1, 6),
+                        seq=[2, 2, 1, 1, 1, 1, 1, 1, 1, 1],
+                        sub_goal=(4, 6))
 
 screen.fill(BG)
 _draw_stage_planning(
@@ -70,19 +73,25 @@ print(f"Saved: {path}")
 
 
 # ── Screenshot 2: Feedback/replay, correct trial ──────────────
-trial_nav = make_trial(start=(7, 2), goal=(2, 7),
-                       seq=[3, 3, 3, 3, 3, 1, 1, 1, 1, 1],
-                       sub_goal=(4, 7))
+# Valid path: start(8,4) → 2:(9,5) → 2:(out)... better:
+# start(6,3), goal(0,5). Path: 2,2,1,1,1,1,1,1 = 8 moves
+# (6,3)→2:(7,4)→2:(8,5)→1:(7,5)→1:(6,5)→1:(5,5)→1:(4,5)→1:(3,5)→1:(2,5)→1:(1,5)→1:(0,5)
+# Sub-goal at (3,5). Mid-replay at cursor=(5,5), trail shows 4 cells behind.
+trial_nav = make_trial(start=(6, 3), goal=(0, 5),
+                       seq=[2, 2, 1, 1, 1, 1, 1, 1, 1, 1],
+                       sub_goal=(3, 5))
 trial_nav.reward_score = 100
 trial_nav.is_correct   = True
 
 now = time.time()
 trail = {
-    (7, 2): now - 2.6, (7, 3): now - 2.1, (7, 4): now - 1.7,
-    (7, 5): now - 1.3, (7, 6): now - 0.9, (7, 7): now - 0.5,
-    (6, 7): now - 0.2,
+    (6, 3): now - 2.0,
+    (7, 4): now - 1.6,
+    (8, 5): now - 1.2,
+    (7, 5): now - 0.8,
+    (6, 5): now - 0.4,
 }
-cursor = (5, 7)
+cursor = (5, 5)
 
 screen.fill(BG)
 _draw_stage_feedback(

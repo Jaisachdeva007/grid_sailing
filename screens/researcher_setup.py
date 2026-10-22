@@ -546,6 +546,7 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
     MINI_CELL          = 54
     repeated_start     = [None]   # list so closure can mutate; (row, col) or None
     repeated_goal      = [None]   # second click sets goal (cheese) position
+    repeated_sub_goal  = [None]   # third click sets sub-goal (small cheese) position
     _mini_rects        = []       # [(pygame.Rect, r, c)] — rebuilt each frame
     _reset_btn_r       = [None]   # stored each draw frame for hit-testing
 
@@ -637,23 +638,33 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
                 if _reset_btn_r[0] and _reset_btn_r[0].collidepoint(event.pos):
                     if get_global_repeated_puzzle():
                         clear_global_repeated_puzzle()
-                        repeated_start[0] = None
-                        repeated_goal[0]  = None
+                        repeated_start[0]    = None
+                        repeated_goal[0]     = None
+                        repeated_sub_goal[0] = None
                 else:
-                    # Mini grid two-click selection: first click = start, second = goal
+                    # Mini grid three-click selection:
+                    #   1st click = start (blue), 2nd = goal (amber), 3rd = sub-goal (pink)
                     if not get_global_repeated_puzzle():
                         for (cell_rect, r, c) in _mini_rects:
                             if cell_rect.collidepoint(event.pos):
                                 cell_pos = (r, c)
                                 if repeated_start[0] is None:
-                                    repeated_start[0] = cell_pos        # set start (blue)
+                                    repeated_start[0] = cell_pos
                                 elif repeated_start[0] == cell_pos:
-                                    repeated_start[0] = None            # deselect start → clear both
-                                    repeated_goal[0]  = None
+                                    repeated_start[0]    = None
+                                    repeated_goal[0]     = None
+                                    repeated_sub_goal[0] = None
+                                elif repeated_goal[0] is None:
+                                    repeated_goal[0] = cell_pos
                                 elif repeated_goal[0] == cell_pos:
-                                    repeated_goal[0] = None             # deselect goal
+                                    repeated_goal[0]     = None
+                                    repeated_sub_goal[0] = None
+                                elif repeated_sub_goal[0] is None:
+                                    repeated_sub_goal[0] = cell_pos
+                                elif repeated_sub_goal[0] == cell_pos:
+                                    repeated_sub_goal[0] = None
                                 else:
-                                    repeated_goal[0] = cell_pos         # set/change goal (amber)
+                                    repeated_sub_goal[0] = cell_pos
                                 break
 
             if data_btn.handle_event(event):
@@ -671,7 +682,8 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
                     ret_pid_box, group_dd, session_dd,
                     planning_input, action_input, feedback_input, intertrial_input,
                     start_block_input,
-                    practice_cond, test_cond, repeated_start[0], repeated_goal[0]
+                    practice_cond, test_cond, repeated_start[0], repeated_goal[0],
+                    repeated_sub_goal[0]
                 )
                 if isinstance(result, str):
                     message = result; message_col = RED
@@ -957,10 +969,24 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
                 s2_col = DIM
             _t(screen, f_sm, s2_txt, s2_col, COL1, oy(y)); y += 26
 
+            step3_done = repeated_sub_goal[0] is not None
+            if step1_done and step2_done:
+                if step3_done:
+                    r2, c2 = repeated_sub_goal[0]
+                    s3_txt = f"Step 3  ✓  SMALL CHEESE at  Row {r2}, Col {c2}  (optional)"
+                    s3_col = GREEN
+                else:
+                    s3_txt = "Step 3  —  Click a third cell for the SMALL CHEESE waypoint  (optional)"
+                    s3_col = ORANGE
+            else:
+                s3_txt = "Step 3  —  Small cheese waypoint  (set after placing MOUSE + CHEESE)"
+                s3_col = DIM
+            _t(screen, f_sm, s3_txt, s3_col, COL1, oy(y)); y += 26
+
             if step1_done:
                 note = "To clear and start over, click the MOUSE cell again."
             else:
-                note = "Both optional — leave blank and the system picks a random puzzle automatically."
+                note = "All optional — leave blank and the system picks a random puzzle automatically."
             _t(screen, f_xs, note, DIM, COL1, oy(y))
             y += 20
             locked_start = None
@@ -994,15 +1020,18 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
                 _mini_rects.append((cr, r, c))
                 cell_pos = (r, c)
 
-                is_start = (locked_start and cell_pos == locked_start) or \
-                           (not locked_start and repeated_start[0] == cell_pos)
-                is_goal  = (locked_goal  and cell_pos == locked_goal)  or \
-                           (not locked_goal  and repeated_goal[0]  == cell_pos)
+                is_start    = (locked_start and cell_pos == locked_start) or \
+                              (not locked_start and repeated_start[0] == cell_pos)
+                is_goal     = (locked_goal  and cell_pos == locked_goal)  or \
+                              (not locked_goal  and repeated_goal[0]  == cell_pos)
+                is_sub_goal = (not locked_start and repeated_sub_goal[0] == cell_pos)
 
                 if is_start:
                     bg = ACCENT; cell_label = "MOUSE"; tc2 = BG
                 elif is_goal:
                     bg = (180, 130, 18); cell_label = "CHEESE"; tc2 = BG
+                elif is_sub_goal:
+                    bg = (180, 90, 140); cell_label = "SMALL"; tc2 = (255, 230, 245)
                 elif locked_start:
                     bg = (20, 20, 38); cell_label = f"{r},{c}"; tc2 = (40, 40, 60)
                 elif cr.collidepoint(mouse_pos):
@@ -1021,9 +1050,10 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
         info_x = COL1 + GRID_OFF_X + GRID_SIZE * MINI_CELL + 24
         info_y = mg_top
         if locked_start:
-            _t(screen, f_xs, "Blue  = MOUSE start",  ACCENT,        info_x, info_y)
-            _t(screen, f_xs, "Amber = CHEESE goal", (200, 160, 40), info_x, info_y + 22)
-            _t(screen, f_xs, "(locked — use Reset to change)", DIM, info_x, info_y + 48)
+            _t(screen, f_xs, "Blue  = MOUSE start",    ACCENT,        info_x, info_y)
+            _t(screen, f_xs, "Amber = CHEESE goal",   (200, 160, 40), info_x, info_y + 22)
+            _t(screen, f_xs, "Pink  = small cheese",  (200, 120, 160), info_x, info_y + 44)
+            _t(screen, f_xs, "(locked — use Reset to change)", DIM, info_x, info_y + 66)
 
         # Reset button (only meaningful when a global puzzle is set)
         reset_btn_r = pygame.Rect(info_x, info_y + 70, 200, 36)
@@ -1101,7 +1131,8 @@ def _validate_and_launch(mode, pid_box, age_box, gender_dd, hand_dd,
                          ret_pid_box, group_dd, session_dd,
                          planning_input, action_input, feedback_input, intertrial_input,
                          start_block_input,
-                         practice_cond, test_cond, repeated_start, repeated_goal=None):
+                         practice_cond, test_cond, repeated_start, repeated_goal=None,
+                         repeated_sub_goal=None):
     if mode == "new":
         pid     = pid_box.text.strip().upper()
         age_str = age_box.text.strip()
@@ -1131,6 +1162,7 @@ def _validate_and_launch(mode, pid_box, age_box, gender_dd, hand_dd,
         "start_from_block": start_block_input.value,
         "practice_ratio":   practice_cond.value,
         "test_ratio":       test_cond.value,
-        "repeated_start":   repeated_start,  # (row, col) or None
-        "repeated_goal":    repeated_goal,   # (row, col) or None
+        "repeated_start":    repeated_start,    # (row, col) or None
+        "repeated_goal":     repeated_goal,    # (row, col) or None
+        "repeated_sub_goal": repeated_sub_goal, # (row, col) or None
     }

@@ -93,8 +93,8 @@ _MOUSE_TIERS = [
     (     0, (195, 200, 220), (220, 145, 158), "Mouse",             "",                                 ""),
     (  3000, (100, 160, 220), (160, 200, 255), "Scout Mouse",       "3,000 points!",                    "Your mouse has leveled up!"),
     (  6000, (210, 170,  45), (255, 215, 100), "Golden Navigator",  "6,000 points!",                    "You’re a Golden Navigator now!"),
-    (  9000, (160, 100, 210), (200, 150, 255), "Master Explorer",   "9,000 points!",                    "Master Explorer status unlocked!"),
-    ( 12000, ( 40, 185, 100), (100, 240, 155), "Emerald Champion",  "12,000 points!",                   "You’re an Emerald Champion!"),
+    (  9000, ( 40, 185, 100), (100, 240, 155), "Emerald Champion",  "9,000 points!",                    "You’re an Emerald Champion!"),
+    ( 12000, (160, 100, 210), (200, 150, 255), "Master Explorer",   "12,000 points!",                   "Master Explorer status unlocked!"),
     ( 15000, (210, 230, 255), (255, 250, 230), "Diamond Legend",    "15,000 points!",                   "Diamond Legend — the highest honour!"),
 ]
 
@@ -1022,50 +1022,7 @@ def _draw_mouse_accessory(surf, cx: int, cy: int, tier_idx: int, s: float):
         pygame.draw.circle(surf, (255, 240, 80),
                            (cx, head_top_y - hat_h), max(3, int(6 * s)))
 
-    elif tier_idx == 3:  # 3-point crown
-        crown_bw = int(33 * s)
-        crown_h  = int(21 * s)
-        tip_h    = int(19 * s)
-        band_y   = head_top_y - crown_h
-
-        # Tapered band (trapezoid — slightly wider at bottom)
-        band_pts = [
-            (cx - crown_bw - int(2 * s), head_top_y),
-            (cx + crown_bw + int(2 * s), head_top_y),
-            (cx + crown_bw,              band_y),
-            (cx - crown_bw,              band_y),
-        ]
-        pygame.draw.polygon(surf, (185, 140, 12), band_pts)
-        pygame.draw.polygon(surf, (255, 215, 45), band_pts, max(1, int(2 * s)))
-
-        # 3 tall triangular points
-        for off in [-int(crown_bw * 0.75), 0, int(crown_bw * 0.75)]:
-            hw = int(9 * s)
-            tip_pts = [
-                (cx + off - hw, band_y + int(2 * s)),
-                (cx + off,      band_y - tip_h),
-                (cx + off + hw, band_y + int(2 * s)),
-            ]
-            pygame.draw.polygon(surf, (220, 175, 20), tip_pts)
-            pygame.draw.polygon(surf, (255, 215, 50), tip_pts, max(1, int(1 * s)))
-
-        # Re-draw top edge to clean up point bases
-        pygame.draw.line(surf, (255, 215, 45),
-                         (cx - crown_bw, band_y), (cx + crown_bw, band_y),
-                         max(1, int(2 * s)))
-
-        # Jewels with specular highlight dot
-        jewel_y = band_y + crown_h // 2
-        for ox, col in [(-int(14 * s), (230, 50, 50)),
-                        (0,             (60, 160, 255)),
-                        (int(14 * s),   (50, 200, 60))]:
-            r = max(2, int(4 * s))
-            pygame.draw.circle(surf, col, (cx + ox, jewel_y), r)
-            pygame.draw.circle(surf, (255, 255, 255),
-                               (cx + ox - max(1, r // 3), jewel_y - max(1, r // 3)),
-                               max(1, int(1.5 * s)))
-
-    elif tier_idx == 4:  # laurel wreath
+    elif tier_idx == 3:  # laurel wreath (Emerald Champion)
         head_r   = int(30 * s)
         leaf_col = (40, 165, 65)
         leaf_hl  = (80, 220, 100)
@@ -1085,6 +1042,45 @@ def _draw_mouse_accessory(surf, cx: int, cy: int, tier_idx: int, s: float):
                 rleaf = pygame.transform.rotate(leaf, -(deg * side + 10))
                 surf.blit(rleaf, (lx - rleaf.get_width() // 2,
                                   ly - rleaf.get_height() // 2))
+
+    elif tier_idx == 4:  # 3-point crown (Master Explorer)
+        crown_bw = int(33 * s)
+        crown_h  = int(21 * s)
+        tip_h    = int(19 * s)
+        band_y   = head_top_y - crown_h
+
+        band_pts = [
+            (cx - crown_bw - int(2 * s), head_top_y),
+            (cx + crown_bw + int(2 * s), head_top_y),
+            (cx + crown_bw,              band_y),
+            (cx - crown_bw,              band_y),
+        ]
+        pygame.draw.polygon(surf, (185, 140, 12), band_pts)
+        pygame.draw.polygon(surf, (255, 215, 45), band_pts, max(1, int(2 * s)))
+
+        for off in [-int(crown_bw * 0.75), 0, int(crown_bw * 0.75)]:
+            hw = int(9 * s)
+            tip_pts = [
+                (cx + off - hw, band_y + int(2 * s)),
+                (cx + off,      band_y - tip_h),
+                (cx + off + hw, band_y + int(2 * s)),
+            ]
+            pygame.draw.polygon(surf, (220, 175, 20), tip_pts)
+            pygame.draw.polygon(surf, (255, 215, 50), tip_pts, max(1, int(1 * s)))
+
+        pygame.draw.line(surf, (255, 215, 45),
+                         (cx - crown_bw, band_y), (cx + crown_bw, band_y),
+                         max(1, int(2 * s)))
+
+        jewel_y = band_y + crown_h // 2
+        for ox, col in [(-int(14 * s), (230, 50, 50)),
+                        (0,             (60, 160, 255)),
+                        (int(14 * s),   (50, 200, 60))]:
+            r = max(2, int(4 * s))
+            pygame.draw.circle(surf, col, (cx + ox, jewel_y), r)
+            pygame.draw.circle(surf, (255, 255, 255),
+                               (cx + ox - max(1, r // 3), jewel_y - max(1, r // 3)),
+                               max(1, int(1.5 * s)))
 
     elif tier_idx == 5:  # fancy crown + cape
         # Cape only in the full-screen overlay (original s > 1.2)

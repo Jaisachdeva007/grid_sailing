@@ -128,11 +128,11 @@ def build_puzzle_pool():
 
 def _pick_puzzles(pool, n_trials, repeated_ratio,
                   repeated_puzzle=None, repeated_start=None, repeated_goal=None,
-                  used_pairs: set = None):
+                  repeated_sub_goal=None, used_pairs: set = None):
     """
     Select n_trials puzzles with the correct repeated:random ratio.
 
-    repeated_start / repeated_goal: (row, col) tuples or None.
+    repeated_start / repeated_goal / repeated_sub_goal: (row, col) tuples or None.
     When set, the repeated puzzle is drawn only from puzzles matching those cells.
 
     used_pairs: set of sequence tuples used in prior random trials.  Random picks
@@ -147,6 +147,9 @@ def _pick_puzzles(pool, n_trials, repeated_ratio,
         if repeated_goal:
             candidates = [p for p in candidates
                           if tuple(p["goal"]) == tuple(repeated_goal)]
+        if repeated_sub_goal:
+            candidates = [p for p in candidates
+                          if p.get("sub_goal") and tuple(p["sub_goal"]) == tuple(repeated_sub_goal)]
         repeated_puzzle = random.choice(candidates) if candidates else random.choice(pool)
 
     n_repeated = round(n_trials * repeated_ratio)
@@ -297,10 +300,12 @@ def run_block(screen, clock, fonts, block_type, block_number,
 
     first_pick = (repeated_puzzle is None)
 
-    repeated_start = config.get("repeated_start", None)
-    repeated_goal  = config.get("repeated_goal",  None)
+    repeated_start    = config.get("repeated_start",    None)
+    repeated_goal     = config.get("repeated_goal",     None)
+    repeated_sub_goal = config.get("repeated_sub_goal", None)
     trials_list, repeated_puzzle, new_random_pairs = _pick_puzzles(
         pool, n_trials, ratio, repeated_puzzle, repeated_start, repeated_goal,
+        repeated_sub_goal=repeated_sub_goal,
         used_pairs=used_random_pairs,
     )
 
