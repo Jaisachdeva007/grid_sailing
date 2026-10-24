@@ -1600,6 +1600,22 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     pygame.K_3, pygame.K_KP3):
                 from core.sounds import play as _play_snd
                 _play_snd("error")
+                # Log invalid keypress during action stage so these trials can be
+                # flagged in analysis (phase="action_invalid")
+                if is_mi and state == ACTION:
+                    _keymap = {pygame.K_1: 1, pygame.K_KP1: 1,
+                               pygame.K_2: 2, pygame.K_KP2: 2,
+                               pygame.K_3: 3, pygame.K_KP3: 3}
+                    _now_inv = time.time()
+                    trial.keypresses_log.append({
+                        "key":    _keymap[ev.key],
+                        "before": None,
+                        "after":  None,
+                        "abs_ms": _now_inv * 1000,
+                        "rel_ms": (_now_inv - trial.trial_start_time) * 1000,
+                        "iki_ms": None,
+                        "phase":  "action_invalid",
+                    })
 
             if state == PAUSED and ev.type == pygame.MOUSEBUTTONDOWN:
                 resume_r, exit_r = _draw_pause_overlay(screen, fonts, trial,
