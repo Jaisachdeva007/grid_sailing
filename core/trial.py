@@ -1082,19 +1082,7 @@ def _draw_mouse_accessory(surf, cx: int, cy: int, tier_idx: int, s: float):
                                (cx + ox - max(1, r // 3), jewel_y - max(1, r // 3)),
                                max(1, int(1.5 * s)))
 
-    elif tier_idx == 5:  # fancy crown + cape
-        # Cape only in the full-screen overlay (original s > 1.2)
-        if s_orig > 1.2:
-            cap_h = int(55 * s)
-            cap_w = int(52 * s)
-            cape_sz = (int(cap_w * 2 + 20), int(cap_h + int(18 * s) + 20))
-            cape = pygame.Surface(cape_sz, pygame.SRCALPHA)
-            ox, oy = cap_w + 10, int(18 * s) + 10
-            cape_pts = [(ox, oy), (10, cap_h + oy), (int(cap_w * 2 + 10), cap_h + oy)]
-            pygame.draw.polygon(cape, (130, 60, 175, 190), cape_pts)
-            pygame.draw.lines(cape, (200, 150, 255, 220), False, cape_pts,
-                              max(1, int(2 * s)))
-            surf.blit(cape, (cx - ox, cy - oy))
+    elif tier_idx == 5:  # 5-point crown (no cape)
 
         # 5-point crown: tall-short-tall-short-tall alternating tips
         crown_bw = int(37 * s)

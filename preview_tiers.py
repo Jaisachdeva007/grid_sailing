@@ -30,40 +30,59 @@ DIM   = (118, 118, 158)
 OUT = os.path.join(os.path.dirname(__file__), "tier_previews")
 os.makedirs(OUT, exist_ok=True)
 
-# ── 1. All 6 tiers side-by-side ───────────────────────────────
-screen.fill(BG)
+# ── 1. All 6 tiers — 3×2 card grid ───────────────────────────
+W2, H2 = 1080, 760
+canvas = pygame.Surface((W2, H2))
+canvas.fill((10, 10, 22))
 
-cols   = 6
-pad    = 60                      # left/right outer margin
-cell_w = (W - pad * 2) // cols
-icon_sz = 110
+CARD_W, CARD_H = 300, 330
+COLS, ROWS     = 3, 2
+GAP_X = (W2 - COLS * CARD_W) // (COLS + 1)
+GAP_Y = (H2 - 60 - ROWS * CARD_H) // (ROWS + 1)
+
+title_s = f_med.render("Grid Sailing — Mouse Tiers", True, WHITE)
+canvas.blit(title_s, (W2 // 2 - title_s.get_width() // 2, 18))
+
+icon_sz = 100
 
 for i, (threshold, body, ear, name, headline, sub) in enumerate(_MOUSE_TIERS):
-    cx = pad + cell_w * i + cell_w // 2
-    cy = H // 2
+    col = i % COLS
+    row = i // COLS
+    cx_card = GAP_X + col * (CARD_W + GAP_X) + CARD_W // 2
+    cy_card = 60 + GAP_Y + row * (CARD_H + GAP_Y)
 
-    # Tier label above icon (high enough to clear accessories)
-    tier_lbl = f_xs.render(f"Tier {i}", True, body)
-    lbl_y    = cy - 130
-    pill     = pygame.Rect(cx - tier_lbl.get_width() // 2 - 12, lbl_y - 4,
-                           tier_lbl.get_width() + 24, 26)
-    pygame.draw.rect(screen, tuple(min(255, c // 2) for c in body), pill, border_radius=13)
-    pygame.draw.rect(screen, body, pill, width=2, border_radius=13)
-    screen.blit(tier_lbl, (cx - tier_lbl.get_width() // 2, lbl_y))
+    # Card background
+    card_rect = pygame.Rect(cx_card - CARD_W // 2, cy_card, CARD_W, CARD_H)
+    pygame.draw.rect(canvas, (18, 20, 40), card_rect, border_radius=18)
+    pygame.draw.rect(canvas, body, card_rect, width=2, border_radius=18)
 
-    _draw_mouse_icon(screen, cx, cy, eyes_open=True, cell_sz=icon_sz, mouse_tier=i)
-    _draw_mouse_accessory(screen, cx, cy, tier_idx=i, s=icon_sz / 75)
+    # Circle background behind mouse
+    circ_r = 72
+    circ_cx, circ_cy = cx_card, cy_card + 90
+    dark_body = tuple(max(0, c - 100) for c in body)
+    pygame.draw.circle(canvas, dark_body, (circ_cx, circ_cy), circ_r)
+    pygame.draw.circle(canvas, body, (circ_cx, circ_cy), circ_r, 2)
 
-    name_s = f_sm.render(name, True, WHITE)
-    screen.blit(name_s, (cx - name_s.get_width() // 2, cy + 76))
+    _draw_mouse_icon(canvas, circ_cx, circ_cy, eyes_open=True, cell_sz=icon_sz, mouse_tier=i)
+    _draw_mouse_accessory(canvas, circ_cx, circ_cy, tier_idx=i, s=icon_sz / 75)
 
-    pts_s = f_xs.render(f"{threshold:,} pts" if threshold else "starting tier", True, DIM)
-    screen.blit(pts_s, (cx - pts_s.get_width() // 2, cy + 104))
+    # Name
+    name_s = f_med.render(name, True, WHITE)
+    canvas.blit(name_s, (cx_card - name_s.get_width() // 2, cy_card + 170))
 
-title = f_med.render("All Mouse Tiers", True, WHITE)
-screen.blit(title, (W // 2 - title.get_width() // 2, 30))
+    # Subtitle (shrink font if too wide for card)
+    if sub:
+        sub_font = f_xs if f_xs.size(sub)[0] < CARD_W - 20 else pygame.font.SysFont("Helvetica Neue", 13)
+        sub_s = sub_font.render(sub, True, body)
+        canvas.blit(sub_s, (cx_card - sub_s.get_width() // 2, cy_card + 210))
 
-pygame.image.save(screen, os.path.join(OUT, "00_all_tiers.png"))  # type: ignore
+    # Points
+    pts_text = f"{threshold:,} pts" if threshold else ""
+    if pts_text:
+        pts_s = f_sm.render(pts_text, True, body)
+        canvas.blit(pts_s, (cx_card - pts_s.get_width() // 2, cy_card + 238 if sub else cy_card + 210))
+
+pygame.image.save(canvas, os.path.join(OUT, "00_all_tiers.png"))
 print("Saved: 00_all_tiers.png")
 
 # ── 2. Each milestone overlay (tiers 1-5) ────────────────────
