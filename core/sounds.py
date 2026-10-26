@@ -10,7 +10,7 @@ def _init_mixer():
     global _initialized
     if _initialized:
         return
-    pygame.mixer.pre_init(frequency=_RATE, size=-16, channels=1, buffer=512)
+    pygame.mixer.pre_init(frequency=_RATE, size=-16, channels=2, buffer=1024)
     _initialized = True
 
 
