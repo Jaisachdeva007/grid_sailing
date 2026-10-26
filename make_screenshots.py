@@ -51,11 +51,11 @@ def make_trial(start, goal, seq, sub_goal=None):
 
 # ── Screenshot 1: Planning stage ──────────────────────────────
 # Valid moves: 1=UP (r-1,c), 2=DOWN-RIGHT (r+1,c+1), 3=DOWN-LEFT (r+1,c-1)
-# 7-move path using all 3 keys:
-# start(6,4) →2→(7,5) →3→(8,4)[sub_goal] →2→(9,5) →1→(8,5) →1→(7,5) →1→(6,5) →1→(5,5)[goal]
+# 7-move path using all 3 keys, NO cell revisits:
+# start(6,4) →3→(7,3) →2→(8,4) →2→(9,5)[sub_goal] →1→(8,5) →1→(7,5) →1→(6,5) →1→(5,5)[goal]
 trial_plan = make_trial(start=(6, 4), goal=(5, 5),
-                        seq=[2, 3, 2, 1, 1, 1, 1],
-                        sub_goal=(8, 4))
+                        seq=[3, 2, 2, 1, 1, 1, 1],
+                        sub_goal=(9, 5))
 
 screen.fill(BG)
 _draw_stage_planning(
@@ -73,21 +73,23 @@ print(f"Saved: {path}")
 
 
 # ── Screenshot 2: Feedback/replay, correct trial ──────────────
-# Same 7-move puzzle, mid-replay: cursor at (9,5), trail shows first 4 cells
+# Same 7-move puzzle, mid-replay after 5 of 7 moves:
+# cursor at (7,5) heading UP toward goal (5,5) — clearly 2 steps away
 trial_nav = make_trial(start=(6, 4), goal=(5, 5),
-                       seq=[2, 3, 2, 1, 1, 1, 1],
-                       sub_goal=(8, 4))
+                       seq=[3, 2, 2, 1, 1, 1, 1],
+                       sub_goal=(9, 5))
 trial_nav.reward_score = 100
 trial_nav.is_correct   = True
 
 now = time.time()
 trail = {
-    (6, 4): now - 1.8,
-    (7, 5): now - 1.3,
-    (8, 4): now - 0.9,
-    (9, 5): now - 0.5,
+    (6, 4): now - 2.4,
+    (7, 3): now - 1.9,
+    (8, 4): now - 1.4,
+    (9, 5): now - 1.0,
+    (8, 5): now - 0.5,
 }
-cursor = (8, 5)
+cursor = (7, 5)
 
 screen.fill(BG)
 _draw_stage_feedback(

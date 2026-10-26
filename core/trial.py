@@ -1793,14 +1793,19 @@ def _flush_keypresses(trial_id, trial):
     if not (trial_id and trial.keypresses_log):
         return
     for kp in trial.keypresses_log:
+        before = kp["before"]
+        after  = kp["after"]
         save_keypress(
             trial_id=trial_id, participant_id=trial.participant_id,
             key_pressed=kp["key"],
-            cursor_row_before=kp["before"][0], cursor_col_before=kp["before"][1],
-            cursor_row_after=kp["after"][0],   cursor_col_after=kp["after"][1],
+            cursor_row_before=before[0] if before else None,
+            cursor_col_before=before[1] if before else None,
+            cursor_row_after=after[0]   if after  else None,
+            cursor_col_after=after[1]   if after  else None,
             timestamp_ms=kp["abs_ms"],
             time_since_trial_start_ms=kp["rel_ms"],
             time_since_last_press_ms=kp["iki_ms"],
+            phase=kp.get("phase"),
         )
 
 

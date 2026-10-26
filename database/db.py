@@ -113,13 +113,14 @@ def initialise_database():
             trial_id                 INTEGER NOT NULL,
             participant_id           TEXT NOT NULL,
             key_pressed              INTEGER NOT NULL,
-            cursor_row_before        INTEGER NOT NULL,
-            cursor_col_before        INTEGER NOT NULL,
-            cursor_row_after         INTEGER NOT NULL,
-            cursor_col_after         INTEGER NOT NULL,
+            cursor_row_before        INTEGER,
+            cursor_col_before        INTEGER,
+            cursor_row_after         INTEGER,
+            cursor_col_after         INTEGER,
             timestamp_ms             REAL NOT NULL,
             time_since_trial_start_ms REAL NOT NULL,
             time_since_last_press_ms  REAL,
+            phase                    TEXT,
             FOREIGN KEY (trial_id) REFERENCES trials(trial_id)
         )
     """)
@@ -160,6 +161,7 @@ def initialise_database():
         "ALTER TABLE trials ADD COLUMN wrong_locked_path INTEGER DEFAULT 0",
         "ALTER TABLE trials ADD COLUMN skipped_sub_goal INTEGER DEFAULT 0",
         "ALTER TABLE trials ADD COLUMN planning_movement_time_ms REAL",
+        "ALTER TABLE keypresses ADD COLUMN phase TEXT",
     ]:
         try:
             c.execute(migration)
@@ -607,20 +609,15 @@ def save_trial(session_id, participant_id, trial_number, grid_type,
 def save_keypress(trial_id, participant_id, key_pressed,
                   cursor_row_before, cursor_col_before,
                   cursor_row_after, cursor_col_after,
-                  timestamp_ms, time_since_trial_start_ms, time_since_last_press_ms):
+                  timestamp_ms, time_since_trial_start_ms, time_since_last_press_ms,
+                  phase=None):
     """
     Save a single key press event immediately to the database.
     Called after EVERY key press — guarantees no data loss on crash.
 
-    Args:
-        trial_id (int): Trial this key press belongs to.
-        participant_id (str): Participant who pressed the key.
-        key_pressed (int): 1, 2, or 3.
-        cursor_row_before / cursor_col_before: Position before the press.
-        cursor_row_after / cursor_col_after: Position after the press.
-        timestamp_ms (float): Absolute time in milliseconds.
-        time_since_trial_start_ms (float): Time since the trial began.
-        time_since_last_press_ms (float or None): Inter-key interval.
+    phase values: "action" (normal PP/MI press), "planning" (planning stage),
+                  "action_invalid" (MI participant pressed a key during ACTION stage).
+    cursor_row/col_before/after are NULL for action_invalid rows (cursor does not move).
     """
     conn = get_connection()
     conn.execute("""
@@ -628,13 +625,15 @@ def save_keypress(trial_id, participant_id, key_pressed,
             trial_id, participant_id, key_pressed,
             cursor_row_before, cursor_col_before,
             cursor_row_after, cursor_col_after,
-            timestamp_ms, time_since_trial_start_ms, time_since_last_press_ms
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            timestamp_ms, time_since_trial_start_ms, time_since_last_press_ms,
+            phase
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         trial_id, participant_id, key_pressed,
         cursor_row_before, cursor_col_before,
         cursor_row_after, cursor_col_after,
-        timestamp_ms, time_since_trial_start_ms, time_since_last_press_ms
+        timestamp_ms, time_since_trial_start_ms, time_since_last_press_ms,
+        phase,
     ))
     conn.commit()   # commit immediately — crash-safe
     conn.close()

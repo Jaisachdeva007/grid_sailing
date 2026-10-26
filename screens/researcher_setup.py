@@ -936,14 +936,19 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
             _t(screen, f_sm, "Puzzle locked in — all participants use this same grid:",
                GREEN, COL1, oy(y))
             y += 22
+            locked_sg = global_puz.get("sub_goal")
+            sg_txt = (f"·   Small cheese at  Row {locked_sg[0]}, Col {locked_sg[1]}   "
+                      if locked_sg else "·   ⚠ No small cheese set — reset and re-set all 3 positions   ")
             _t(screen, f_xs,
                f"MOUSE starts at  Row {global_puz['start'][0]}, Col {global_puz['start'][1]}   "
                f"·   CHEESE is at  Row {global_puz['goal'][0]}, Col {global_puz['goal'][1]}   "
+               + sg_txt +
                f"·   Optimal length  {global_puz['length']} moves",
-               DIM, COL1, oy(y))
+               DIM if locked_sg else ORANGE, COL1, oy(y))
             y += 20
-            locked_start = tuple(global_puz["start"])
-            locked_goal  = tuple(global_puz["goal"])
+            locked_start    = tuple(global_puz["start"])
+            locked_goal     = tuple(global_puz["goal"])
+            locked_sub_goal = tuple(locked_sg) if locked_sg else None
         else:
             # Step 1
             step1_done = repeated_start[0] is not None
@@ -973,24 +978,27 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
             if step1_done and step2_done:
                 if step3_done:
                     r2, c2 = repeated_sub_goal[0]
-                    s3_txt = f"Step 3  ✓  SMALL CHEESE at  Row {r2}, Col {c2}  (optional)"
+                    s3_txt = f"Step 3  ✓  SMALL CHEESE at  Row {r2}, Col {c2}"
                     s3_col = GREEN
                 else:
-                    s3_txt = "Step 3  —  Click a third cell for the SMALL CHEESE waypoint  (optional)"
-                    s3_col = ORANGE
+                    s3_txt = "Step 3  —  Click a third cell for the SMALL CHEESE waypoint  (required)"
+                    s3_col = RED
             else:
-                s3_txt = "Step 3  —  Small cheese waypoint  (set after placing MOUSE + CHEESE)"
+                s3_txt = "Step 3  —  Small cheese waypoint  (required once start + goal are set)"
                 s3_col = DIM
             _t(screen, f_sm, s3_txt, s3_col, COL1, oy(y)); y += 26
 
-            if step1_done:
+            if step1_done and step2_done and not step3_done:
+                note = "Every puzzle needs a small cheese — click a third cell to complete the setup."
+            elif step1_done:
                 note = "To clear and start over, click the MOUSE cell again."
             else:
-                note = "All optional — leave blank and the system picks a random puzzle automatically."
+                note = "Leave all three blank to let the system pick random puzzles automatically."
             _t(screen, f_xs, note, DIM, COL1, oy(y))
             y += 20
-            locked_start = None
-            locked_goal  = None
+            locked_start    = None
+            locked_goal     = None
+            locked_sub_goal = None
 
         # Mini grid — column headers above, row numbers to the left
         _mini_rects.clear()
@@ -1020,11 +1028,12 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
                 _mini_rects.append((cr, r, c))
                 cell_pos = (r, c)
 
-                is_start    = (locked_start and cell_pos == locked_start) or \
-                              (not locked_start and repeated_start[0] == cell_pos)
-                is_goal     = (locked_goal  and cell_pos == locked_goal)  or \
-                              (not locked_goal  and repeated_goal[0]  == cell_pos)
-                is_sub_goal = (not locked_start and repeated_sub_goal[0] == cell_pos)
+                is_start    = (locked_start    and cell_pos == locked_start)    or \
+                              (not locked_start    and repeated_start[0]    == cell_pos)
+                is_goal     = (locked_goal     and cell_pos == locked_goal)     or \
+                              (not locked_goal     and repeated_goal[0]     == cell_pos)
+                is_sub_goal = (locked_sub_goal and cell_pos == locked_sub_goal) or \
+                              (not locked_start    and repeated_sub_goal[0] == cell_pos)
 
                 if is_start:
                     bg = ACCENT; cell_label = "MOUSE"; tc2 = BG
@@ -1050,13 +1059,13 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
         info_x = COL1 + GRID_OFF_X + GRID_SIZE * MINI_CELL + 24
         info_y = mg_top
         if locked_start:
-            _t(screen, f_xs, "Blue  = MOUSE start",    ACCENT,        info_x, info_y)
-            _t(screen, f_xs, "Amber = CHEESE goal",   (200, 160, 40), info_x, info_y + 22)
+            _t(screen, f_xs, "Blue  = MOUSE start",   ACCENT,          info_x, info_y)
+            _t(screen, f_xs, "Amber = CHEESE goal",   (200, 160, 40),  info_x, info_y + 22)
             _t(screen, f_xs, "Pink  = small cheese",  (200, 120, 160), info_x, info_y + 44)
-            _t(screen, f_xs, "(locked — use Reset to change)", DIM, info_x, info_y + 66)
+            _t(screen, f_xs, "Locked — click Reset to change", DIM,    info_x, info_y + 68)
 
-        # Reset button (only meaningful when a global puzzle is set)
-        reset_btn_r = pygame.Rect(info_x, info_y + 70, 200, 36)
+        # Reset button — moved to info_y+98 so it never overlaps the legend text
+        reset_btn_r = pygame.Rect(info_x, info_y + 98, 200, 36)
         reset_hover = reset_btn_r.collidepoint(pygame.mouse.get_pos())
         rb_col  = (180, 60, 60) if reset_hover else (100, 40, 40)
         rb_tc   = WHITE if global_puz else (60, 60, 80)
@@ -1133,6 +1142,9 @@ def _validate_and_launch(mode, pid_box, age_box, gender_dd, hand_dd,
                          start_block_input,
                          practice_cond, test_cond, repeated_start, repeated_goal=None,
                          repeated_sub_goal=None):
+    if repeated_start and repeated_goal and not repeated_sub_goal:
+        return "Set the small cheese (step 3) to complete the repeated puzzle, or clear the grid to use random puzzles."
+
     if mode == "new":
         pid     = pid_box.text.strip().upper()
         age_str = age_box.text.strip()

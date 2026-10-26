@@ -160,6 +160,7 @@ KEYPRESS_COLUMNS = [
     "keypress_id",
     "key_pressed",            # 1 / 2 / 3
     "key_direction",          # UP / DOWN-RIGHT / DOWN-LEFT
+    "phase",                  # "action" / "planning" / "action_invalid" (MI key during imagery)
     "cursor_row_before",
     "cursor_col_before",
     "cursor_row_after",
@@ -190,6 +191,7 @@ _NULLABLE_FIELDS = (
     "imagery_duration_ms", "number_of_moves", "reward_score",
     "oob_count", "keypress_id", "key_pressed", "timestamp_ms",
     "time_since_trial_start_ms", "time_since_last_press_ms",
+    "phase",
     "session_completed_at",
     "time_to_imagery_start_ms", "time_to_imagery_start_s",
     "action_reaction_time_ms", "action_reaction_time_s",
@@ -312,6 +314,7 @@ def _fetch_rows(participant_id=None) -> list:
             t.created_at                       AS trial_created_at,
             k.keypress_id,
             k.key_pressed,
+            k.phase,
             k.cursor_row_before, k.cursor_col_before,
             k.cursor_row_after,  k.cursor_col_after,
             k.timestamp_ms,
