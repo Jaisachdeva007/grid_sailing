@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import pygame
 pygame.init()
 
-W, H = 1280, 800
+W, H = 1560, 820
 screen = pygame.Surface((W, H))
 
 # Build fonts the same way the game does
@@ -33,30 +33,32 @@ os.makedirs(OUT, exist_ok=True)
 # ── 1. All 6 tiers side-by-side ───────────────────────────────
 screen.fill(BG)
 
-cols = 6
-cell_w = W // cols
-icon_sz = 120
+cols   = 6
+pad    = 60                      # left/right outer margin
+cell_w = (W - pad * 2) // cols
+icon_sz = 110
 
 for i, (threshold, body, ear, name, headline, sub) in enumerate(_MOUSE_TIERS):
-    cx = cell_w * i + cell_w // 2
-    cy = H // 2 - 60
+    cx = pad + cell_w * i + cell_w // 2
+    cy = H // 2
 
-    # Tier colour background pill
-    pill = pygame.Rect(cx - 70, cy - 90, 140, 30)
-    pygame.draw.rect(screen, tuple(min(255, c // 2) for c in body) + (0,),
-                     pill, border_radius=15)
-    pygame.draw.rect(screen, body, pill, width=2, border_radius=15)
+    # Tier label above icon (high enough to clear accessories)
     tier_lbl = f_xs.render(f"Tier {i}", True, body)
-    screen.blit(tier_lbl, (cx - tier_lbl.get_width() // 2, cy - 84))
+    lbl_y    = cy - 130
+    pill     = pygame.Rect(cx - tier_lbl.get_width() // 2 - 12, lbl_y - 4,
+                           tier_lbl.get_width() + 24, 26)
+    pygame.draw.rect(screen, tuple(min(255, c // 2) for c in body), pill, border_radius=13)
+    pygame.draw.rect(screen, body, pill, width=2, border_radius=13)
+    screen.blit(tier_lbl, (cx - tier_lbl.get_width() // 2, lbl_y))
 
     _draw_mouse_icon(screen, cx, cy, eyes_open=True, cell_sz=icon_sz, mouse_tier=i)
     _draw_mouse_accessory(screen, cx, cy, tier_idx=i, s=icon_sz / 75)
 
     name_s = f_sm.render(name, True, WHITE)
-    screen.blit(name_s, (cx - name_s.get_width() // 2, cy + 80))
+    screen.blit(name_s, (cx - name_s.get_width() // 2, cy + 76))
 
-    pts_s = f_xs.render(f"{threshold:,} pts" if threshold else "default", True, DIM)
-    screen.blit(pts_s, (cx - pts_s.get_width() // 2, cy + 108))
+    pts_s = f_xs.render(f"{threshold:,} pts" if threshold else "starting tier", True, DIM)
+    screen.blit(pts_s, (cx - pts_s.get_width() // 2, cy + 104))
 
 title = f_med.render("All Mouse Tiers", True, WHITE)
 screen.blit(title, (W // 2 - title.get_width() // 2, 30))
