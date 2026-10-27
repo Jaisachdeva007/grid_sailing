@@ -639,7 +639,8 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
     move_count      = 0
     keys_used       = set()    # which of 1/2/3 have been pressed at least once
     sub_goal_visited = False   # True once cursor has passed through trial.sub_goal
-    goal_just_reached = False  # True for one frame after cursor lands on cheese
+    goal_just_reached = False  # True after cursor lands on cheese; waits 300ms then ITI
+    goal_reached_t    = None   # time cursor landed on cheese
 
     trial.trial_start_time = time.time()
 
@@ -655,8 +656,8 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
         dt           = now_s - last_frame_t
         last_frame_t = now_s
 
-        # Previous frame drew the mouse on the cheese — now save + go to ITI
-        if goal_just_reached and state == "explore":
+        # 300ms after mouse lands on cheese: save + go to ITI
+        if goal_just_reached and state == "explore" and goal_reached_t and (now_s - goal_reached_t) >= 0.3:
             goal_just_reached = False
             trial.movement_time_ms = (last_key_t - first_key_t) * 1000
             trial.planned_sequence = []
@@ -759,7 +760,8 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     # AND sub_goal (SMALL CHEESE) was visited first.
                     sub_goal_ok = (trial.sub_goal is None or sub_goal_visited)
                     if cursor == trial.goal and {1, 2, 3}.issubset(keys_used) and sub_goal_ok:
-                        goal_just_reached = True  # draw one frame with mouse on cheese
+                        goal_just_reached = True
+                        goal_reached_t    = now_t
 
             # ITI: SPACE triggers jitter then trial start
             if state == ITI and ev.type == pygame.KEYDOWN and ev.key == pygame.K_SPACE:
