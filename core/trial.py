@@ -655,6 +655,22 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
         dt           = now_s - last_frame_t
         last_frame_t = now_s
 
+        # Previous frame drew the mouse on the cheese — now save + go to ITI
+        if goal_just_reached and state == "explore":
+            goal_just_reached = False
+            trial.movement_time_ms = (last_key_t - first_key_t) * 1000
+            trial.planned_sequence = []
+            trial.is_correct       = True
+            trial.sub_goal_visited = sub_goal_visited
+            used_keys_list = [kp["key"] for kp in trial.keypresses_log]
+            score, _, _ = _score(used_keys_list, trial.optimal_sequence, cursor, trial.goal)
+            trial.reward_score    = score
+            trial.number_of_moves = move_count
+            trial_id  = _save(trial, session_id)
+            update_session_progress(session_id, trial.trial_number)
+            state     = ITI
+            iti_start = now_s
+
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
                 pygame.quit(); import sys; sys.exit()
@@ -750,22 +766,6 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                 state        = JITTER
                 jitter_start = now_s
                 jitter_dur   = random.uniform(3.0, 5.0)
-
-        # One frame after mouse lands on cheese: save + go to ITI
-        if goal_just_reached and state == "explore":
-            goal_just_reached = False
-            trial.movement_time_ms = (last_key_t - first_key_t) * 1000
-            trial.planned_sequence = []
-            trial.is_correct       = True
-            trial.sub_goal_visited = sub_goal_visited
-            used_keys_list = [kp["key"] for kp in trial.keypresses_log]
-            score, _, _ = _score(used_keys_list, trial.optimal_sequence, cursor, trial.goal)
-            trial.reward_score    = score
-            trial.number_of_moves = move_count
-            trial_id  = _save(trial, session_id)
-            update_session_progress(session_id, trial.trial_number)
-            state     = ITI
-            iti_start = now_s
 
         # Safety auto-advance from ITI after 5 min (SPACE normally required)
         if state == ITI and iti_start and (now_s - iti_start) >= 300.0:
