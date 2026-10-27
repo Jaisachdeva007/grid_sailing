@@ -471,6 +471,8 @@ def run_block(screen, clock, fonts, block_type, block_number,
                 locked_sequence=locked_sequence if grid_type == "repeated" else None,
                 mouse_tier=milestone_tier,
                 milestone_fn=_do_milestone,
+                skip_input_timeout=(guided_gate_trial is not None
+                                    and trial_number <= guided_gate_trial),
             )
 
         if result.get("paused_exit"):

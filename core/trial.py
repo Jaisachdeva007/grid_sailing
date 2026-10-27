@@ -1312,7 +1312,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
               session_state: dict = None,
               locked_sequence=None,
               mouse_tier: int = 0,
-              milestone_fn=None) -> dict:
+              milestone_fn=None,
+              skip_input_timeout: bool = False) -> dict:
 
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
@@ -1649,9 +1650,9 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
             input_entered_t = now_s
 
         # 10-sec timeout in INPUT: auto-advance after 10s regardless of partial input.
-        # Skipped for the first 3 trials (Juliet may be explaining the task).
+        # Skipped for the first 3 trials of session 1 practice block 1 (guided gate).
         if (state == INPUT and input_entered_t
-                and trial.trial_number > 3
+                and not skip_input_timeout
                 and (now_s - input_entered_t) >= 10.0):
             if is_ctrl:
                 _finalise(trial, list(typed_seq), session_id, locked_sequence=locked_sequence)
