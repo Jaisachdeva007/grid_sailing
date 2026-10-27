@@ -1334,6 +1334,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
     input_entered_t      = None   # when INPUT state began; used for 10-sec no-key timeout
     post_action_t        = None   # when POST_ACTION began; 1-sec pause before feedback
     post_action_next     = None   # "feedback" or "iti" — where to go after the pause
+    input_timed_out      = False  # True when INPUT 10-sec timeout fired on PP trial
 
     particles         = []
     particles_spawned = False
@@ -1655,7 +1656,12 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                 update_session_progress(session_id, trial.trial_number)
                 enter_feedback() if show_feedback else enter_iti()
             else:
-                enter_action()
+                input_timed_out = True
+                action_path = _build_path(trial.start, list(typed_seq))
+                _finalise(trial, list(typed_seq), session_id, locked_sequence=locked_sequence)
+                trial_id = _save(trial, session_id)
+                update_session_progress(session_id, trial.trial_number)
+                enter_feedback() if show_feedback else enter_iti()
 
         # 1-sec post-action pause → feedback or ITI
         if state == POST_ACTION and post_action_t and (now_s - post_action_t) >= 1.0:
@@ -1753,7 +1759,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     screen, fonts, trial, cumulative_score,
                     rp_cursor, rp_trail, rp_done,
                     total_trials, block_type, sn,
-                    streak=streak, show_score=show_score, mouse_tier=mouse_tier)
+                    streak=streak, show_score=show_score, mouse_tier=mouse_tier,
+                    timed_out=input_timed_out)
             if particles:
                 _update_draw_particles(screen, particles, dt)
         elif draw_state in (ITI, JITTER):
@@ -2306,7 +2313,8 @@ def _draw_stage_action(screen, fonts, trial,
 def _draw_stage_feedback(screen, fonts, trial, cum_score,
                          rp_cursor, rp_trail, rp_done,
                          total_trials, block_type, sn,
-                         streak: int = 0, show_score: bool = True, mouse_tier: int = 0):
+                         streak: int = 0, show_score: bool = True, mouse_tier: int = 0,
+                         timed_out: bool = False):
     f_big, f_med, f_sm, f_xs = fonts
     W, H = screen.get_width(), screen.get_height()
     GL, GT, GR, GRW, CELL = _layout(W, H)
@@ -2339,7 +2347,9 @@ def _draw_stage_feedback(screen, fonts, trial, cum_score,
 
     # Failure reason — shown under the banner for incorrect trials
     if not trial.is_correct:
-        if getattr(trial, "wrong_locked_path", False):
+        if timed_out:
+            reason = "Timed out"
+        elif getattr(trial, "wrong_locked_path", False):
             reason = "Use your locked sequence!"
         elif getattr(trial, "skipped_sub_goal", False):
             reason = "Must pass through the SMALL CHEESE!"
