@@ -639,6 +639,7 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
     move_count      = 0
     keys_used       = set()    # which of 1/2/3 have been pressed at least once
     sub_goal_visited = False   # True once cursor has passed through trial.sub_goal
+    goal_just_reached = False  # True for one frame after cursor lands on cheese
 
     trial.trial_start_time = time.time()
 
@@ -742,24 +743,29 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     # AND sub_goal (SMALL CHEESE) was visited first.
                     sub_goal_ok = (trial.sub_goal is None or sub_goal_visited)
                     if cursor == trial.goal and {1, 2, 3}.issubset(keys_used) and sub_goal_ok:
-                        trial.movement_time_ms = (last_key_t - first_key_t) * 1000
-                        trial.planned_sequence = []
-                        trial.is_correct       = True
-                        trial.sub_goal_visited = sub_goal_visited
-                        used_keys_list = [kp["key"] for kp in trial.keypresses_log]
-                        score, _, _ = _score(used_keys_list, trial.optimal_sequence, cursor, trial.goal)
-                        trial.reward_score    = score
-                        trial.number_of_moves = move_count
-                        trial_id  = _save(trial, session_id)
-                        update_session_progress(session_id, trial.trial_number)
-                        state     = ITI
-                        iti_start = now_t
+                        goal_just_reached = True  # draw one frame with mouse on cheese
 
             # ITI: SPACE triggers jitter then trial start
             if state == ITI and ev.type == pygame.KEYDOWN and ev.key == pygame.K_SPACE:
                 state        = JITTER
                 jitter_start = now_s
                 jitter_dur   = random.uniform(3.0, 5.0)
+
+        # One frame after mouse lands on cheese: save + go to ITI
+        if goal_just_reached and state == "explore":
+            goal_just_reached = False
+            trial.movement_time_ms = (last_key_t - first_key_t) * 1000
+            trial.planned_sequence = []
+            trial.is_correct       = True
+            trial.sub_goal_visited = sub_goal_visited
+            used_keys_list = [kp["key"] for kp in trial.keypresses_log]
+            score, _, _ = _score(used_keys_list, trial.optimal_sequence, cursor, trial.goal)
+            trial.reward_score    = score
+            trial.number_of_moves = move_count
+            trial_id  = _save(trial, session_id)
+            update_session_progress(session_id, trial.trial_number)
+            state     = ITI
+            iti_start = now_s
 
         # Safety auto-advance from ITI after 5 min (SPACE normally required)
         if state == ITI and iti_start and (now_s - iti_start) >= 300.0:
