@@ -51,15 +51,16 @@ from core.grid import apply_key
 from database.db import save_trial, save_keypress, update_session_progress
 
 # ── States ────────────────────────────────────────────────────
-PLANNING  = "planning"
-INPUT     = "input"
-COUNTDOWN = "countdown"
-ACTION    = "action"
-FEEDBACK  = "feedback"
-ITI       = "iti"
-JITTER    = "jitter"   # brief random delay after SPACE, before trial starts
-DONE      = "done"
-PAUSED    = "paused"
+PLANNING    = "planning"
+INPUT       = "input"
+COUNTDOWN   = "countdown"
+ACTION      = "action"
+POST_ACTION = "post_action"   # 1-sec pause after action so mouse is visible on cheese
+FEEDBACK    = "feedback"
+ITI         = "iti"
+JITTER      = "jitter"   # brief random delay after SPACE, before trial starts
+DONE        = "done"
+PAUSED      = "paused"
 
 # ── Colorblind-safe palette ───────────────────────────────────
 BG          = (8,    8,   16)
@@ -1334,7 +1335,9 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
     pause_rect      = None
     researcher_rect = None
     btns            = {}   # on-screen button rects; populated each draw frame
-    input_entered_t = None  # when INPUT state began; used for 10-sec no-key timeout
+    input_entered_t      = None   # when INPUT state began; used for 10-sec no-key timeout
+    post_action_t        = None   # when POST_ACTION began; 1-sec pause before feedback
+    post_action_next     = None   # "feedback" or "iti" — where to go after the pause
 
     particles         = []
     particles_spawned = False
@@ -1447,7 +1450,9 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                                   locked_sequence=locked_sequence)
                         trial_id = _save(trial, session_id)
                         update_session_progress(session_id, trial.trial_number)
-                        enter_feedback() if show_feedback else enter_iti()
+                        state            = POST_ACTION
+                        post_action_t    = time.time()
+                        post_action_next = "feedback" if show_feedback else "iti"
             # PP ACTION: participant physically re-types their sequence; SPACE ends trial
             if state == ACTION and is_pp and ev.type == pygame.KEYDOWN:
                 _pkmap = {
@@ -1484,8 +1489,10 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     trial_id = _save(trial, session_id)
                     update_session_progress(session_id, trial.trial_number)
                     # Replay animates actual physical sequence, not planned
-                    action_path = _build_path(trial.start, pp_typed_seq)
-                    enter_feedback() if show_feedback else enter_iti()
+                    action_path      = _build_path(trial.start, pp_typed_seq)
+                    state            = POST_ACTION
+                    post_action_t    = time.time()
+                    post_action_next = "feedback" if show_feedback else "iti"
 
             if ev.type == pygame.MOUSEBUTTONDOWN and state != PAUSED:
                 if state == PLANNING and ev.button == 1 and show_timer:
@@ -1653,6 +1660,13 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                 enter_feedback() if show_feedback else enter_iti()
             else:
                 enter_action()
+
+        # 1-sec post-action pause → feedback or ITI
+        if state == POST_ACTION and post_action_t and (now_s - post_action_t) >= 1.0:
+            if post_action_next == "feedback":
+                enter_feedback()
+            else:
+                enter_iti()
 
         if state == FEEDBACK and not rp_done:
             if now_ms - rp_timer >= REPLAY_MS:
