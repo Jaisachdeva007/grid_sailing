@@ -623,13 +623,14 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
     cursor = trial.start
     trail  = {}
     state  = "explore"
-    pre_pause_state = "explore"
-    iti_start    = None
-    jitter_start = None
-    jitter_dur   = 0.0
-    trial_id     = None
-    pause_rect   = None
-    researcher_rect = None
+    pre_pause_state  = "explore"
+    iti_start        = None
+    jitter_start     = None
+    jitter_dur       = 0.0
+    trial_id         = None
+    pause_rect       = None
+    researcher_rect  = None
+    goal_reached_t   = None   # time goal was reached; 1-sec pause before ITI
     last_frame_t = time.time()
 
     first_key_t     = None
@@ -740,24 +741,29 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     # AND sub_goal (SMALL CHEESE) was visited first.
                     sub_goal_ok = (trial.sub_goal is None or sub_goal_visited)
                     if cursor == trial.goal and {1, 2, 3}.issubset(keys_used) and sub_goal_ok:
-                        trial.movement_time_ms = (last_key_t - first_key_t) * 1000
-                        trial.planned_sequence = []
-                        trial.is_correct       = True
-                        trial.sub_goal_visited = sub_goal_visited
-                        used_keys = [kp["key"] for kp in trial.keypresses_log]
-                        score, _, _ = _score(used_keys, trial.optimal_sequence, cursor, trial.goal)
-                        trial.reward_score     = score
-                        trial.number_of_moves  = move_count
-                        trial_id = _save(trial, session_id)
-                        update_session_progress(session_id, trial.trial_number)
-                        state     = ITI
-                        iti_start = now_t
+                        if goal_reached_t is None:
+                            goal_reached_t = now_t   # start 1-sec pause so player sees mouse on cheese
 
             # ITI: SPACE triggers jitter then trial start
             if state == ITI and ev.type == pygame.KEYDOWN and ev.key == pygame.K_SPACE:
                 state        = JITTER
                 jitter_start = now_s
                 jitter_dur   = random.uniform(3.0, 5.0)
+
+        # 1-sec pause after goal reached so player sees mouse on cheese, then save + ITI
+        if goal_reached_t and state == "explore" and (now_t - goal_reached_t) >= 1.0:
+            trial.movement_time_ms = (last_key_t - first_key_t) * 1000
+            trial.planned_sequence = []
+            trial.is_correct       = True
+            trial.sub_goal_visited = sub_goal_visited
+            used_keys_list = [kp["key"] for kp in trial.keypresses_log]
+            score, _, _ = _score(used_keys_list, trial.optimal_sequence, cursor, trial.goal)
+            trial.reward_score    = score
+            trial.number_of_moves = move_count
+            trial_id  = _save(trial, session_id)
+            update_session_progress(session_id, trial.trial_number)
+            state     = ITI
+            iti_start = now_t
 
         # Safety auto-advance from ITI after 5 min (SPACE normally required)
         if state == ITI and iti_start and (now_s - iti_start) >= 300.0:
@@ -1328,6 +1334,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
     pause_rect      = None
     researcher_rect = None
     btns            = {}   # on-screen button rects; populated each draw frame
+    input_entered_t = None  # when INPUT state began; used for 10-sec no-key timeout
 
     particles         = []
     particles_spawned = False
@@ -1632,6 +1639,20 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
         # Auto-transitions
         if state == PLANNING and show_timer and elapsed >= p_time:
             state = INPUT   # typed_seq and first_key_time carry over from planning
+            input_entered_t = now_s
+
+        # 10-sec no-key timeout in INPUT: auto-advance if participant hasn't pressed anything.
+        # Skipped for the first 3 trials (Juliet may be explaining the task).
+        if (state == INPUT and input_entered_t and not typed_seq
+                and trial.trial_number > 3
+                and (now_s - input_entered_t) >= 10.0):
+            if is_ctrl:
+                _finalise(trial, [], session_id, locked_sequence=locked_sequence)
+                trial_id = _save(trial, session_id)
+                update_session_progress(session_id, trial.trial_number)
+                enter_feedback() if show_feedback else enter_iti()
+            else:
+                enter_action()
 
         if state == FEEDBACK and not rp_done:
             if now_ms - rp_timer >= REPLAY_MS:
@@ -2143,8 +2164,6 @@ def _draw_stage_input(screen, fonts, trial, typed_seq, blink_on,
         bx = rx + 14 + ss.get_width() + 5
         pygame.draw.rect(screen, ACCENT, (bx, ry + seq_y, 2, ss.get_height()))
 
-    cnt = f_xs.render(f"{len(typed_seq)} key(s) entered", True, DIM)
-    screen.blit(cnt, (rx + 14, ry + cnt_y))
     ry += card_h + 10
 
     # ── Direction buttons (1 / 2 / 3) + backspace ────────────
