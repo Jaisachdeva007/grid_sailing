@@ -752,7 +752,7 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                 jitter_dur   = random.uniform(3.0, 5.0)
 
         # 1-sec pause after goal reached so player sees mouse on cheese, then save + ITI
-        if goal_reached_t and state == "explore" and (now_t - goal_reached_t) >= 1.0:
+        if goal_reached_t and state == "explore" and (now_s - goal_reached_t) >= 1.0:
             trial.movement_time_ms = (last_key_t - first_key_t) * 1000
             trial.planned_sequence = []
             trial.is_correct       = True
@@ -1648,13 +1648,13 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
             state = INPUT   # typed_seq and first_key_time carry over from planning
             input_entered_t = now_s
 
-        # 10-sec no-key timeout in INPUT: auto-advance if participant hasn't pressed anything.
+        # 10-sec timeout in INPUT: auto-advance after 10s regardless of partial input.
         # Skipped for the first 3 trials (Juliet may be explaining the task).
-        if (state == INPUT and input_entered_t and not typed_seq
+        if (state == INPUT and input_entered_t
                 and trial.trial_number > 3
                 and (now_s - input_entered_t) >= 10.0):
             if is_ctrl:
-                _finalise(trial, [], session_id, locked_sequence=locked_sequence)
+                _finalise(trial, list(typed_seq), session_id, locked_sequence=locked_sequence)
                 trial_id = _save(trial, session_id)
                 update_session_progress(session_id, trial.trial_number)
                 enter_feedback() if show_feedback else enter_iti()
