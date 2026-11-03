@@ -526,7 +526,7 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
     age_box   = InputBox(INP_X2, 0, 100, ROW_H, "e.g. 22")
     gender_dd = Dropdown(INP_X2, 0, 190, ROW_H,
                          ["Female", "Male", "Non-binary", "Other", "Prefer not to say"])
-    hand_dd   = Dropdown(INP_X2, 0, 190, ROW_H, ["Right", "Left", "Ambidextrous"])
+    hand_dd   = Dropdown(INP_X2, 0, 190, ROW_H, ["Right", "Left"])
 
     ret_pid_box = InputBox(INP_X1, 0, 190, ROW_H, "Participant ID")
 
