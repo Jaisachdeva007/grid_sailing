@@ -856,12 +856,12 @@ def _show_block_intro(screen, clock, fonts, block_type, block_number,
     elif block_type == "pre_test":
         title = "Baseline"
         desc  = ("Navigate the MOUSE through the SMALL CHEESE to the BIG CHEESE. "
-                 "Try to find the shortest sequence using all keys at least once.")
+                 "Try to find the shortest sequence using each key at least once.")
     elif block_type == "post_test":
         title = "Final Block"
         desc  = ("In this block you will go back to FREE PLAY. Trials are NO LONGER split into "
                  "planning and action stages. Navigate the MOUSE through the SMALL CHEESE to the "
-                 "BIG CHEESE. Try to find the shortest sequence using all keys at least once.")
+                 "BIG CHEESE. Try to find the shortest sequence using each key at least once.")
     elif block_type == "practice":
         title = "Practice"
         if is_mi:
@@ -909,6 +909,12 @@ def _show_break(screen, clock, fonts,
     lines = [
         ("Well done! Take a moment to rest before continuing.", DIM),
     ]
+    if completed_block == "familiarization" and block_num == 2:
+        lines += [
+            ("", DIM),
+            ("Please notify the researcher before proceeding.", WHITE),
+            ("Wait for researcher's instructions before pressing SPACE to continue.", DIM),
+        ]
     _card_screen(screen, clock, fonts,
                  title=f"Take a Short Break  (block {block_num} of {total_blocks})",
                  title_col=GREEN, badge=None, lines=lines,
@@ -1110,14 +1116,25 @@ def _show_try_it_yourself_practice_intro(screen, clock, fonts):
 
 
 def _show_score_explanation(screen, clock, fonts):
-    """Score explanation slide shown before every practice block."""
+    """Score explanation shown before every practice block — two slides."""
     _card_screen(screen, clock, fonts,
-                 title="Score",
+                 title="Score  (part 1 of 2)",
                  title_col=GREEN, badge=None,
                  lines=[
-                     ("During the practice blocks you will receive feedback on your planned sequences after each trial. You will receive a score for each trial AND a cumulative score.", DIM),
+                     ("You will now receive feedback on your planned sequences after each trial.", DIM),
                      ("", DIM),
-                     ("A sequence that successfully moves the MOUSE through the SMALL CHEESE to the BIG CHEESE using the shortest possible path and all three keys will receive 100 pts. Each additional move beyond the shortest path will result in a 5-pt deduction. If your sequence does not move the MOUSE to the BIG CHEESE (or skips the SMALL CHEESE), you will receive 0 pts.", DIM),
+                     ("Feedback will include both a score for each trial AND a cumulative score.", DIM),
+                 ],
+                 hint_text="Press  SPACE  to continue")
+    _card_screen(screen, clock, fonts,
+                 title="Score  (part 2 of 2)",
+                 title_col=GREEN, badge=None,
+                 lines=[
+                     ("The shortest path through the SMALL CHEESE to the BIG CHEESE, using each key at least once, earns 100 points.", DIM),
+                     ("", DIM),
+                     ("Each additional move results in a 5-point deduction.", DIM),
+                     ("", DIM),
+                     ("Invalid sequences earn 0 points.", DIM),
                  ],
                  hint_text="Press  SPACE  to continue")
 
