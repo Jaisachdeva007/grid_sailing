@@ -149,6 +149,12 @@ TRIAL_COLUMNS = [
     "time_to_imagery_start_s",
     "action_reaction_time_ms",
     "action_reaction_time_s",
+    "reaction_time_planning_ms",
+    "reaction_time_planning_s",
+    "reaction_time_action_ms",
+    "reaction_time_action_s",
+    "planning_keypresses",
+    "input_timed_out",
     # Outcome
     "is_correct",
     "wrong_locked_path",
@@ -196,6 +202,9 @@ _NULLABLE_FIELDS = (
     "time_to_imagery_start_ms", "time_to_imagery_start_s",
     "action_reaction_time_ms", "action_reaction_time_s",
     "planning_movement_time_ms", "planning_movement_time_s",
+    "reaction_time_planning_ms", "reaction_time_planning_s",
+    "reaction_time_action_ms", "reaction_time_action_s",
+    "planning_keypresses",
 )
 
 
@@ -229,7 +238,9 @@ def _add_derived(row: dict, cumulative_score: int) -> dict:
     row["planning_movement_time_s"]     = _ms_to_s(row.get("planning_movement_time_ms"))
     row["imagery_duration_s"]           = _ms_to_s(row.get("imagery_duration_ms"))
     row["time_to_imagery_start_s"]    = _ms_to_s(row.get("time_to_imagery_start_ms"))
-    row["action_reaction_time_s"]     = _ms_to_s(row.get("action_reaction_time_ms"))
+    row["action_reaction_time_s"]      = _ms_to_s(row.get("action_reaction_time_ms"))
+    row["reaction_time_planning_s"]    = _ms_to_s(row.get("reaction_time_planning_ms"))
+    row["reaction_time_action_s"]      = _ms_to_s(row.get("reaction_time_action_ms"))
 
     # Boolean as text
     row["is_correct"] = "TRUE" if is_corr else "FALSE"
@@ -307,6 +318,10 @@ def _fetch_rows(participant_id=None) -> list:
             t.imagery_duration_ms,
             COALESCE(t.time_to_imagery_start_ms, NULL) AS time_to_imagery_start_ms,
             COALESCE(t.action_reaction_time_ms,  NULL) AS action_reaction_time_ms,
+            COALESCE(t.reaction_time_planning_ms, NULL) AS reaction_time_planning_ms,
+            COALESCE(t.reaction_time_action_ms,   NULL) AS reaction_time_action_ms,
+            COALESCE(t.planning_keypresses,       NULL) AS planning_keypresses,
+            COALESCE(t.input_timed_out, 0)             AS input_timed_out,
             t.is_correct,
             COALESCE(t.oob_count, 0)           AS oob_count,
             COALESCE(t.wrong_locked_path, 0)   AS wrong_locked_path,
@@ -384,6 +399,10 @@ def _fetch_summary_rows(participant_id=None) -> list:
             t.imagery_duration_ms,
             COALESCE(t.time_to_imagery_start_ms, NULL) AS time_to_imagery_start_ms,
             COALESCE(t.action_reaction_time_ms,  NULL) AS action_reaction_time_ms,
+            COALESCE(t.reaction_time_planning_ms, NULL) AS reaction_time_planning_ms,
+            COALESCE(t.reaction_time_action_ms,   NULL) AS reaction_time_action_ms,
+            COALESCE(t.planning_keypresses,       NULL) AS planning_keypresses,
+            COALESCE(t.input_timed_out, 0)             AS input_timed_out,
             t.is_correct,
             COALESCE(t.oob_count, 0)           AS oob_count,
             COALESCE(t.wrong_locked_path, 0)   AS wrong_locked_path,

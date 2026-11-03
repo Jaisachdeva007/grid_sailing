@@ -141,6 +141,10 @@ class TrialData:
     wrong_locked_path:   bool  = False   # True when repeated-trial lock was violated
     sub_goal_visited:    bool  = False   # True when cursor passed through sub_goal
     skipped_sub_goal:    bool  = False   # True when goal reached without sub_goal
+    planning_keypresses:       Optional[str]   = None
+    reaction_time_planning_ms: Optional[float] = None
+    reaction_time_action_ms:   Optional[float] = None
+    input_timed_out:           int             = 0
 
 
 def _is_mi(g):   return g.startswith("MI")
@@ -1471,6 +1475,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                         phys_first_key_t = _now_t
                         if action_start:
                             trial.action_reaction_time_ms = (phys_first_key_t - action_start) * 1000
+                        trial.reaction_time_action_ms = (phys_first_key_t - planning_start) * 1000
                     _iki    = (_now_t - phys_last_key_t) * 1000 if phys_last_key_t else None
                     _before = _build_path(trial.start, pp_typed_seq)[-1]
                     phys_last_key_t = _now_t
@@ -1527,8 +1532,10 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                             # Go straight to action — skip INPUT to avoid needing a second confirm press
                             if first_key_time:
                                 trial.reaction_time_ms = (first_key_time - planning_start) * 1000
+                                trial.reaction_time_planning_ms = trial.reaction_time_ms
                             if first_key_time and last_key_time and last_key_time > first_key_time:
                                 trial.planning_movement_time_ms = (last_key_time - first_key_time) * 1000
+                            trial.planning_keypresses = ",".join(str(k) for k in typed_seq)
                             trial.planned_sequence = list(typed_seq)
                             action_path = _build_path(trial.start, typed_seq)
                             if is_ctrl:
@@ -1587,8 +1594,10 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                         elif btns.get("confirm") and btns["confirm"].collidepoint(p) and typed_seq:
                             if first_key_time:
                                 trial.reaction_time_ms = (first_key_time - planning_start) * 1000
+                                trial.reaction_time_planning_ms = trial.reaction_time_ms
                             if first_key_time and last_key_time and last_key_time > first_key_time:
                                 trial.planning_movement_time_ms = (last_key_time - first_key_time) * 1000
+                            trial.planning_keypresses = ",".join(str(k) for k in typed_seq)
                             trial.planned_sequence = list(typed_seq)
                             action_path = _build_path(trial.start, typed_seq)
                             if is_ctrl:
@@ -1665,6 +1674,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                 enter_feedback() if show_feedback else enter_iti()
             else:
                 input_timed_out = True
+                trial.input_timed_out = 1
                 action_path = _build_path(trial.start, list(typed_seq))
                 _finalise(trial, list(typed_seq), session_id, locked_sequence=locked_sequence)
                 trial_id = _save(trial, session_id)
@@ -1885,6 +1895,10 @@ def _save(trial, session_id):
         oob_count=trial.oob_count,
         wrong_locked_path=int(trial.wrong_locked_path),
         skipped_sub_goal=int(trial.skipped_sub_goal),
+        planning_keypresses=trial.planning_keypresses,
+        reaction_time_planning_ms=trial.reaction_time_planning_ms,
+        reaction_time_action_ms=trial.reaction_time_action_ms,
+        input_timed_out=trial.input_timed_out,
     )
 
 
