@@ -54,13 +54,13 @@ from database.db import (
 
 
 def _next_session_for(participant_id):
-    """Return the next incomplete session number (1–3) for a returning participant."""
-    for sn in [1, 2, 3]:
+    """Return the next incomplete session number (1–2) for a returning participant."""
+    for sn in [1, 2]:
         expected = len(SESSION_STRUCTURE.get(sn, []))
         done = len([b for b in get_completed_blocks(participant_id, sn) if b >= 1])
         if done < expected:
             return sn
-    return 3
+    return 2
 from screens.export_screen import run_export_screen
 from screens.data_viewer  import run_data_viewer
 
@@ -531,7 +531,7 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
     ret_pid_box = InputBox(INP_X1, 0, 190, ROW_H, "Participant ID")
 
     group_dd   = Dropdown(INP_X1, 0, 210, ROW_H, GROUPS)
-    session_dd = Dropdown(INP_X1, 0, 100, ROW_H, [1, 2, 3])
+    session_dd = Dropdown(INP_X1, 0, 100, ROW_H, [1, 2])
 
     planning_input   = NumericInput(INP_X1, 0, PLANNING_TIME_SEC,  4, 12)
     action_input     = NumericInput(INP_X1, 0, ACTION_TIME_SEC,    3, 20)

@@ -256,7 +256,7 @@ def run_block(screen, clock, fonts, block_type, block_number,
         block_type (str):       familiarization / pre_test / practice / post_test.
         block_number (int):     Index within the session (for DB).
         participant_id (str):   Who is running this block.
-        session_number (int):   Session 1, 2, or 3.
+        session_number (int):   Session 1 or 2.
         group (str):            Participant's experimental group.
         config (dict):          Session config from researcher setup.
         pool (list):            Full puzzle pool.
@@ -1238,8 +1238,8 @@ def _show_instructions(screen, clock, fonts, group):
 
 def _show_session_complete(screen, clock, fonts, session_number, total_score, group=""):
     next_msg = (f"Please return for Session {session_number + 1}."
-                if session_number < 3
-                else "You have completed all 3 sessions. Thank you!")
+                if session_number < 2
+                else "You have completed all sessions. Thank you!")
     is_mi = group.startswith("MI")
     lines = [
         (f"Total score:  {total_score}", AMBER),

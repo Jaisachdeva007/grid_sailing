@@ -156,8 +156,7 @@ GROUPS = [
 # Don't change this unless we're redesigning the study structure.
 SESSION_STRUCTURE = {
     1: ["familiarization", "familiarization", "pre_test", "practice", "practice"],
-    2: ["practice", "practice"],
-    3: ["practice", "practice", "post_test"],
+    2: ["practice", "practice", "post_test"],
 }
 
 

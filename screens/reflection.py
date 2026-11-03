@@ -215,7 +215,7 @@ def run_reflection(screen, clock, fonts, participant_id: str,
         clock:            Pygame clock.
         fonts:            Tuple (f_big, f_med, f_sm, f_xs).
         participant_id:   Who is completing the reflection.
-        session_number:   Current session (1, 2, or 3).
+        session_number:   Current session (1 or 2).
         is_last_session:  If True, suppress the "next session goal" field.
     """
     f_big, f_med, f_sm, f_xs = fonts

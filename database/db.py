@@ -470,7 +470,7 @@ def create_session(participant_id, session_number, block_type, block_number):
 
     Args:
         participant_id (str): Who this session belongs to.
-        session_number (int): 1, 2, or 3.
+        session_number (int): 1 or 2.
         block_type (str): familiarization / pre_test / practice / post_test.
         block_number (int): Index of this block within the session.
 
