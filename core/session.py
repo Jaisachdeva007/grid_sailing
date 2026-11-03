@@ -1176,7 +1176,7 @@ def _show_instructions(screen, clock, fonts, group):
             ("In this task, you will navigate a grid to move a MOUSE", DIM),
             ("through the SMALL CHEESE to the BIG CHEESE in as few moves as possible.", DIM),
             ("", DIM),
-            ("There are three sessions in total.", DIM),
+            ("There are two sessions in total.", DIM),
         ],
     )
 
