@@ -131,7 +131,6 @@ class TrialData:
     planning_movement_time_ms:   Optional[float] = None
     imagery_duration_ms:         Optional[float] = None
     time_to_imagery_start_ms:    Optional[float] = None   # MI only: action start → SPACE press
-    action_reaction_time_ms:     Optional[float] = None   # PP only: action start → first physical key
     reward_score:        int   = 0
     number_of_moves:     int   = 0
     is_correct:          bool  = False
@@ -142,7 +141,6 @@ class TrialData:
     sub_goal_visited:    bool  = False   # True when cursor passed through sub_goal
     skipped_sub_goal:    bool  = False   # True when goal reached without sub_goal
     planning_keypresses:       Optional[str]   = None
-    reaction_time_planning_ms: Optional[float] = None
     reaction_time_action_ms:   Optional[float] = None
     input_timed_out:           int             = 0
 
@@ -1473,8 +1471,6 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     _now_t = time.time()
                     if phys_first_key_t is None:
                         phys_first_key_t = _now_t
-                        if action_start:
-                            trial.action_reaction_time_ms = (phys_first_key_t - action_start) * 1000
                         trial.reaction_time_action_ms = (phys_first_key_t - planning_start) * 1000
                     _iki    = (_now_t - phys_last_key_t) * 1000 if phys_last_key_t else None
                     _before = _build_path(trial.start, pp_typed_seq)[-1]
@@ -1532,7 +1528,6 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                             # Go straight to action — skip INPUT to avoid needing a second confirm press
                             if first_key_time:
                                 trial.reaction_time_ms = (first_key_time - planning_start) * 1000
-                                trial.reaction_time_planning_ms = trial.reaction_time_ms
                             if first_key_time and last_key_time and last_key_time > first_key_time:
                                 trial.planning_movement_time_ms = (last_key_time - first_key_time) * 1000
                             trial.planning_keypresses = ",".join(str(k) for k in typed_seq)
@@ -1594,7 +1589,6 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                         elif btns.get("confirm") and btns["confirm"].collidepoint(p) and typed_seq:
                             if first_key_time:
                                 trial.reaction_time_ms = (first_key_time - planning_start) * 1000
-                                trial.reaction_time_planning_ms = trial.reaction_time_ms
                             if first_key_time and last_key_time and last_key_time > first_key_time:
                                 trial.planning_movement_time_ms = (last_key_time - first_key_time) * 1000
                             trial.planning_keypresses = ",".join(str(k) for k in typed_seq)
@@ -1668,6 +1662,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                 and not skip_input_timeout
                 and (now_s - input_entered_t) >= 10.0):
             if is_ctrl:
+                trial.input_timed_out = 1
                 _finalise(trial, list(typed_seq), session_id, locked_sequence=locked_sequence)
                 trial_id = _save(trial, session_id)
                 update_session_progress(session_id, trial.trial_number)
@@ -1889,14 +1884,12 @@ def _save(trial, session_id):
         elapsed_time_s=time.time() - trial.trial_start_time,
         imagery_duration_ms=trial.imagery_duration_ms,
         time_to_imagery_start_ms=trial.time_to_imagery_start_ms,
-        action_reaction_time_ms=trial.action_reaction_time_ms,
         is_correct=trial.is_correct,
         all_optimal_sequences=all_opt_json,
         oob_count=trial.oob_count,
         wrong_locked_path=int(trial.wrong_locked_path),
         skipped_sub_goal=int(trial.skipped_sub_goal),
         planning_keypresses=trial.planning_keypresses,
-        reaction_time_planning_ms=trial.reaction_time_planning_ms,
         reaction_time_action_ms=trial.reaction_time_action_ms,
         input_timed_out=trial.input_timed_out,
     )

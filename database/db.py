@@ -102,7 +102,6 @@ def initialise_database():
             wrong_locked_path    INTEGER DEFAULT 0,
             skipped_sub_goal     INTEGER DEFAULT 0,
             planning_keypresses       TEXT,
-            reaction_time_planning_ms REAL,
             reaction_time_action_ms   REAL,
             input_timed_out           INTEGER DEFAULT 0,
             created_at           TEXT DEFAULT (datetime('now')),
@@ -158,7 +157,6 @@ def initialise_database():
         "ALTER TABLE trials ADD COLUMN all_optimal_sequences TEXT",
         "ALTER TABLE trials ADD COLUMN oob_count INTEGER DEFAULT 0",
         "ALTER TABLE trials ADD COLUMN time_to_imagery_start_ms REAL",
-        "ALTER TABLE trials ADD COLUMN action_reaction_time_ms REAL",
         "ALTER TABLE trials ADD COLUMN sub_goal_row INTEGER",
         "ALTER TABLE trials ADD COLUMN sub_goal_col INTEGER",
         "ALTER TABLE trials ADD COLUMN sub_goal_visited INTEGER DEFAULT 0",
@@ -167,7 +165,6 @@ def initialise_database():
         "ALTER TABLE trials ADD COLUMN planning_movement_time_ms REAL",
         "ALTER TABLE keypresses ADD COLUMN phase TEXT",
         "ALTER TABLE trials ADD COLUMN planning_keypresses TEXT",
-        "ALTER TABLE trials ADD COLUMN reaction_time_planning_ms REAL",
         "ALTER TABLE trials ADD COLUMN reaction_time_action_ms REAL",
         "ALTER TABLE trials ADD COLUMN input_timed_out INTEGER DEFAULT 0",
     ]:
@@ -572,11 +569,11 @@ def save_trial(session_id, participant_id, trial_number, grid_type,
                reaction_time_ms, movement_time_ms, elapsed_time_s,
                imagery_duration_ms, is_correct,
                all_optimal_sequences=None, oob_count=0,
-               time_to_imagery_start_ms=None, action_reaction_time_ms=None,
+               time_to_imagery_start_ms=None,
                sub_goal_row=None, sub_goal_col=None, sub_goal_visited=0,
                wrong_locked_path=0, skipped_sub_goal=0,
                planning_movement_time_ms=None,
-               planning_keypresses=None, reaction_time_planning_ms=None,
+               planning_keypresses=None,
                reaction_time_action_ms=None, input_timed_out=0):
     """
     Save a completed trial to the database and return its trial_id.
@@ -592,12 +589,12 @@ def save_trial(session_id, participant_id, trial_number, grid_type,
             reaction_time_ms, movement_time_ms, planning_movement_time_ms,
             elapsed_time_s,
             imagery_duration_ms, is_correct, all_optimal_sequences, oob_count,
-            time_to_imagery_start_ms, action_reaction_time_ms,
+            time_to_imagery_start_ms,
             sub_goal_row, sub_goal_col, sub_goal_visited,
             wrong_locked_path, skipped_sub_goal,
-            planning_keypresses, reaction_time_planning_ms,
+            planning_keypresses,
             reaction_time_action_ms, input_timed_out
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         session_id, participant_id, trial_number, grid_type,
         start_row, start_col, goal_row, goal_col,
@@ -606,10 +603,10 @@ def save_trial(session_id, participant_id, trial_number, grid_type,
         reaction_time_ms, movement_time_ms, planning_movement_time_ms,
         elapsed_time_s,
         imagery_duration_ms, int(is_correct), all_optimal_sequences, oob_count,
-        time_to_imagery_start_ms, action_reaction_time_ms,
+        time_to_imagery_start_ms,
         sub_goal_row, sub_goal_col, int(sub_goal_visited),
         int(wrong_locked_path), int(skipped_sub_goal),
-        planning_keypresses, reaction_time_planning_ms,
+        planning_keypresses,
         reaction_time_action_ms, int(input_timed_out)
     ))
     trial_id = cursor.lastrowid

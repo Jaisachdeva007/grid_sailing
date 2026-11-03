@@ -147,10 +147,6 @@ TRIAL_COLUMNS = [
     "imagery_duration_s",
     "time_to_imagery_start_ms",
     "time_to_imagery_start_s",
-    "action_reaction_time_ms",
-    "action_reaction_time_s",
-    "reaction_time_planning_ms",
-    "reaction_time_planning_s",
     "reaction_time_action_ms",
     "reaction_time_action_s",
     "planning_keypresses",
@@ -200,9 +196,7 @@ _NULLABLE_FIELDS = (
     "phase",
     "session_completed_at",
     "time_to_imagery_start_ms", "time_to_imagery_start_s",
-    "action_reaction_time_ms", "action_reaction_time_s",
     "planning_movement_time_ms", "planning_movement_time_s",
-    "reaction_time_planning_ms", "reaction_time_planning_s",
     "reaction_time_action_ms", "reaction_time_action_s",
     "planning_keypresses",
 )
@@ -238,8 +232,6 @@ def _add_derived(row: dict, cumulative_score: int) -> dict:
     row["planning_movement_time_s"]     = _ms_to_s(row.get("planning_movement_time_ms"))
     row["imagery_duration_s"]           = _ms_to_s(row.get("imagery_duration_ms"))
     row["time_to_imagery_start_s"]    = _ms_to_s(row.get("time_to_imagery_start_ms"))
-    row["action_reaction_time_s"]      = _ms_to_s(row.get("action_reaction_time_ms"))
-    row["reaction_time_planning_s"]    = _ms_to_s(row.get("reaction_time_planning_ms"))
     row["reaction_time_action_s"]      = _ms_to_s(row.get("reaction_time_action_ms"))
 
     # Boolean as text
@@ -317,8 +309,6 @@ def _fetch_rows(participant_id=None) -> list:
             t.elapsed_time_s,
             t.imagery_duration_ms,
             COALESCE(t.time_to_imagery_start_ms, NULL) AS time_to_imagery_start_ms,
-            COALESCE(t.action_reaction_time_ms,  NULL) AS action_reaction_time_ms,
-            COALESCE(t.reaction_time_planning_ms, NULL) AS reaction_time_planning_ms,
             COALESCE(t.reaction_time_action_ms,   NULL) AS reaction_time_action_ms,
             COALESCE(t.planning_keypresses,       NULL) AS planning_keypresses,
             COALESCE(t.input_timed_out, 0)             AS input_timed_out,
@@ -398,8 +388,6 @@ def _fetch_summary_rows(participant_id=None) -> list:
             t.elapsed_time_s,
             t.imagery_duration_ms,
             COALESCE(t.time_to_imagery_start_ms, NULL) AS time_to_imagery_start_ms,
-            COALESCE(t.action_reaction_time_ms,  NULL) AS action_reaction_time_ms,
-            COALESCE(t.reaction_time_planning_ms, NULL) AS reaction_time_planning_ms,
             COALESCE(t.reaction_time_action_ms,   NULL) AS reaction_time_action_ms,
             COALESCE(t.planning_keypresses,       NULL) AS planning_keypresses,
             COALESCE(t.input_timed_out, 0)             AS input_timed_out,
@@ -445,8 +433,6 @@ COLUMN_LABELS = {
     "time_to_imagery_start_ms":  "time_to_imagery_start_ms [MI only: action start → spacebar press]",
     "time_to_imagery_start_s":   "time_to_imagery_start_s [MI only: action start → spacebar press]",
     "actual_sequence_used":      "actual_sequence_used [keys physically pressed during trial, e.g. 1,2,3,1,2]",
-    "action_reaction_time_ms":   "action_reaction_time_ms [PP only: action start → first physical key]",
-    "action_reaction_time_s":    "action_reaction_time_s [PP only: action start → first physical key]",
     "sub_goal_visited":          "sub_goal_visited [1 = cursor passed through SMALL CHEESE, 0 = skipped]",
     "wrong_locked_path":         "wrong_locked_path [1 = repeated trial penalised for not using locked sequence]",
     "skipped_sub_goal":          "skipped_sub_goal [1 = reached BIG CHEESE without visiting SMALL CHEESE first]",
