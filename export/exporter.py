@@ -138,19 +138,19 @@ TRIAL_COLUMNS = [
     # Timing
     "reaction_time_ms",
     "reaction_time_s",
-    "rt_planning_ms",
-    "rt_planning_s",
     "movement_time_ms",
     "movement_time_s",
+    "rt_planning_ms",
+    "rt_planning_s",
+    "reaction_time_action_ms",
+    "reaction_time_action_s",
+    "time_to_imagery_start_ms",
+    "time_to_imagery_start_s",
     "planning_movement_time_ms",
     "planning_movement_time_s",
     "elapsed_time_s",
     "imagery_duration_ms",
     "imagery_duration_s",
-    "time_to_imagery_start_ms",
-    "time_to_imagery_start_s",
-    "reaction_time_action_ms",
-    "reaction_time_action_s",
     "planning_keypresses",
     "input_timed_out",
     # Outcome
@@ -237,10 +237,12 @@ def _add_derived(row: dict, cumulative_score: int) -> dict:
     row["time_to_imagery_start_s"]  = _ms_to_s(row.get("time_to_imagery_start_ms"))
     row["reaction_time_action_s"]   = _ms_to_s(row.get("reaction_time_action_ms"))
 
-    # rt_planning_ms: reaction_time_ms for practice blocks only
+    # rt_ms only applies to fam/pre_test/post_test; practice uses rt_planning_ms
     if row.get("block_type") == "practice":
         row["rt_planning_ms"] = row.get("reaction_time_ms")
         row["rt_planning_s"]  = _ms_to_s(row.get("reaction_time_ms"))
+        row["reaction_time_ms"] = None
+        row["reaction_time_s"]  = ""
     else:
         row["rt_planning_ms"] = None
         row["rt_planning_s"]  = None

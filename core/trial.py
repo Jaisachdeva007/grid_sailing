@@ -725,6 +725,7 @@ def run_explore_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     and (now_s - trial.trial_start_time) >= time_limit):
                 trial.is_correct = False
                 trial.reward_score = 0
+                trial.input_timed_out = 1
                 trial.number_of_moves = move_count
                 trial.sub_goal_visited = sub_goal_visited
                 trial_id = _save(trial, session_id)
@@ -1672,6 +1673,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
             if is_ctrl:
                 trial.input_timed_out = 1
                 _finalise(trial, list(typed_seq), session_id, locked_sequence=locked_sequence)
+                trial.reward_score = 0
+                trial.is_correct = False
                 trial_id = _save(trial, session_id)
                 update_session_progress(session_id, trial.trial_number)
                 enter_feedback() if show_feedback else enter_iti()
@@ -1680,6 +1683,8 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                 trial.input_timed_out = 1
                 action_path = _build_path(trial.start, list(typed_seq))
                 _finalise(trial, list(typed_seq), session_id, locked_sequence=locked_sequence)
+                trial.reward_score = 0
+                trial.is_correct = False
                 trial_id = _save(trial, session_id)
                 update_session_progress(session_id, trial.trial_number)
                 enter_feedback() if show_feedback else enter_iti()
