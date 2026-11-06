@@ -138,6 +138,8 @@ TRIAL_COLUMNS = [
     # Timing
     "reaction_time_ms",
     "reaction_time_s",
+    "rt_planning_ms",
+    "rt_planning_s",
     "movement_time_ms",
     "movement_time_s",
     "planning_movement_time_ms",
@@ -199,6 +201,7 @@ _NULLABLE_FIELDS = (
     "planning_movement_time_ms", "planning_movement_time_s",
     "reaction_time_action_ms", "reaction_time_action_s",
     "planning_keypresses",
+    "rt_planning_ms", "rt_planning_s",
 )
 
 
@@ -227,15 +230,24 @@ def _add_derived(row: dict, cumulative_score: int) -> dict:
     row["all_optimal_sequences"] = _clean_all_optimal(row.get("all_optimal_sequences"))
 
     # Timing in seconds
-    row["reaction_time_s"]              = _ms_to_s(row.get("reaction_time_ms"))
-    row["movement_time_s"]              = _ms_to_s(row.get("movement_time_ms"))
-    row["planning_movement_time_s"]     = _ms_to_s(row.get("planning_movement_time_ms"))
-    row["imagery_duration_s"]           = _ms_to_s(row.get("imagery_duration_ms"))
-    row["time_to_imagery_start_s"]    = _ms_to_s(row.get("time_to_imagery_start_ms"))
-    row["reaction_time_action_s"]      = _ms_to_s(row.get("reaction_time_action_ms"))
+    row["reaction_time_s"]          = _ms_to_s(row.get("reaction_time_ms"))
+    row["movement_time_s"]          = _ms_to_s(row.get("movement_time_ms"))
+    row["planning_movement_time_s"] = _ms_to_s(row.get("planning_movement_time_ms"))
+    row["imagery_duration_s"]       = _ms_to_s(row.get("imagery_duration_ms"))
+    row["time_to_imagery_start_s"]  = _ms_to_s(row.get("time_to_imagery_start_ms"))
+    row["reaction_time_action_s"]   = _ms_to_s(row.get("reaction_time_action_ms"))
+
+    # rt_planning_ms: reaction_time_ms for practice blocks only
+    if row.get("block_type") == "practice":
+        row["rt_planning_ms"] = row.get("reaction_time_ms")
+        row["rt_planning_s"]  = _ms_to_s(row.get("reaction_time_ms"))
+    else:
+        row["rt_planning_ms"] = None
+        row["rt_planning_s"]  = None
 
     # Boolean as text
-    row["is_correct"] = "TRUE" if is_corr else "FALSE"
+    row["is_correct"]      = "TRUE" if is_corr else "FALSE"
+    row["input_timed_out"] = "TRUE" if row.get("input_timed_out") and int(row.get("input_timed_out", 0)) == 1 else "FALSE"
 
     # Keypress-level derived columns
     kp = row.get("key_pressed")
@@ -419,23 +431,21 @@ def _fetch_summary_rows(participant_id=None) -> list:
     return rows
 
 
-# ── Column display labels (bracketed descriptions in CSV headers) ────────────
+# ── Column display labels (CSV header names) ─────────────────────────────────
 COLUMN_LABELS = {
-    "reaction_time_ms":          "reaction_time_ms [planning: trial start → first plan-key click]",
-    "reaction_time_s":           "reaction_time_s [planning: trial start → first plan-key click]",
-    "movement_time_ms":              "movement_time_ms [PP only: first → last physical key press during action stage]",
-    "movement_time_s":               "movement_time_s [PP only: first → last physical key press during action stage]",
-    "planning_movement_time_ms":     "planning_movement_time_ms [all groups: first → last on-screen button click during planning]",
-    "planning_movement_time_s":      "planning_movement_time_s [all groups: first → last on-screen button click during planning]",
-    "elapsed_time_s":            "elapsed_time_s [total trial duration incl. ITI]",
-    "imagery_duration_ms":       "imagery_duration_ms [MI only: spacebar hold duration]",
-    "imagery_duration_s":        "imagery_duration_s [MI only: spacebar hold duration]",
-    "time_to_imagery_start_ms":  "time_to_imagery_start_ms [MI only: action start → spacebar press]",
-    "time_to_imagery_start_s":   "time_to_imagery_start_s [MI only: action start → spacebar press]",
-    "actual_sequence_used":      "actual_sequence_used [keys physically pressed during trial, e.g. 1,2,3,1,2]",
-    "sub_goal_visited":          "sub_goal_visited [1 = cursor passed through SMALL CHEESE, 0 = skipped]",
-    "wrong_locked_path":         "wrong_locked_path [1 = repeated trial penalised for not using locked sequence]",
-    "skipped_sub_goal":          "skipped_sub_goal [1 = reached BIG CHEESE without visiting SMALL CHEESE first]",
+    "reaction_time_ms":          "rt_ms",
+    "reaction_time_s":           "rt_s",
+    "movement_time_ms":          "mt_ms",
+    "movement_time_s":           "mt_s",
+    "planning_movement_time_ms": "plan_mt_ms",
+    "planning_movement_time_s":  "plan_mt_s",
+    "elapsed_time_s":            "elapsed_s",
+    "imagery_duration_ms":       "imag_dur_ms",
+    "imagery_duration_s":        "imag_dur_s",
+    "time_to_imagery_start_ms":  "rt_action_mi_ms",
+    "time_to_imagery_start_s":   "rt_action_mi_s",
+    "reaction_time_action_ms":   "rt_action_pp_ms",
+    "reaction_time_action_s":    "rt_action_pp_s",
 }
 
 

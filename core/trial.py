@@ -1447,8 +1447,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
                     if not mi_space_held:
                         mi_space_held  = True
                         mi_space_start = time.time()
-                        if action_start:
-                            trial.time_to_imagery_start_ms = (mi_space_start - action_start) * 1000
+                        trial.time_to_imagery_start_ms = (mi_space_start - trial.trial_start_time) * 1000
                 elif ev.type == pygame.KEYUP and ev.key == pygame.K_SPACE:
                     if mi_space_held and mi_space_start:
                         trial.imagery_duration_ms = (time.time() - mi_space_start) * 1000
