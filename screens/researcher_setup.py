@@ -42,7 +42,6 @@ import pygame
 import sys
 from config import (
     WINDOW_WIDTH, WINDOW_HEIGHT, GROUPS, SESSION_STRUCTURE,
-    PLANNING_TIME_SEC, ACTION_TIME_SEC, FEEDBACK_TIME_SEC, INTERTRIAL_SEC,
     PRACTICE_REPEATED_RATIO, TEST_REPEATED_RATIO, GRID_SIZE, FPS
 )
 from database.db import (
@@ -533,10 +532,6 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
     group_dd   = Dropdown(INP_X1, 0, 210, ROW_H, GROUPS)
     session_dd = Dropdown(INP_X1, 0, 100, ROW_H, [1, 2])
 
-    planning_input   = NumericInput(INP_X1, 0, PLANNING_TIME_SEC,  4, 12)
-    action_input     = NumericInput(INP_X1, 0, ACTION_TIME_SEC,    3, 20)
-    feedback_input   = NumericInput(INP_X2, 0, FEEDBACK_TIME_SEC,  1,  5)
-    intertrial_input = NumericInput(INP_X2, 0, INTERTRIAL_SEC,     2, 10)
     start_block_input = NumericInput(INP_X1, 0, 1, 1, 5)  # start from block N (1 = normal start)
 
     practice_cond = ToggleGroup(INP_X1, 0, PRACTICE_REPEATED_RATIO)
@@ -568,7 +563,7 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
 
     all_dropdowns = [gender_dd, hand_dd, group_dd, session_dd]
     all_inputs    = [pid_box, age_box, ret_pid_box]
-    all_steppers  = [planning_input, action_input, feedback_input, intertrial_input, start_block_input]
+    all_steppers  = [start_block_input]
 
     # Top-bar icon buttons — x updated each frame in case window size changes
     _back_btn    = pygame.Rect(0, 14, 100, 32)
@@ -680,7 +675,6 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
                 result = _validate_and_launch(
                     mode, pid_box, age_box, gender_dd, hand_dd,
                     ret_pid_box, group_dd, session_dd,
-                    planning_input, action_input, feedback_input, intertrial_input,
                     start_block_input,
                     practice_cond, test_cond, repeated_start[0], repeated_goal[0],
                     repeated_sub_goal[0]
@@ -874,16 +868,24 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
         _tl = f_xs.render("Timers:", True, DIM)
         screen.blit(_tl, (COL1, oy(y, 8)))
         _tx = COL1 + _tl.get_width() + 12
-        _fc = 0
         for _b in blocks:
             if _b == "familiarization":
-                _fc += 1
-                _ht = _fc > 1
-            else:
+                _pill_txt = f"familiarization  no timer"
+                _ht = False
+            elif _b == "pre_test":
+                _pill_txt = "pre test  9 s"
                 _ht = True
-            _pill_txt = f"{_b.replace('_', ' ')}  {'6 s' if _ht else 'no timer'}"
-            _pill_fg  = BG  if _ht else DIM
-            _pill_bg  = ACCENT if _ht else (38, 38, 62)
+            elif _b == "post_test":
+                _pill_txt = "post test  9 s"
+                _ht = True
+            elif _b == "practice":
+                _pill_txt = "practice  9 s / 10 s input"
+                _ht = True
+            else:
+                _pill_txt = f"{_b.replace('_', ' ')}  9 s"
+                _ht = True
+            _pill_fg = BG if _ht else DIM
+            _pill_bg = ACCENT if _ht else (38, 38, 62)
             _tw = _pill(screen, f_xs, _pill_txt, _pill_fg, _pill_bg, _tx, oy(y, 4))
             _tx += _tw + 8
         y += ROW_H + 4
@@ -897,23 +899,8 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
         screen.blit(_note_s, (COL1, oy(y)))
         y += _note_s.get_height() + 20
 
-        # ── §4: Timing ────────────────────────────────────────
-        y += _section(screen, f_sec, "4  Timing Overrides (seconds)", oy(y))
-
-        _label(screen, f_sm, "Planning time",  COL1, oy(y))
-        planning_input.reposition(INP_X1, oy(y, 5)); planning_input.draw(screen, f_sm)
-        _label(screen, f_sm, "Feedback time",  COL2, oy(y))
-        feedback_input.reposition(INP_X2, oy(y, 5)); feedback_input.draw(screen, f_sm)
-
-        y += ROW_H + 8
-        _label(screen, f_sm, "Action time",    COL1, oy(y))
-        action_input.reposition(INP_X1, oy(y, 5)); action_input.draw(screen, f_sm)
-        _label(screen, f_sm, "Intertrial gap", COL2, oy(y))
-        intertrial_input.reposition(INP_X2, oy(y, 5)); intertrial_input.draw(screen, f_sm)
-        y += ROW_H + 20
-
-        # ── §5: Grid Condition ────────────────────────────────
-        y += _section(screen, f_sec, "5  Grid Condition", oy(y))
+        # ── §4: Grid Condition ────────────────────────────────
+        y += _section(screen, f_sec, "4  Grid Condition", oy(y))
         _label(screen, f_sm, "Practice blocks", COL1, oy(y))
         practice_cond.reposition(INP_X1, oy(y))
         practice_cond.draw(screen, f_xs)
@@ -923,8 +910,8 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
         test_cond.draw(screen, f_xs)
         y += ROW_H + 24
 
-        # ── §6: Repeated puzzle ───────────────────────────────
-        y += _section(screen, f_sec, "6  Repeated Puzzle  (shared across all participants)", oy(y))
+        # ── §5: Repeated puzzle ───────────────────────────────
+        y += _section(screen, f_sec, "5  Repeated Puzzle  (shared across all participants)", oy(y))
         _t(screen, f_xs, "Note: familiarisation blocks are always fully random regardless of this setting.",
            DIM, COL1, oy(y))
         y += 20
@@ -1138,7 +1125,6 @@ def run_researcher_setup(screen=None, clock=None, mode="new"):
 
 def _validate_and_launch(mode, pid_box, age_box, gender_dd, hand_dd,
                          ret_pid_box, group_dd, session_dd,
-                         planning_input, action_input, feedback_input, intertrial_input,
                          start_block_input,
                          practice_cond, test_cond, repeated_start, repeated_goal=None,
                          repeated_sub_goal=None):
@@ -1167,10 +1153,6 @@ def _validate_and_launch(mode, pid_box, age_box, gender_dd, hand_dd,
         "participant_id":   participant_id,
         "group":            group_dd.value,
         "session_number":   session_dd.value,
-        "planning_time":    planning_input.value,
-        "action_time":      action_input.value,
-        "feedback_time":    feedback_input.value,
-        "intertrial_time":  intertrial_input.value,
         "start_from_block": start_block_input.value,
         "practice_ratio":   practice_cond.value,
         "test_ratio":       test_cond.value,

@@ -143,6 +143,7 @@ class TrialData:
     planning_keypresses:       Optional[str]   = None
     reaction_time_action_ms:   Optional[float] = None
     input_timed_out:           int             = 0
+    mouse_tier:                int             = 0
 
 
 def _is_mi(g):   return g.startswith("MI")
@@ -1374,6 +1375,7 @@ def run_trial(screen, clock, fonts, trial: TrialData, config: dict,
     rp_done_time = None   # when replay finished; feedback lingers fb_time more seconds
 
     trial.trial_start_time = time.time()
+    trial.mouse_tier       = mouse_tier
 
     is_mi   = _is_mi(trial.group)
     is_pp   = _is_pp(trial.group)
@@ -1905,6 +1907,7 @@ def _save(trial, session_id):
         planning_keypresses=trial.planning_keypresses,
         reaction_time_action_ms=trial.reaction_time_action_ms,
         input_timed_out=trial.input_timed_out,
+        mouse_tier=trial.mouse_tier,
     )
 
 

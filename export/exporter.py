@@ -134,7 +134,9 @@ TRIAL_COLUMNS = [
     "oob_count",          # moves that hit boundary (cursor stayed)
     "reward_score",
     "penalty_pts",        # extra_moves * 5 when correct, else 0
-    "cumulative_score",   # running total for this participant
+    "cumulative_score",   # running total from practice block 1 onwards
+    "streak",             # consecutive correct trials (practice only; 0 when lost)
+    "mouse",              # mouse tier name at this trial
     # Timing
     "reaction_time_ms",
     "reaction_time_s",
@@ -202,6 +204,7 @@ _NULLABLE_FIELDS = (
     "reaction_time_action_ms", "reaction_time_action_s",
     "planning_keypresses",
     "rt_planning_ms", "rt_planning_s",
+    "mouse_tier",
 )
 
 
@@ -223,6 +226,11 @@ def _add_derived(row: dict, cumulative_score: int) -> dict:
         row["penalty_pts"] = ""
 
     row["cumulative_score"] = cumulative_score
+
+    # Mouse tier name
+    from core.trial import _MOUSE_TIERS
+    tier = row.get("mouse_tier") or 0
+    row["mouse"] = _MOUSE_TIERS[min(int(tier), len(_MOUSE_TIERS) - 1)][3]
 
     # Clean sequence strings
     row["planned_sequence"]      = _clean_sequence(row.get("planned_sequence"))
@@ -330,6 +338,7 @@ def _fetch_rows(participant_id=None) -> list:
             COALESCE(t.oob_count, 0)           AS oob_count,
             COALESCE(t.wrong_locked_path, 0)   AS wrong_locked_path,
             COALESCE(t.skipped_sub_goal, 0)    AS skipped_sub_goal,
+            COALESCE(t.mouse_tier, 0)          AS mouse_tier,
             t.created_at                       AS trial_created_at,
             k.keypress_id,
             k.key_pressed,
@@ -354,21 +363,39 @@ def _fetch_rows(participant_id=None) -> list:
     raw = conn.execute(query, params).fetchall()
     conn.close()
 
-    actual_seqs     = _fetch_actual_sequences(participant_id)
-    cum_by_pid      = {}
-    last_tid_by_pid = {}
-    rows            = []
+    actual_seqs          = _fetch_actual_sequences(participant_id)
+    cum_by_pid           = {}
+    last_tid_by_pid      = {}
+    streak_by_pid        = {}
+    seen_practice_pids   = set()
+    streak_cache_by_tid  = {}   # tid -> streak value (computed once per trial)
+    rows                 = []
 
     for r in raw:
         d   = dict(r)
         pid = d["participant_id"]
         tid = d["trial_id"]
 
-        # Add reward_score to running total only once per trial
+        is_practice = d.get("block_type") == "practice"
+
+        # Update cumulative score and streak once per trial
         if last_tid_by_pid.get(pid) != tid:
+            if is_practice and pid not in seen_practice_pids:
+                cum_by_pid[pid] = 0   # reset at first practice trial
+                seen_practice_pids.add(pid)
             cum_by_pid[pid] = cum_by_pid.get(pid, 0) + (d.get("reward_score") or 0)
             last_tid_by_pid[pid] = tid
 
+            if is_practice:
+                if d.get("is_correct"):
+                    streak_by_pid[pid] = streak_by_pid.get(pid, 0) + 1
+                else:
+                    streak_by_pid[pid] = 0
+                streak_cache_by_tid[tid] = streak_by_pid[pid]
+            else:
+                streak_cache_by_tid[tid] = ""
+
+        d["streak"] = streak_cache_by_tid.get(tid, "")
         d["actual_sequence_used"] = actual_seqs.get(tid, "")
         rows.append(_add_derived(d, cum_by_pid[pid]))
 
@@ -409,6 +436,7 @@ def _fetch_summary_rows(participant_id=None) -> list:
             COALESCE(t.oob_count, 0)           AS oob_count,
             COALESCE(t.wrong_locked_path, 0)   AS wrong_locked_path,
             COALESCE(t.skipped_sub_goal, 0)    AS skipped_sub_goal,
+            COALESCE(t.mouse_tier, 0)          AS mouse_tier,
             t.created_at                       AS trial_created_at
         FROM participants p
         JOIN sessions s ON p.participant_id = s.participant_id
@@ -419,14 +447,31 @@ def _fetch_summary_rows(participant_id=None) -> list:
     raw = conn.execute(query, params).fetchall()
     conn.close()
 
-    actual_seqs = _fetch_actual_sequences(participant_id)
-    cum_by_pid  = {}
-    rows        = []
+    actual_seqs        = _fetch_actual_sequences(participant_id)
+    cum_by_pid         = {}
+    streak_by_pid      = {}
+    seen_practice_pids = set()
+    rows               = []
 
     for r in raw:
         d   = dict(r)
         pid = d["participant_id"]
+        is_practice = d.get("block_type") == "practice"
+
+        if is_practice and pid not in seen_practice_pids:
+            cum_by_pid[pid] = 0   # reset at first practice trial
+            seen_practice_pids.add(pid)
         cum_by_pid[pid] = cum_by_pid.get(pid, 0) + (d.get("reward_score") or 0)
+
+        if is_practice:
+            if d.get("is_correct"):
+                streak_by_pid[pid] = streak_by_pid.get(pid, 0) + 1
+            else:
+                streak_by_pid[pid] = 0
+            d["streak"] = streak_by_pid[pid]
+        else:
+            d["streak"] = ""
+
         d["actual_sequence_used"] = actual_seqs.get(d["trial_id"], "")
         rows.append(_add_derived(d, cum_by_pid[pid]))
 

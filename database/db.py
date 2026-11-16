@@ -167,6 +167,7 @@ def initialise_database():
         "ALTER TABLE trials ADD COLUMN planning_keypresses TEXT",
         "ALTER TABLE trials ADD COLUMN reaction_time_action_ms REAL",
         "ALTER TABLE trials ADD COLUMN input_timed_out INTEGER DEFAULT 0",
+        "ALTER TABLE trials ADD COLUMN mouse_tier INTEGER DEFAULT 0",
     ]:
         try:
             c.execute(migration)
@@ -574,7 +575,8 @@ def save_trial(session_id, participant_id, trial_number, grid_type,
                wrong_locked_path=0, skipped_sub_goal=0,
                planning_movement_time_ms=None,
                planning_keypresses=None,
-               reaction_time_action_ms=None, input_timed_out=0):
+               reaction_time_action_ms=None, input_timed_out=0,
+               mouse_tier=0):
     """
     Save a completed trial to the database and return its trial_id.
     Called at the end of every trial regardless of outcome.
@@ -593,8 +595,9 @@ def save_trial(session_id, participant_id, trial_number, grid_type,
             sub_goal_row, sub_goal_col, sub_goal_visited,
             wrong_locked_path, skipped_sub_goal,
             planning_keypresses,
-            reaction_time_action_ms, input_timed_out
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            reaction_time_action_ms, input_timed_out,
+            mouse_tier
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         session_id, participant_id, trial_number, grid_type,
         start_row, start_col, goal_row, goal_col,
@@ -607,7 +610,8 @@ def save_trial(session_id, participant_id, trial_number, grid_type,
         sub_goal_row, sub_goal_col, int(sub_goal_visited),
         int(wrong_locked_path), int(skipped_sub_goal),
         planning_keypresses,
-        reaction_time_action_ms, int(input_timed_out)
+        reaction_time_action_ms, int(input_timed_out),
+        int(mouse_tier)
     ))
     trial_id = cursor.lastrowid
     conn.commit()
